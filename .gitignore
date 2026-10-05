@@ -1,0 +1,15 @@
+# secrets and local state (never in git)
+.env
+.venv/
+__pycache__/
+*.pyc
+data/
+logs/
+run/
+engines/
+# reference clones and raw audit output (large, read-only reference)
+ref/
+docs/audit/
+# test artefacts that are large
+tests/out/
+.pytest_cache/
