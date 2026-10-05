@@ -143,7 +143,13 @@ class Reassembler:
       lost_fragments  - fragments that never arrived in abandoned frames
       abandoned       - frames started but not completed (dropped by a newer frame or timeout)
       bad             - datagrams or frames that failed a check (magic, crc, size)
+      late            - fragments of the newest complete frame or of a frame at most LATE_WINDOW
+                        frames older (duplicates and late arrivals): dropped, NOT a loss
+    A seq that is more than LATE_WINDOW frames older than the newest complete frame starts a new
+    stream (for example a sender restart): it is accepted.
     """
+
+    LATE_WINDOW = 8
 
     def __init__(self, cam: int, max_frame: int = 4 * 1024 * 1024, slots: int = 4,
                  timeout_s: float = 0.2):
@@ -154,6 +160,8 @@ class Reassembler:
         self.lost_fragments = 0
         self.abandoned = 0
         self.bad = 0
+        self.late = 0
+        self._last_done: int | None = None
         self.datagrams = 0
         self.bytes = 0
         self.last_error = ""
@@ -179,6 +187,10 @@ class Reassembler:
                 off + n > self.max_frame:
             self.bad += 1
             self.last_error = "bad fragment header"
+            return None
+        if self._last_done is not None and \
+                ((self._last_done - seq) & 0xFFFFFFFF) <= self.LATE_WINDOW:
+            self.late += 1
             return None
         slot = None
         for s in self.slots:
@@ -209,6 +221,7 @@ class Reassembler:
         if slot.got == slot.count:
             out = bytes(slot.buf[:slot.size])
             slot.seq = -1
+            self._last_done = seq
             # frames older than this one can never be useful any more (newest frame wins)
             for s in self.slots:
                 if s.seq >= 0 and ((seq - s.seq) & 0xFFFFFFFF) < 0x80000000:

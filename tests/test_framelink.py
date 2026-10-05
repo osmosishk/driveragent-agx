@@ -59,3 +59,24 @@ def test_h265_variable_size():
     outs = [o for o in (r.push(x, now=0.0) for x in fl.fragments(frame, 3, 1, 1456)) if o is not None]
     h, p = fl.unpack_frame(outs[0])
     assert h.fmt == fl.FMT_H265 and bytes(p) == payload
+
+
+def test_late_duplicate_after_complete_is_not_loss():
+    r = fl.Reassembler(0)
+    f5, _ = _frame(seq=5, size=30000)
+    d5 = list(fl.fragments(f5, 0, 5))
+    assert [o for o in (r.push(x, now=0.0) for x in d5) if o] == [f5]
+    assert r.push(d5[1], now=0.01) is None          # duplicate of the complete frame
+    f6, _ = _frame(seq=6, size=30000)
+    assert [o for o in (r.push(x, now=0.02) for x in fl.fragments(f6, 0, 6)) if o] == [f6]
+    assert r.push(d5[0], now=0.03) is None          # late fragment of an older frame
+    assert r.late == 2 and r.abandoned == 0 and r.lost_fragments == 0
+
+
+def test_sender_restart_is_a_new_stream():
+    r = fl.Reassembler(0)
+    f, _ = _frame(seq=1000, size=20000)
+    assert [o for o in (r.push(x, now=0.0) for x in fl.fragments(f, 0, 1000)) if o] == [f]
+    g, _ = _frame(seq=0, size=20000)               # restart: seq goes far back
+    assert [o for o in (r.push(x, now=0.1) for x in fl.fragments(g, 0, 0)) if o] == [g]
+    assert r.late == 0 and r.abandoned == 0

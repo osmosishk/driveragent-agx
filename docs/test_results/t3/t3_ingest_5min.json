@@ -1,0 +1,523 @@
+{
+ "mode": "sim",
+ "bind_host": "127.0.0.1",
+ "seconds": 300.6,
+ "config": "/home/tonyho/driveragent-agx/config/sources.yaml",
+ "t_start_unix": 1791235334.2867317,
+ "cameras": [
+  {
+   "cam": 0,
+   "role": "front",
+   "port": 6000,
+   "state_end": "SIMULATED",
+   "states_seen_s": {
+    "SIMULATED": 300
+   },
+   "simulated": true,
+   "source": "replay",
+   "fmt": "h265",
+   "width": 1280,
+   "height": 720,
+   "fps": {
+    "avg": 30.0,
+    "min": 29.0,
+    "max": 31.0,
+    "n": 300
+   },
+   "bitrate_kbps": {
+    "avg": 5031.45,
+    "min": 4664.1,
+    "max": 5357.8,
+    "n": 300
+   },
+   "frames": 9014,
+   "datagrams": 27566,
+   "lost_packets": 0,
+   "lost_fragments": 0,
+   "lost_frames": 0,
+   "abandoned_frames": 0,
+   "missing_frames": 0,
+   "bad": 0,
+   "waiting_idr": 16,
+   "decoder_errors": 0,
+   "decoder_drops": 0,
+   "seq_resets": 0,
+   "ring_overruns": 0,
+   "late_datagrams": 0,
+   "new_streams": 0,
+   "foreign_frames": 0,
+   "rx_restarts": 0,
+   "internal_errors": 0,
+   "decode_ms_p50": {
+    "avg": 16.29,
+    "min": 14.9,
+    "max": 17.24,
+    "n": 300
+   },
+   "decode_ms_p95": {
+    "avg": 26.67,
+    "min": 21.75,
+    "max": 304.48,
+    "n": 300
+   },
+   "decode_ms_last300": {
+    "p50": 15.158571,
+    "p95": 22.423011,
+    "max": 26.851086,
+    "n": 300
+   },
+   "capture_to_ready_ms_last300": {
+    "p50": 17.329886,
+    "p95": 25.280692
+   },
+   "frame_age_ms_max": 45.6,
+   "rcvbuf": 425984,
+   "last_error": ""
+  },
+  {
+   "cam": 1,
+   "role": "right",
+   "port": 6001,
+   "state_end": "SIMULATED",
+   "states_seen_s": {
+    "SIMULATED": 300
+   },
+   "simulated": true,
+   "source": "replay",
+   "fmt": "h265",
+   "width": 1280,
+   "height": 720,
+   "fps": {
+    "avg": 30.0,
+    "min": 29.0,
+    "max": 31.0,
+    "n": 300
+   },
+   "bitrate_kbps": {
+    "avg": 5031.3,
+    "min": 4731.2,
+    "max": 5484.2,
+    "n": 300
+   },
+   "frames": 9015,
+   "datagrams": 24218,
+   "lost_packets": 0,
+   "lost_fragments": 0,
+   "lost_frames": 0,
+   "abandoned_frames": 0,
+   "missing_frames": 0,
+   "bad": 0,
+   "waiting_idr": 10,
+   "decoder_errors": 0,
+   "decoder_drops": 0,
+   "seq_resets": 0,
+   "ring_overruns": 0,
+   "late_datagrams": 0,
+   "new_streams": 0,
+   "foreign_frames": 0,
+   "rx_restarts": 0,
+   "internal_errors": 0,
+   "decode_ms_p50": {
+    "avg": 10.86,
+    "min": 10.51,
+    "max": 11.56,
+    "n": 300
+   },
+   "decode_ms_p95": {
+    "avg": 19.56,
+    "min": 13.44,
+    "max": 303.92,
+    "n": 300
+   },
+   "decode_ms_last300": {
+    "p50": 10.811268,
+    "p95": 15.913351,
+    "max": 26.371535,
+    "n": 300
+   },
+   "capture_to_ready_ms_last300": {
+    "p50": 12.621977,
+    "p95": 19.650963
+   },
+   "frame_age_ms_max": 50.4,
+   "rcvbuf": 425984,
+   "last_error": ""
+  },
+  {
+   "cam": 2,
+   "role": "left",
+   "port": 6002,
+   "state_end": "SIMULATED",
+   "states_seen_s": {
+    "SIMULATED": 300
+   },
+   "simulated": true,
+   "source": "replay",
+   "fmt": "h265",
+   "width": 1280,
+   "height": 720,
+   "fps": {
+    "avg": 30.0,
+    "min": 30.0,
+    "max": 30.0,
+    "n": 300
+   },
+   "bitrate_kbps": {
+    "avg": 5042.1,
+    "min": 4596.6,
+    "max": 5323.3,
+    "n": 300
+   },
+   "frames": 9015,
+   "datagrams": 26652,
+   "lost_packets": 0,
+   "lost_fragments": 0,
+   "lost_frames": 0,
+   "abandoned_frames": 0,
+   "missing_frames": 0,
+   "bad": 0,
+   "waiting_idr": 4,
+   "decoder_errors": 0,
+   "decoder_drops": 0,
+   "seq_resets": 0,
+   "ring_overruns": 0,
+   "late_datagrams": 0,
+   "new_streams": 0,
+   "foreign_frames": 0,
+   "rx_restarts": 0,
+   "internal_errors": 0,
+   "decode_ms_p50": {
+    "avg": 8.43,
+    "min": 8.0,
+    "max": 8.82,
+    "n": 300
+   },
+   "decode_ms_p95": {
+    "avg": 12.9,
+    "min": 8.86,
+    "max": 301.12,
+    "n": 300
+   },
+   "decode_ms_last300": {
+    "p50": 8.412081,
+    "p95": 9.342028,
+    "max": 19.984176,
+    "n": 300
+   },
+   "capture_to_ready_ms_last300": {
+    "p50": 10.432327,
+    "p95": 11.602974
+   },
+   "frame_age_ms_max": 27.4,
+   "rcvbuf": 425984,
+   "last_error": ""
+  },
+  {
+   "cam": 3,
+   "role": "right-back",
+   "port": 6003,
+   "state_end": "SIMULATED",
+   "states_seen_s": {
+    "SIMULATED": 300
+   },
+   "simulated": true,
+   "source": "replay",
+   "fmt": "h265",
+   "width": 1280,
+   "height": 720,
+   "fps": {
+    "avg": 29.95,
+    "min": 14.0,
+    "max": 31.0,
+    "n": 300
+   },
+   "bitrate_kbps": {
+    "avg": 5031.56,
+    "min": 4773.3,
+    "max": 5447.0,
+    "n": 300
+   },
+   "frames": 8985,
+   "datagrams": 27831,
+   "lost_packets": 0,
+   "lost_fragments": 0,
+   "lost_frames": 0,
+   "abandoned_frames": 0,
+   "missing_frames": 0,
+   "bad": 0,
+   "waiting_idr": 28,
+   "decoder_errors": 0,
+   "decoder_drops": 0,
+   "seq_resets": 0,
+   "ring_overruns": 0,
+   "late_datagrams": 0,
+   "new_streams": 0,
+   "foreign_frames": 0,
+   "rx_restarts": 0,
+   "internal_errors": 0,
+   "decode_ms_p50": {
+    "avg": 19.17,
+    "min": 17.96,
+    "max": 23.62,
+    "n": 300
+   },
+   "decode_ms_p95": {
+    "avg": 24.73,
+    "min": 22.95,
+    "max": 130.68,
+    "n": 300
+   },
+   "decode_ms_last300": {
+    "p50": 18.966744,
+    "p95": 23.416923,
+    "max": 30.983828,
+    "n": 300
+   },
+   "capture_to_ready_ms_last300": {
+    "p50": 21.074858,
+    "p95": 26.204492
+   },
+   "frame_age_ms_max": 54.4,
+   "rcvbuf": 425984,
+   "last_error": ""
+  },
+  {
+   "cam": 4,
+   "role": "left-back",
+   "port": 6004,
+   "state_end": "SIMULATED",
+   "states_seen_s": {
+    "SIMULATED": 300
+   },
+   "simulated": true,
+   "source": "replay",
+   "fmt": "h265",
+   "width": 1280,
+   "height": 720,
+   "fps": {
+    "avg": 29.95,
+    "min": 15.0,
+    "max": 31.0,
+    "n": 300
+   },
+   "bitrate_kbps": {
+    "avg": 5028.74,
+    "min": 4744.5,
+    "max": 5467.2,
+    "n": 300
+   },
+   "frames": 8985,
+   "datagrams": 24040,
+   "lost_packets": 0,
+   "lost_fragments": 0,
+   "lost_frames": 0,
+   "abandoned_frames": 0,
+   "missing_frames": 0,
+   "bad": 0,
+   "waiting_idr": 22,
+   "decoder_errors": 0,
+   "decoder_drops": 0,
+   "seq_resets": 0,
+   "ring_overruns": 0,
+   "late_datagrams": 0,
+   "new_streams": 0,
+   "foreign_frames": 0,
+   "rx_restarts": 0,
+   "internal_errors": 0,
+   "decode_ms_p50": {
+    "avg": 19.73,
+    "min": 18.13,
+    "max": 20.73,
+    "n": 300
+   },
+   "decode_ms_p95": {
+    "avg": 24.55,
+    "min": 22.88,
+    "max": 129.7,
+    "n": 300
+   },
+   "decode_ms_last300": {
+    "p50": 20.280462,
+    "p95": 24.020282,
+    "max": 29.024829,
+    "n": 300
+   },
+   "capture_to_ready_ms_last300": {
+    "p50": 22.615332,
+    "p95": 26.612331
+   },
+   "frame_age_ms_max": 57.1,
+   "rcvbuf": 425984,
+   "last_error": ""
+  },
+  {
+   "cam": 5,
+   "role": "back",
+   "port": 6005,
+   "state_end": "SIMULATED",
+   "states_seen_s": {
+    "SIMULATED": 300
+   },
+   "simulated": true,
+   "source": "replay",
+   "fmt": "h265",
+   "width": 1280,
+   "height": 720,
+   "fps": {
+    "avg": 29.94,
+    "min": 15.0,
+    "max": 31.0,
+    "n": 300
+   },
+   "bitrate_kbps": {
+    "avg": 5031.64,
+    "min": 4401.8,
+    "max": 5708.2,
+    "n": 300
+   },
+   "frames": 8985,
+   "datagrams": 27670,
+   "lost_packets": 0,
+   "lost_fragments": 0,
+   "lost_frames": 0,
+   "abandoned_frames": 0,
+   "missing_frames": 0,
+   "bad": 0,
+   "waiting_idr": 15,
+   "decoder_errors": 0,
+   "decoder_drops": 0,
+   "seq_resets": 0,
+   "ring_overruns": 0,
+   "late_datagrams": 0,
+   "new_streams": 0,
+   "foreign_frames": 0,
+   "rx_restarts": 0,
+   "internal_errors": 0,
+   "decode_ms_p50": {
+    "avg": 15.16,
+    "min": 13.75,
+    "max": 22.51,
+    "n": 300
+   },
+   "decode_ms_p95": {
+    "avg": 23.68,
+    "min": 21.65,
+    "max": 133.1,
+    "n": 300
+   },
+   "decode_ms_last300": {
+    "p50": 14.922987,
+    "p95": 22.913283,
+    "max": 28.707234,
+    "n": 300
+   },
+   "capture_to_ready_ms_last300": {
+    "p50": 17.358527,
+    "p95": 26.458187
+   },
+   "frame_age_ms_max": 63.7,
+   "rcvbuf": 425984,
+   "last_error": ""
+  }
+ ],
+ "system": {
+  "cpu_total_pct": {
+   "avg": 15.06,
+   "min": 12.7,
+   "max": 26.3,
+   "n": 300
+  },
+  "cpu_ingest_proc_pct_of_one_core": {
+   "avg": 102.98,
+   "min": 54.2,
+   "max": 124.2,
+   "n": 300
+  },
+  "cpu_rx_child_procs_pct_of_one_core": {
+   "avg": 6.75,
+   "min": 4.0,
+   "max": 13.0,
+   "n": 300
+  },
+  "cpu_rx_child_by_cam_pct_of_one_core": {
+   "cam0": {
+    "avg": 1.18,
+    "min": 0.0,
+    "max": 3.0,
+    "n": 300
+   },
+   "cam1": {
+    "avg": 1.12,
+    "min": 0.0,
+    "max": 2.1,
+    "n": 300
+   },
+   "cam2": {
+    "avg": 1.06,
+    "min": 0.0,
+    "max": 2.1,
+    "n": 300
+   },
+   "cam3": {
+    "avg": 1.14,
+    "min": 0.0,
+    "max": 3.0,
+    "n": 300
+   },
+   "cam4": {
+    "avg": 1.06,
+    "min": 0.0,
+    "max": 2.1,
+    "n": 300
+   },
+   "cam5": {
+    "avg": 1.19,
+    "min": 0.0,
+    "max": 3.0,
+    "n": 300
+   },
+   "pid1953750": {
+    "avg": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "n": 300
+   }
+  },
+  "rx_child_procs": 7,
+  "rx_child_rss_mb_end": 240.6,
+  "cpu_sim_proc_pct_of_one_core": {
+   "avg": 15.17,
+   "min": 10.6,
+   "max": 19.1,
+   "n": 300
+  },
+  "sim_pids": [
+   1953497
+  ],
+  "cpu_count": 12,
+  "gpu_load_pct": {
+   "avg": 0.0,
+   "min": 0.0,
+   "max": 0.0,
+   "n": 300
+  },
+  "ram_used_mb_start": 7287.5,
+  "ram_used_mb_end": 7463.3,
+  "rss_mb_start": 39.5,
+  "rss_mb_after_start": 299.7,
+  "rss_mb_end": 346.3,
+  "temp_max_c": {
+   "avg": 54.37,
+   "min": 53.72,
+   "max": 55.81,
+   "n": 300
+  },
+  "temps_end_c": {
+   "cpu-thermal": 54.125,
+   "soc0-thermal": 50.687,
+   "soc1-thermal": 50.562,
+   "soc2-thermal": 50.312,
+   "tj-thermal": 54.437
+  }
+ }
+}

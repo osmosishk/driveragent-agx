@@ -1,0 +1,448 @@
+ingest mode sim bind 127.0.0.1 cams 6 seconds 300 sim procs [1953497]
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+--- t=  5.0 s  cpu 13%  ingest 104% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5035.7 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.5 ms age 6 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5069.3 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.0 ms age 14 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5091.4 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 19 ms
+  cam3 right-back SIMULATED fps 29.0 kbit/s   5024.4 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 20.1 ms age 36 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   4871.9 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 18.8 ms age 6 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5015.1 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.3 ms age 11 ms
+--- t= 10.0 s  cpu 20%  ingest 84% + rx procs 4% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4995.6 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.4 ms age 4 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5072.2 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 15 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5088.7 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 21 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   4993.7 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.5 ms age 10 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5249.0 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.0 ms age 4 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5045.8 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.3 ms age 8 ms
+--- t= 15.0 s  cpu 14%  ingest 104% + rx procs 8% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5023.3 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.5 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4968.0 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 14 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4823.5 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 19 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   4995.8 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.8 ms age 4 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5007.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.4 ms age 3 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4784.5 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.6 ms age 9 ms
+--- t= 20.0 s  cpu 14%  ingest 102% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4970.8 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.9 ms age 2 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4957.3 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.0 ms age 14 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4795.2 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 19 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   4968.9 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.0 ms age 35 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5091.4 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.0 ms age 11 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4708.3 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.8 ms age 14 ms
+--- t= 25.0 s  cpu 18%  ingest 88% + rx procs 5% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5017.0 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.8 ms age 4 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5072.6 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5023.3 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 20 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5011.7 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.5 ms age 9 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5169.6 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.5 ms age 4 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4968.2 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.2 ms age 15 ms
+--- t= 30.0 s  cpu 14%  ingest 101% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5035.6 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.0 ms age 8 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4981.0 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 14 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5122.1 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 19 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   4989.9 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.2 ms age 4 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5160.8 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.4 ms age 6 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5216.6 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.6 ms age 13 ms
+--- t= 35.0 s  cpu 14%  ingest 101% + rx procs 9% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5102.0 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.0 ms age 11 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5089.4 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.0 ms age 14 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5091.0 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 19 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   4996.6 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.9 ms age 4 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5042.1 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.4 ms age 9 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5289.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.9 ms age 8 ms
+--- t= 40.0 s  cpu 14%  ingest 107% + rx procs 9% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4999.9 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.4 ms age 5 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4993.7 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.1 ms age 14 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5129.0 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.6 ms age 19 ms
+  cam3 right-back SIMULATED fps 29.0 kbit/s   5008.8 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.3 ms age 35 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5002.9 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.4 ms age 13 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5029.3 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.8 ms age 7 ms
+--- t= 45.0 s  cpu 15%  ingest 108% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 29.0 kbit/s   5019.1 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.3 ms age 32 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4946.4 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5115.0 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 20 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5047.9 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.8 ms age 6 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   4907.4 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.3 ms age 10 ms
+  cam5 back       SIMULATED fps 31.0 kbit/s   5434.8 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.7 ms age 16 ms
+--- t= 50.0 s  cpu 14%  ingest 103% + rx procs 5% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5098.1 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.8 ms age 13 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5064.4 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 11 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5061.3 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 20 ms
+  cam3 right-back SIMULATED fps 29.0 kbit/s   5030.2 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.7 ms age 39 ms
+  cam4 left-back  SIMULATED fps 31.0 kbit/s   5017.0 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.0 ms age 6 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5078.9 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.6 ms age 10 ms
+--- t= 55.0 s  cpu 14%  ingest 104% + rx procs 8% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5357.8 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.8 ms age 6 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5123.1 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5174.7 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 21 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5379.2 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.3 ms age 15 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5135.8 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.0 ms age 9 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5305.6 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.0 ms age 46 ms
+--- t= 60.0 s  cpu 15%  ingest 111% + rx procs 8% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5091.4 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.7 ms age 3 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5057.0 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5136.1 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 21 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   4981.2 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.6 ms age 5 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5139.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.2 ms age 12 ms
+  cam5 back       SIMULATED fps 31.0 kbit/s   5043.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 16.2 ms age 17 ms
+--- t= 65.0 s  cpu 14%  ingest 110% + rx procs 6% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4995.7 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 17.1 ms age 10 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5156.0 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5093.2 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 22 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5035.9 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.0 ms age 6 ms
+  cam4 left-back  SIMULATED fps 31.0 kbit/s   5096.4 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.2 ms age 11 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4899.2 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.6 ms age 15 ms
+--- t= 70.0 s  cpu 14%  ingest 112% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 31.0 kbit/s   4984.1 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 17.2 ms age 8 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5111.1 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.0 ms age 15 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4682.3 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 21 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5037.0 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.4 ms age 10 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   4992.6 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.9 ms age 38 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5081.1 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.8 ms age 11 ms
+--- t= 75.0 s  cpu 15%  ingest 105% + rx procs 9% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 29.0 kbit/s   5107.6 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.6 ms age 42 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4890.6 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.1 ms age 14 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5134.7 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 21 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5035.8 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.8 ms age 12 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   4976.6 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.4 ms age 8 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4806.9 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.3 ms age 19 ms
+--- t= 80.0 s  cpu 14%  ingest 110% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4910.7 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.4 ms age 6 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5120.6 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.2 ms age 15 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4731.4 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 23 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   4886.6 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.0 ms age 8 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   5016.0 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.7 ms age 46 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4680.4 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.3 ms age 18 ms
+--- t= 85.0 s  cpu 18%  ingest 90% + rx procs 6% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 29.0 kbit/s   5006.2 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.7 ms age 34 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5082.5 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.1 ms age 15 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4669.6 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 21 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5013.2 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.2 ms age 10 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5038.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.9 ms age 17 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5081.2 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 16.3 ms age 9 ms
+--- t= 90.0 s  cpu 18%  ingest 84% + rx procs 5% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5103.7 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.2 ms age 2 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5109.8 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.1 ms age 15 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5101.3 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 21 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5017.0 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.5 ms age 14 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   5031.2 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.6 ms age 40 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5092.9 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 16.0 ms age 14 ms
+--- t= 95.0 s  cpu 14%  ingest 99% + rx procs 9% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5048.2 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.8 ms age 10 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5169.3 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4767.2 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 20 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5005.0 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.4 ms age 10 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5020.4 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.1 ms age 9 ms
+  cam5 back       SIMULATED fps 29.0 kbit/s   5093.7 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.4 ms age 43 ms
+--- t=100.0 s  cpu 14%  ingest 101% + rx procs 6% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4984.8 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.5 ms age 14 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4976.4 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.8 ms age 2 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5093.6 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.6 ms age 21 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5015.3 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.4 ms age 10 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   4936.3 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.0 ms age 16 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4932.6 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.4 ms age 10 ms
+--- t=105.0 s  cpu 19%  ingest 92% + rx procs 8% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5023.8 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.1 ms age 12 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5045.4 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.8 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5231.2 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.6 ms age 22 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5039.7 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.9 ms age 10 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5207.4 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.7 ms age 7 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5140.1 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.0 ms age 15 ms
+--- t=110.0 s  cpu 14%  ingest 100% + rx procs 4% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5005.5 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.7 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5047.5 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.8 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5116.3 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 22 ms
+  cam3 right-back SIMULATED fps 29.0 kbit/s   5047.9 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.9 ms age 46 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5108.5 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.6 ms age 12 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4911.7 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.7 ms age 20 ms
+--- t=115.0 s  cpu 14%  ingest 102% + rx procs 4% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5259.3 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.1 ms age 3 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5258.9 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5182.4 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 22 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5447.0 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.4 ms age 8 ms
+  cam4 left-back  SIMULATED fps 31.0 kbit/s   5166.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.7 ms age 14 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5319.1 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.3 ms age 20 ms
+--- t=120.0 s  cpu 14%  ingest 104% + rx procs 8% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5104.0 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.1 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4922.4 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5077.4 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 21 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5042.7 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.8 ms age 13 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   5014.3 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.5 ms age 39 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5244.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.6 ms age 12 ms
+--- t=125.0 s  cpu 14%  ingest 104% + rx procs 6% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 29.0 kbit/s   5040.8 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.7 ms age 34 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4924.5 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.6 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5110.9 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 23 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5039.4 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.4 ms age 16 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5037.9 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.3 ms age 12 ms
+  cam5 back       SIMULATED fps 31.0 kbit/s   5078.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 16.1 ms age 18 ms
+--- t=130.0 s  cpu 14%  ingest 104% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5079.1 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.8 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5019.0 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5116.7 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 22 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5035.6 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.4 ms age 12 ms
+  cam4 left-back  SIMULATED fps 31.0 kbit/s   5030.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.2 ms age 11 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5193.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.2 ms age 13 ms
+--- t=135.0 s  cpu 14%  ingest 97% + rx procs 5% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 29.0 kbit/s   5122.6 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.6 ms age 38 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5124.3 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.8 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4772.8 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 21 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5033.7 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.9 ms age 11 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5004.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.1 ms age 10 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4874.9 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.8 ms age 19 ms
+--- t=140.0 s  cpu 14%  ingest 106% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4793.6 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.5 ms age 2 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4908.9 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4603.5 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 21 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   4874.0 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.5 ms age 11 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   4947.3 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.7 ms age 44 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4941.9 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.1 ms age 18 ms
+--- t=145.0 s  cpu 19%  ingest 94% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5015.1 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.5 ms age 5 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5015.5 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.8 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4841.7 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 22 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5060.9 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.2 ms age 16 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   5029.6 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.9 ms age 40 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4476.6 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.9 ms age 17 ms
+--- t=150.0 s  cpu 14%  ingest 110% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5090.2 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.8 ms age 10 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4936.8 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5120.6 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 22 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   4998.9 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.7 ms age 13 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   4884.2 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.9 ms age 40 ms
+  cam5 back       SIMULATED fps 31.0 kbit/s   5062.2 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.5 ms age 14 ms
+--- t=155.0 s  cpu 14%  ingest 100% + rx procs 5% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 31.0 kbit/s   4963.5 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.7 ms age 1 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4949.9 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5108.2 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 22 ms
+  cam3 right-back SIMULATED fps 29.0 kbit/s   5001.4 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.0 ms age 46 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5079.5 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.6 ms age 17 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4830.1 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.3 ms age 22 ms
+--- t=160.0 s  cpu 14%  ingest 104% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5092.0 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.3 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5087.7 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.6 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5113.6 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 21 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5012.8 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.4 ms age 11 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5063.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.5 ms age 10 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5247.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.3 ms age 10 ms
+--- t=165.0 s  cpu 14%  ingest 103% + rx procs 5% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5195.4 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.8 ms age 4 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5071.1 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.6 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5253.5 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 23 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5131.3 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.2 ms age 18 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5053.2 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.1 ms age 57 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4941.2 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.5 ms age 20 ms
+--- t=170.0 s  cpu 14%  ingest 103% + rx procs 8% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5053.3 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.4 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5135.0 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5147.0 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.1 ms age 24 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   4996.7 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.4 ms age 9 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5130.8 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.1 ms age 9 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5073.5 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.8 ms age 16 ms
+--- t=175.0 s  cpu 15%  ingest 107% + rx procs 5% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5242.7 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.1 ms age 1 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5105.7 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 15 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5141.7 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.2 ms age 22 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5083.2 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.1 ms age 13 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5131.6 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.3 ms age 47 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5037.5 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.2 ms age 22 ms
+--- t=180.0 s  cpu 14%  ingest 104% + rx procs 8% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 29.0 kbit/s   5034.8 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.6 ms age 36 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4965.6 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.8 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5118.0 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 23 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5039.2 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.9 ms age 20 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   4983.2 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.0 ms age 14 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4965.9 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.8 ms age 20 ms
+--- t=185.0 s  cpu 20%  ingest 80% + rx procs 6% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5050.6 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.5 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4967.7 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.8 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5036.3 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 22 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5038.0 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.6 ms age 14 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   5065.2 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.3 ms age 40 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4808.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.2 ms age 14 ms
+--- t=190.0 s  cpu 14%  ingest 107% + rx procs 8% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4871.8 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.6 ms age 43 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4981.2 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 11 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4782.6 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 21 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   4880.9 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.7 ms age 8 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   4839.8 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.8 ms age 16 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4669.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.0 ms age 23 ms
+--- t=195.0 s  cpu 14%  ingest 102% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5017.2 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.8 ms age 6 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4952.3 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 15 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5120.5 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 22 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5037.5 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.7 ms age 10 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   5005.3 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.4 ms age -2 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5127.1 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.0 ms age 25 ms
+--- t=200.0 s  cpu 16%  ingest 98% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5018.5 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.9 ms age 8 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5195.1 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5043.6 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 22 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5033.5 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.9 ms age 8 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5007.8 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.1 ms age 13 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5146.4 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.8 ms age 21 ms
+--- t=205.0 s  cpu 18%  ingest 85% + rx procs 4% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5016.2 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.7 ms age 11 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5054.1 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 18 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4787.7 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.3 ms age 24 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5040.8 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.1 ms age 12 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5042.1 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.3 ms age 2 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4442.6 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.7 ms age 22 ms
+--- t=210.0 s  cpu 16%  ingest 106% + rx procs 6% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5019.5 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.6 ms age 8 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5052.8 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.6 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5018.9 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.3 ms age 22 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5031.6 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.6 ms age 13 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5015.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.5 ms age -3 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5067.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.4 ms age 18 ms
+--- t=215.0 s  cpu 14%  ingest 102% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 31.0 kbit/s   5156.4 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.8 ms age 10 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5009.0 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4869.8 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 24 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5164.7 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.4 ms age 4 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5198.9 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.5 ms age 19 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5119.5 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.2 ms age 20 ms
+--- t=220.0 s  cpu 14%  ingest 101% + rx procs 8% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 31.0 kbit/s   5029.1 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.4 ms age 11 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5163.8 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5092.8 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.3 ms age 23 ms
+  cam3 right-back SIMULATED fps 29.0 kbit/s   5034.7 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.4 ms age 54 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   4927.3 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.1 ms age 16 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5403.4 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.2 ms age 23 ms
+--- t=225.0 s  cpu 13%  ingest 103% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5039.7 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.7 ms age 6 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5096.8 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5117.1 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.3 ms age 22 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5026.3 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 18.9 ms age -3 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   4950.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.7 ms age 22 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4831.9 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.0 ms age 18 ms
+--- t=230.0 s  cpu 14%  ingest 105% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4928.6 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.9 ms age 6 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5135.0 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.0 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5038.5 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 24 ms
+  cam3 right-back SIMULATED fps 29.0 kbit/s   5037.9 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.2 ms age 49 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5110.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.4 ms age 19 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5485.4 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.5 ms age 27 ms
+--- t=235.0 s  cpu 14%  ingest 106% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5127.2 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.8 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5250.9 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.0 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5168.9 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 22 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5126.4 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.6 ms age 10 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5100.0 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.8 ms age 45 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5038.2 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.5 ms age 24 ms
+--- t=240.0 s  cpu 14%  ingest 96% + rx procs 8% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5068.6 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.6 ms age 3 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5080.3 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.1 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5142.8 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 23 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5034.0 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.4 ms age 15 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   4890.3 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.2 ms age 16 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5025.6 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 13.9 ms age 29 ms
+--- t=245.0 s  cpu 14%  ingest 100% + rx procs 5% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4982.6 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.6 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5063.3 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.0 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5093.6 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.6 ms age 23 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5037.7 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.5 ms age 11 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5086.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.6 ms age 19 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4849.7 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.5 ms age 6 ms
+--- t=250.0 s  cpu 14%  ingest 102% + rx procs 13% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4790.7 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.4 ms age 8 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4988.0 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4767.5 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 24 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   4789.0 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.4 ms age 12 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   4981.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.1 ms age 47 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4855.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.1 ms age 27 ms
+--- t=255.0 s  cpu 14%  ingest 109% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 29.0 kbit/s   5051.0 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.7 ms age 39 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5093.2 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.0 ms age 18 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4869.4 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.3 ms age 27 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5000.0 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.2 ms age 17 ms
+  cam4 left-back  SIMULATED fps 31.0 kbit/s   5073.5 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.8 ms age 19 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4990.9 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.0 ms age 30 ms
+--- t=260.0 s  cpu 14%  ingest 112% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5113.6 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.9 ms age 0 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4954.2 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.1 ms age 16 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5145.0 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 24 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5052.3 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.7 ms age 19 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5125.8 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.4 ms age 19 ms
+  cam5 back       SIMULATED fps 29.0 kbit/s   4971.5 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.8 ms age 56 ms
+--- t=265.0 s  cpu 21%  ingest 80% + rx procs 6% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5018.8 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.2 ms age 3 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5168.6 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5102.8 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 23 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5050.3 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.5 ms age 13 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5028.8 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.4 ms age 12 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4809.9 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.7 ms age 23 ms
+--- t=270.0 s  cpu 14%  ingest 99% + rx procs 9% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5021.3 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.2 ms age 10 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4954.7 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.7 ms age 10 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4808.7 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 23 ms
+  cam3 right-back SIMULATED fps 29.0 kbit/s   5022.5 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.3 ms age -2 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5059.0 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.5 ms age 18 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5550.4 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.6 ms age 30 ms
+--- t=275.0 s  cpu 13%  ingest 100% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5192.7 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.2 ms age 11 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5071.8 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.8 ms age 19 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5259.1 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 26 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5249.1 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.5 ms age 14 ms
+  cam4 left-back  SIMULATED fps 31.0 kbit/s   5087.2 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 18.7 ms age 20 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5272.5 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 15.0 ms age 28 ms
+--- t=280.0 s  cpu 19%  ingest 82% + rx procs 4% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   4961.0 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.3 ms age 15 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4861.1 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.0 ms age 23 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5138.3 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 27 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5026.6 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.2 ms age 19 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5055.7 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 18.9 ms age 19 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4974.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 16.1 ms age 31 ms
+--- t=285.0 s  cpu 14%  ingest 105% + rx procs 9% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5100.1 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.5 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5065.5 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.9 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4727.1 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 24 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5062.4 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.6 ms age 12 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5034.4 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.1 ms age 14 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4924.5 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 16.2 ms age 22 ms
+--- t=290.0 s  cpu 14%  ingest 110% + rx procs 5% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5028.4 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 16.3 ms age 9 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   4969.4 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.0 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   4644.9 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 25 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5018.5 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.8 ms age 16 ms
+  cam4 left-back  SIMULATED fps 29.0 kbit/s   4994.3 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 19.4 ms age 49 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5213.6 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 16.1 ms age 27 ms
+--- t=295.0 s  cpu 14%  ingest 99% + rx procs 7% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 30.0 kbit/s   5150.8 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.1 ms age 8 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5106.0 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 11.1 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5174.6 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.5 ms age 23 ms
+  cam3 right-back SIMULATED fps 30.0 kbit/s   5103.4 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.4 ms age 9 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   4977.2 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.1 ms age 14 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   5065.2 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 16.1 ms age 23 ms
+--- t=300.0 s  cpu 14%  ingest 101% + rx procs 9% (of one core)  gpu 0%
+  cam0 front      SIMULATED fps 29.0 kbit/s   5039.7 lost pkt 0 frm 0 bad 0 idr-wait 16 decode p50 15.2 ms age 39 ms
+  cam1 right      SIMULATED fps 30.0 kbit/s   5052.5 lost pkt 0 frm 0 bad 0 idr-wait 10 decode p50 10.8 ms age 17 ms
+  cam2 left       SIMULATED fps 30.0 kbit/s   5137.5 lost pkt 0 frm 0 bad 0 idr-wait 4 decode p50 8.4 ms age 23 ms
+  cam3 right-back SIMULATED fps 31.0 kbit/s   5028.1 lost pkt 0 frm 0 bad 0 idr-wait 28 decode p50 19.0 ms age 15 ms
+  cam4 left-back  SIMULATED fps 30.0 kbit/s   5009.1 lost pkt 0 frm 0 bad 0 idr-wait 22 decode p50 20.3 ms age 15 ms
+  cam5 back       SIMULATED fps 30.0 kbit/s   4768.0 lost pkt 0 frm 0 bad 0 idr-wait 15 decode p50 14.9 ms age 26 ms
+--- summary
+  cam0 fps avg 30.0 min 29.0 kbit/s avg 5031.4 frames 9014 lost pkt 0 frm 0 decode p50 15.2 p95 22.4 ms age max 46 ms
+  cam1 fps avg 30.0 min 29.0 kbit/s avg 5031.3 frames 9015 lost pkt 0 frm 0 decode p50 10.8 p95 15.9 ms age max 50 ms
+  cam2 fps avg 30.0 min 30.0 kbit/s avg 5042.1 frames 9015 lost pkt 0 frm 0 decode p50 8.4 p95 9.3 ms age max 27 ms
+  cam3 fps avg 29.9 min 14.0 kbit/s avg 5031.6 frames 8985 lost pkt 0 frm 0 decode p50 19.0 p95 23.4 ms age max 54 ms
+  cam4 fps avg 29.9 min 15.0 kbit/s avg 5028.7 frames 8985 lost pkt 0 frm 0 decode p50 20.3 p95 24.0 ms age max 57 ms
+  cam5 fps avg 29.9 min 15.0 kbit/s avg 5031.6 frames 8985 lost pkt 0 frm 0 decode p50 14.9 p95 22.9 ms age max 64 ms
+  cpu total avg 15.06%  ingest avg 102.98% + rx procs 6.75% of one core  sim 15.17%  gpu avg 0.0%  ram 7287.5 -> 7463.3 MB  rss 39.5 -> 346.3 MB  temp max 55.81 C
+json: /home/tonyho/driveragent-agx/tests/out/t3_ingest_5min.json
+Opening in BLOCKING MODE 
+Opening in BLOCKING MODE 
+Opening in BLOCKING MODE 
+Opening in BLOCKING MODE 
+Opening in BLOCKING MODE 
+Opening in BLOCKING MODE 
