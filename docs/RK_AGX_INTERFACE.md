@@ -199,7 +199,7 @@ Each fragment is one UDP datagram (RK repo, `rk/docs/BRINGUP_REPORT.md:783`). Th
 | Chunk at MTU 9000 | 8896 B | RK repo (`RK3588_AGENT_KICKOFF.md:86`); AGX `common/framelink.py:52` |
 | Chunk at MTU 1500 | 1456 B (UDP payload 1472 B). The kick-off value 1472 B + 16 B overflows MTU 1500. | RK repo (`rk/docs/BRINGUP_REPORT.md:1593`, gap row `:1631`). Not agreed yet: open question `:1711`. AGX uses it (`common/framelink.py:53`) |
 | Chunk size on the receiver | Any size. The receiver uses `offset`. | AGX proposal (`common/framelink.py:176-204`) |
-| Max frame | 4 MiB | AGX proposal (`common/framelink.py:148`; `max_frame_bytes: 4194304`, `config/sources.yaml:35`) |
+| Max frame | 2 MiB in the receive processes (4 MiB in the thread-mode reassembler) | AGX proposal (`max_frame_bytes` in `config/sources.yaml`; `common/framelink.py` Reassembler default) |
 | Frames in flight per camera | 4 | AGX proposal (`common/framelink.py:148`) |
 | Partial frame timeout | 200 ms, then the frame is abandoned | AGX proposal (`common/framelink.py:149`, `:205-208`; `reassembly_timeout_s: 0.2`, `config/sources.yaml:42`) |
 | Newest frame wins | A complete frame abandons all older partial frames of that camera | AGX proposal (`common/framelink.py:212-215`) |
@@ -451,7 +451,7 @@ struct AgxInferStatus {
 
 | Item | Value | Source |
 |---|---|---|
-| URL | HTTP GET `http://<agx>:8700/api/health` | Night-task Section 6/7 default; check `dashboard/app.py:186-188` |
+| URL | HTTP GET `http://<agx>:8700/api/health` | Night-task Section 6/7 default; check `dashboard/app.py` route `/api/health` |
 | Auth | HTTP Basic auth, realm `agx02-dashboard` | AGX proposal; check `dashboard/auth.py:17` |
 | Allowed sources | Private addresses only: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 (tailscale), 169.254.0.0/16, ::1, fc00::/7, fe80::/10 | AGX proposal; check `config/dashboard.yaml:7-16` |
 | Methods | GET only (POST gives 405) | Check `tests/test_dashboard.py:170` |

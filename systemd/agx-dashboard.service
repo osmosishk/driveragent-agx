@@ -1,0 +1,26 @@
+# driveragent-agx dashboard (FastAPI, port 8700, HTTP Basic auth, private networks only).
+# Install (needs sudo, owner approval): see install_units.sh. Do NOT enable at boot without approval.
+[Unit]
+Description=driveragent-agx dashboard (agx-dashboard)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=tonyho
+Group=tonyho
+WorkingDirectory=/home/tonyho/driveragent-agx
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/home/tonyho/driveragent-agx
+ExecStart=/home/tonyho/driveragent-agx/.venv/bin/python -m dashboard.main --config /home/tonyho/driveragent-agx/config/dashboard.yaml
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/home/tonyho/driveragent-agx/data /home/tonyho/driveragent-agx/logs
+
+[Install]
+WantedBy=multi-user.target
