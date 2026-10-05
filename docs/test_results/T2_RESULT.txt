@@ -1,0 +1,18 @@
+## T2 test 2026-10-05T21:42:04+01:00
+$ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8700/api/health   (no password)
+401
+$ curl -s -o /dev/null -w '%{http_code}' -u agx:WRONG http://127.0.0.1:8700/api/health
+401
+$ curl -s -u "agx:$AGX_DASH_PASSWORD" http://127.0.0.1:8700/api/health  (password from .env, not shown) | selected fields
+page http 200 bytes 6952
+schema agx-health/1 | hostname agx02 | node_state OK | nvpmodel {'mode': 'MAXN', 'id': 0, 'error': None}
+cpu cores 12 | cpu load avg % 3.9 | gpu load % 0.0 | gpu MHz 306
+ram MB used/total 6584 / 62841 ok | temps max C 53.8 ok
+power W 8.52 | fan {'pwm_pct': 27.1, 'pwm_raw': 69, 'rpm': 1184} | uptime s 909311.1
+disk [('/', 67.7, 'ok'), ('/boot/efi', 0.2, 'ok')]
+net [('can0', None, 'down'), ('can1', None, 'down'), ('docker0', 10000, 'up'), ('eno1', 2500, 'up'), ('l4tbr0', None, 'down'), ('tailscale0', None, 'unknown')]
+link {'rk_ip': '100.64.0.180', 'ping_ms': 10.6, 'loss_pct': 0.0, 'clock_offset_ms': None, 'clock_method': 'none'}
+infer None
+changed between two calls 1.1 s apart: ['time', 'uptime_s', 'cpu.per_core', 'power.total_w', 'temps'] | time 1791232924.145 -> 1791232925.145
+SSE events in 3.5 s: 4
+<title>agx02 dashboard</title>

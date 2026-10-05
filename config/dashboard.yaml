@@ -1,0 +1,82 @@
+# agx02 dashboard (read-only). Paths are relative to the project root.
+port: 8700                 # if in use, the next free port is used (8701, ...)
+port_file: data/dashboard_port
+bind: "0.0.0.0"            # IPv4, all interfaces. Access is limited by allow_cidrs and HTTP Basic auth.
+env_file: .env             # AGX_DASH_USER / AGX_DASH_PASSWORD / AGX_MQTT_*
+# Plain HTTP + Basic auth: the password crosses the network on every request (also on SSE
+# reconnects). Use the page through tailscale (100.64.0.0/10) or loopback. Optional TLS: set both
+# files (PEM) and the page is served as https.
+tls_certfile: null
+tls_keyfile: null
+
+# IP allowlist (R12 list). The password is still needed from every address. To narrow it, keep
+# 127.0.0.0/8, 10.0.0.0/24 (eno1) and 100.64.0.0/10 (tailscale). 172.16.0.0/12 includes docker0.
+allow_cidrs:
+  - 127.0.0.0/8
+  - ::1/128
+  - 10.0.0.0/8
+  - 172.16.0.0/12
+  - 192.168.0.0/16
+  - 100.64.0.0/10          # tailscale
+  - 169.254.0.0/16
+  - fc00::/7
+  - fe80::/10
+
+rk_ip: 100.64.0.180
+
+link:
+  ping_interval_s: 2
+  loss_window_s: 60
+  clock_method: auto       # auto | http_date | clockdiff | none
+  clock_http_port: null    # null = in auto mode, try clock_http_ports_auto
+  clock_http_ports_auto: [80, 8080, 8000]
+  clock_interval_s: 30
+
+infer_status_endpoint: tcp://127.0.0.1:5562
+infer_stale_s: 3
+
+docker: true
+
+services:
+  agx_units: [agx-dashboard, agx-infer, agx-sim]
+  log_units: [agx-infer, agx-dashboard]   # whitelist for /api/services/logs
+  unit_refresh_s: 5
+  docker_refresh_s: 10
+  docker_inspect_cache_s: 30
+
+# Units from the audit (docs/audit/agx_audit_agx02_20261005_210334/raw/
+# Custom_systemd_units__created_by_hand_.txt) plus docker.service. The coordinator may edit this list.
+old_units:
+  # No systemd unit exists for the OLD DriverAgent stack: it starts by hand (~/s.sh -> start.py).
+  # Its only autostart item is the Docker container driveragent-valhalla (see "Docker containers").
+  # This list shows the units that matter for this inference node and for docs/CLEANUP_PROPOSAL.md.
+  - docker.service                       # runs driveragent-valhalla (old map service, MOVE TO RK3588)
+  - jtop.service                         # jetson-stats (health data source; KEEP)
+  - nvpmodel.service                     # power mode (KEEP)
+  - nvfancontrol.service                 # fan (KEEP)
+  - nvargus-daemon.service               # CSI camera daemon of JetPack (not used by FrameLink ingest)
+  - tailscaled.service                   # path to the RK3588 tonight (KEEP)
+  - ssh.service                          # remote access (KEEP)
+  - systemd-timesyncd.service            # clock (NTP); no PTP yet
+  - gdm.service                          # desktop (proposal: DISABLE)
+  - nxserver.service                     # NoMachine remote desktop (proposal: owner decides)
+  - openvpn@uk-ovpn-agent-20.service     # VPN; fails TLS handshake now (proposal: owner decides)
+  - snap.cups.cupsd.service              # printing (proposal: DISABLE)
+  - snapd.service                        # snap daemon (proposal: DISABLE last)
+  - packagekit.service                   # package updates (proposal: DISABLE)
+
+history:
+  db: data/history.sqlite
+  max_mb: 50
+  memory_s: 3600           # 1 h at 1 s in memory
+  db_step_s: 10            # 24 h at 10 s in SQLite
+  db_keep_s: 86400
+  cleanup_interval_s: 600
+
+limits:
+  temp_c: {warn: 70, crit: 85}
+  ram_pct: {warn: 80, crit: 90}
+  disk_pct: {warn: 80, crit: 90}
+
+nvpmodel_interval_s: 30
+mqtt_interval_s: 5

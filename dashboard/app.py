@@ -1,0 +1,295 @@
+"""FastAPI app factory for the agx02 dashboard. READ-ONLY: GET routes only."""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import re
+import time
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+
+from common.env import get, load_env
+from dashboard.auth import GuardMiddleware
+from dashboard.collectors.health import HealthCollector, worst
+from dashboard.collectors.infer_status import InferStatusClient
+from dashboard.collectors.link import LinkMonitor
+from dashboard.collectors.services import ServicesCollector
+from dashboard.config import resolve_path
+from dashboard.history import History
+from dashboard.mqtt_pub import start_mqtt
+
+log = logging.getLogger("dashboard.app")
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+HEALTH_SCHEMA = "agx-health/1"
+METRIC_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
+INFER_TO_LEVEL = {"RUNNING": "ok", "STARTING": "warn", "DEGRADED": "warn", "ERROR": "crit"}
+HEALTH_STALE_S = 3.0  # a health sample older than this is not "current"
+CSP = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
+       "script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+
+
+class SecurityHeaders:
+    """Pure ASGI: add security headers to every HTTP response (does not buffer SSE)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def _send(msg):
+            if msg["type"] == "http.response.start":
+                h = list(msg.get("headers") or [])
+                h += [(b"content-security-policy", CSP.encode()),
+                      (b"x-content-type-options", b"nosniff"),
+                      (b"referrer-policy", b"no-referrer"),
+                      (b"x-frame-options", b"DENY")]
+                msg = dict(msg, headers=h)
+            await send(msg)
+        return await self.app(scope, receive, _send)
+
+
+class Hub:
+    """Holds the collectors and builds the API documents."""
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self.health = HealthCollector(cfg)
+        self.link = LinkMonitor(cfg)
+        self.services = ServicesCollector(cfg)
+        self.infer = InferStatusClient(cfg["infer_status_endpoint"], cfg.get("infer_stale_s", 3))
+        h = cfg["history"]
+        self.history = History(resolve_path(h["db"]), h["max_mb"], h["memory_s"], h["db_step_s"],
+                               h["db_keep_s"], h["cleanup_interval_s"])
+        self.health.add_listener(self._on_sample)
+        self.mqtt = None
+
+    def _on_sample(self, s: dict):
+        m = {
+            "gpu_load_pct": s["gpu"]["load_pct"],
+            "ram_used_pct": s["ram"]["pct"],
+            "temp_max_c": s["temps"]["max_c"],
+            "power_total_w": s["power"]["total_w"],
+            "cpu_load_avg_pct": s["cpu"]["load_pct_avg"],
+        }
+        m.update(self.infer.metrics())
+        self.history.add(s["t"], m)
+
+    def start(self, env: dict):
+        self.history.start()
+        self.infer.start()
+        self.health.start()
+        self.link.start()
+        self.services.start()
+        self.mqtt = start_mqtt(env, self.health_doc, self.cfg.get("mqtt_interval_s", 5))
+
+    def stop(self):
+        for c in (self.mqtt, self.health, self.link, self.services, self.infer, self.history):
+            if c is not None:
+                try:
+                    c.stop()
+                except Exception:
+                    log.exception("stop failed")
+
+    def link_doc(self) -> dict:
+        d = self.link.summary()
+        d.update(self.infer.link_part())
+        return d
+
+    def health_doc(self) -> dict:
+        s = self.health.latest() or self.health.sample()
+        inf = self.infer.summary()
+        now = time.time()
+        age = round(now - s["t"], 1)
+        stale = age > HEALTH_STALE_S
+        levels = [s["temps"]["level"], s["ram"]["level"]] + [d["level"] for d in s["disk"]]
+        reasons = []
+        if s["temps"]["level"] == "n/a":
+            reasons.append("temperature n/a (no thermal zone readable)")
+        if s["ram"]["level"] == "n/a":
+            reasons.append("RAM n/a (" + str(s["ram"].get("na") or "not readable") + ")")
+        if s["temps"]["level"] in ("warn", "crit"):
+            reasons.append(f"temperature {s['temps']['max_c']} C ({s['temps']['max_zone']})")
+        if s["ram"]["level"] in ("warn", "crit"):
+            reasons.append(f"RAM {s['ram']['pct']} %")
+        for d in s["disk"]:
+            if d["level"] in ("warn", "crit"):
+                reasons.append(f"disk {d['mount']} {d['pct']} %")
+        node_source = "local limits"
+        if inf["infer"] is not None:
+            il = INFER_TO_LEVEL.get(inf["infer_state"], "warn")
+            levels.append(il)
+            node_source = "local limits + agx-infer"
+            if il != "ok":
+                reasons.append(f"agx-infer {inf['infer_state']}")
+        real = [lv for lv in levels if lv in ("ok", "warn", "crit")]
+        if stale:
+            node_state = "UNKNOWN"
+            reasons.insert(0, f"health sample stale ({age} s old): values are not current")
+        elif not real:
+            node_state = "UNKNOWN"
+            reasons.insert(0, "no measured input (temperature, RAM, disk and agx-infer are n/a)")
+        else:
+            node_state = worst(real).upper()
+        doc = {
+            "schema": HEALTH_SCHEMA,
+            "hostname": s["hostname"],
+            "time": round(s["t"], 3),
+            "time_iso": s["time_iso"],
+            "age_s": age,
+            "stale": stale,
+            "uptime_s": s["uptime_s"],
+            "node_state": node_state,
+            "node_state_source": node_source,
+            "node_state_reasons": reasons,
+            "nvpmodel": s["nvpmodel"],
+            "cpu": s["cpu"],
+            "gpu": s["gpu"],
+            "ram": s["ram"],
+            "swap": s["swap"],
+            "temps": s["temps"],
+            "power": s["power"],
+            "fan": s["fan"],
+            "disk": s["disk"],
+            "net": s["net"],
+            "link": self.link_doc(),
+            "infer": inf["infer"],
+            "infer_state": inf["infer_state"],
+            "infer_reason": inf["infer_reason"],
+            "simulated": bool(inf["infer"] and inf["infer"]["simulated"]),
+            "limits": self.cfg["limits"],
+            "errors": list(s["errors"]),
+        }
+        if stale:
+            doc["errors"].append(f"health sample stale: last good sample {age} s old")
+        if self.history.db_error:
+            doc["errors"].append(self.history.db_error)
+        return doc
+
+
+def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True) -> FastAPI:
+    if env is None:
+        env = load_env(resolve_path(cfg.get("env_file", ".env")))
+    user = get(env, "AGX_DASH_USER", "agx")
+    password = get(env, "AGX_DASH_PASSWORD")
+    if not password:
+        raise RuntimeError("AGX_DASH_PASSWORD is not set in .env: refuse to start without a password")
+
+    hub = Hub(cfg)
+
+    @asynccontextmanager
+    async def lifespan(app):
+        if start_collectors:
+            hub.start(env)
+        yield
+        hub.stop()
+
+    app = FastAPI(title="agx02 dashboard", docs_url=None, redoc_url=None, openapi_url=None,
+                  lifespan=lifespan)
+    app.state.hub = hub
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    def nocache(data, status=200):
+        return JSONResponse(data, status_code=status, headers={"cache-control": "no-store"})
+
+    @app.get("/", include_in_schema=False)
+    def index():
+        return FileResponse(STATIC_DIR / "index.html", headers={"cache-control": "no-cache"})
+
+    @app.get("/api/health")
+    def api_health():
+        return nocache(hub.health_doc())
+
+    @app.get("/api/link")
+    def api_link():
+        d = hub.link_doc()
+        d["ping_history"] = hub.link.ping_history(3600)
+        return nocache(d)
+
+    @app.get("/api/services")
+    def api_services():
+        d = hub.services.snapshot()
+        d["summary"] = hub.services.summary()
+        return nocache(d)
+
+    @app.get("/api/services/logs")
+    def api_logs(unit: str = Query(...)):
+        if unit not in hub.services.log_units:
+            return nocache({"error": "unit not allowed", "allowed": hub.services.log_units}, 400)
+        return nocache(hub.services.logs(unit, 100))
+
+    @app.get("/api/models")
+    def api_models():
+        return nocache(hub.infer.part("models"))
+
+    @app.get("/api/cameras")
+    def api_cameras():
+        return nocache(hub.infer.part("cameras"))
+
+    @app.get("/api/cameras/{cam}/snapshot.jpg")
+    def api_snapshot(cam: int):
+        if not 0 <= cam <= 5:
+            return nocache({"error": "camera index must be 0..5"}, 404)
+        st, state, reason, _ = hub.infer.current()
+        if st is None:
+            return nocache({"error": f"no snapshot for camera {cam}", "reason": reason}, 404)
+        snap = hub.infer.snapshot(cam)
+        if snap is None:
+            return nocache({"error": f"no snapshot for camera {cam}",
+                            "reason": "agx-infer sent no snapshot for this camera"}, 404)
+        data, t = snap
+        if time.time() - t > hub.infer.stale_s:
+            return nocache({"error": f"no snapshot for camera {cam}",
+                            "reason": f"last snapshot is {time.time() - t:.0f} s old "
+                                      f"(limit {hub.infer.stale_s:.0f} s)"}, 404)
+        return Response(data, media_type="image/jpeg",
+                        headers={"cache-control": "no-store", "x-snapshot-age-s": f"{time.time() - t:.1f}"})
+
+    @app.get("/api/history")
+    def api_history(range: str = Query("1h"), metrics: str | None = Query(None)):
+        rs = {"1h": 3600, "24h": 86400}.get(range)
+        if rs is None:
+            return nocache({"error": "range must be 1h or 24h"}, 400)
+        names = None
+        if metrics:
+            names = [m for m in metrics.split(",") if m][:50]
+            if not all(METRIC_RE.match(m) for m in names):
+                return nocache({"error": "bad metric name"}, 400)
+        d = hub.history.query(rs, names)
+        d["available"] = hub.history.names()
+        return nocache(d)
+
+    @app.get("/api/stream")
+    async def api_stream(request: Request):
+        async def gen():
+            yield "retry: 3000\n\n"
+            n = 0
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    doc = await asyncio.to_thread(
+                        lambda: {"health": hub.health_doc(), "services": hub.services.summary()})
+                    n += 1
+                    yield f"id: {n}\ndata: {json.dumps(doc, separators=(',', ':'))}\n\n"
+                except Exception:  # keep the stream alive; details only in the server log
+                    log.exception("stream build failed")
+                    yield 'event: fail\ndata: {"error":"stream build failed"}\n\n'
+                await asyncio.sleep(1.0 - (time.time() % 1.0) + 0.05)
+
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"cache-control": "no-store", "x-accel-buffering": "no"})
+
+    allow = cfg.get("allow_cidrs")
+    # add_middleware puts the newest one outside: SecurityHeaders is outermost, so the
+    # 401/403 replies of GuardMiddleware also get the security headers.
+    app.add_middleware(GuardMiddleware, user=user, password=password, allow_cidrs=allow)
+    app.add_middleware(SecurityHeaders)
+    return app

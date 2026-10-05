@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>agx02 dashboard</title>
+<link rel="stylesheet" href="/static/vendor/uPlot.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-l">
+    <h1 id="host">agx02</h1>
+    <span id="node-state" class="badge lv-na" title="Node state">NO DATA</span>
+    <span id="sim-badge" class="badge sim" hidden>SIMULATED</span>
+  </div>
+  <div class="top-r">
+    <span class="kv"><span class="k">Time</span> <span id="time">-</span></span>
+    <span class="kv"><span class="k">Uptime</span> <span id="uptime">-</span></span>
+    <span class="kv"><span class="k">Power mode</span> <span id="nvp">-</span></span>
+    <span id="conn" class="conn off">Not connected</span>
+  </div>
+</header>
+<div id="state-reasons" class="reasons" hidden></div>
+
+<main class="grid">
+  <section class="card" id="c-cpu">
+    <h2>CPU <span class="big" id="cpu-avg">-</span></h2>
+    <div id="cpu-cores" class="cores"></div>
+  </section>
+
+  <section class="card" id="c-gpu">
+    <h2>GPU and memory</h2>
+    <div class="row"><span class="k">GPU load</span><span id="gpu-load" class="v">-</span></div>
+    <div class="bar"><i id="gpu-bar"></i></div>
+    <div class="row"><span class="k">GPU frequency</span><span id="gpu-freq" class="v">-</span></div>
+    <div class="row"><span class="k">RAM</span><span id="ram" class="v">-</span></div>
+    <div class="bar"><i id="ram-bar"></i></div>
+    <div class="row"><span class="k">Swap</span><span id="swap" class="v">-</span></div>
+    <p class="note">On Jetson, the GPU and the CPU use the same RAM.</p>
+  </section>
+
+  <section class="card" id="c-temp">
+    <h2>Temperatures <span class="big" id="temp-max">-</span></h2>
+    <table class="tbl" id="temp-tbl"><tbody></tbody></table>
+  </section>
+
+  <section class="card" id="c-power">
+    <h2>Power <span class="big" id="power-total">-</span></h2>
+    <p class="note" id="power-src"></p>
+    <table class="tbl" id="power-tbl">
+      <thead><tr><th>Rail</th><th class="n">V</th><th class="n">A</th><th class="n">W</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="row"><span class="k">Fan</span><span id="fan" class="v">-</span></div>
+  </section>
+
+  <section class="card" id="c-disk">
+    <h2>Disks</h2>
+    <div id="disks"></div>
+  </section>
+
+  <section class="card wide" id="c-net">
+    <h2>Network</h2>
+    <div class="scroll">
+    <table class="tbl" id="net-tbl">
+      <thead><tr><th>Interface</th><th>State</th><th class="n">Speed</th><th class="n">RX</th><th class="n">TX</th><th>IPv4</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="card" id="c-link">
+    <h2>RK3588 link</h2>
+    <div class="row"><span class="k">RK3588 address</span><span id="rk-ip" class="v">-</span></div>
+    <div class="row"><span class="k">Ping time</span><span id="ping" class="v">-</span></div>
+    <div class="row"><span class="k" id="loss-k">Packet loss</span><span id="loss" class="v">-</span></div>
+    <div class="row"><span class="k">Clock offset (RK - AGX)</span><span id="clock" class="v">-</span></div>
+    <p class="note" id="clock-note"></p>
+    <div class="row"><span class="k">Time since last frame</span><span id="frame-age" class="v">-</span></div>
+    <div class="row"><span class="k">Result publish rate</span><span id="res-rate" class="v">-</span></div>
+    <div class="row"><span class="k">Subscribers</span><span id="subs" class="v">-</span></div>
+  </section>
+
+  <section class="card" id="c-infer">
+    <h2>agx-infer <span id="infer-state" class="badge lv-na">NO DATA</span> <span id="infer-sim" class="badge sim" hidden>SIMULATED</span></h2>
+    <p id="infer-reason" class="note"></p>
+    <div class="placeholder" id="infer-wait">
+      <b>Models and cameras: no data from agx-infer</b>
+      <p class="note">This part shows data when agx-infer sends its status.</p>
+    </div>
+    <div id="infer-summary"></div>
+  </section>
+
+  <section class="card wide" id="c-svc">
+    <h2>Services</h2>
+    <h3>agx units</h3>
+    <div class="scroll">
+    <table class="tbl" id="agx-tbl">
+      <thead><tr><th>Unit</th><th>User manager</th><th>System manager</th><th class="n">PID</th><th class="n">Restarts</th><th class="n">Memory</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+    <h3>Docker containers <span id="docker-sum" class="muted"></span></h3>
+    <div class="scroll">
+    <table class="tbl" id="docker-tbl">
+      <thead><tr><th>Name</th><th>State</th><th>Status</th><th>Restart policy</th><th>Image</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+    <details id="old-det">
+      <summary>Old units <span id="old-sum" class="muted"></span></summary>
+      <div class="scroll">
+      <table class="tbl" id="old-tbl">
+        <thead><tr><th>Unit</th><th>State</th><th>Unit file</th><th class="n">PID</th><th class="n">Memory</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </details>
+    <p class="note" id="svc-err"></p>
+  </section>
+
+  <section class="card wide" id="c-logs">
+    <details id="logs-det">
+      <summary>Logs (last 100 lines)</summary>
+      <div class="logs-ctl">
+        <label for="logs-unit">Unit</label>
+        <select id="logs-unit">
+          <option value="agx-infer">agx-infer</option>
+          <option value="agx-dashboard">agx-dashboard</option>
+        </select>
+        <span id="logs-t" class="muted"></span>
+      </div>
+      <pre id="logs" class="logs">-</pre>
+    </details>
+  </section>
+
+  <section class="card wide" id="c-hist">
+    <h2>History
+      <span class="seg" role="group" aria-label="Time range">
+        <button type="button" data-range="1h" class="on">1 h</button>
+        <button type="button" data-range="24h">24 h</button>
+      </span>
+    </h2>
+    <p class="note" id="hist-src"></p>
+    <div class="charts">
+      <div class="chart" id="ch-load"><h3>Load (%)</h3><div class="plot"></div></div>
+      <div class="chart" id="ch-ram"><h3>RAM used (%)</h3><div class="plot"></div></div>
+      <div class="chart" id="ch-temp"><h3>Maximum temperature (°C)</h3><div class="plot"></div></div>
+      <div class="chart" id="ch-power"><h3>Power total (W)</h3><div class="plot"></div></div>
+      <div class="chart" id="ch-fps"><h3>Frames per second per camera <span class="badge sim" hidden>SIMULATED</span></h3><div class="plot"></div></div>
+      <div class="chart" id="ch-lat"><h3>Latency p50 per model (ms) <span class="badge sim" hidden>SIMULATED</span></h3><div class="plot"></div></div>
+    </div>
+  </section>
+</main>
+<footer class="foot">Read-only page. Data comes from this machine (/proc, /sys, systemd, docker). Values that are not available show "n/a".</footer>
+<script src="/static/vendor/uPlot.iife.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
