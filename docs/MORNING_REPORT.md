@@ -142,7 +142,10 @@ service restarts: 0. System RAM slope over the 30 min: -46 MB/h (no leak visible
 
 ### 4.5 Night run (T8, from 00:08 to 05:20)
 
-(Filled at the end of the night.)
+The night loggers (`agx-log-night-sysmon`, 10 s samples; `agx-log-night-status`, every 10th status)
+write `docs/test_results/t8/night_sysmon.jsonl` and `night_status.jsonl` until 05:20. The agent fills
+this section at the end of the night. If it still has no numbers, run:
+`PYTHONPATH=. .venv/bin/python -m tools.soak_report --sysmon docs/test_results/t8/night_sysmon.jsonl --status docs/test_results/t8/night_status.jsonl`
 
 ## 5. Old services or containers stopped
 
