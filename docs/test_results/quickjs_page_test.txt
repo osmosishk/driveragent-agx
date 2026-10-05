@@ -1,0 +1,9 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/tonyho/driveragent-agx
+plugins: anyio-4.13.0
+collected 15 items / 14 deselected / 1 selected
+
+tests/test_dashboard_v2.py .
+
+======================= 1 passed, 14 deselected in 0.25s =======================

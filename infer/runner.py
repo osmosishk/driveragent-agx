@@ -211,6 +211,16 @@ class FrameScheduler:
             return True
 
 
+def adapter_outputs(adapter, outs: dict) -> dict:
+    """Only the engine outputs that the adapter lists in ENGINE_OUTPUTS (rule R8: for DTCP only
+    pred_wp; mu, sigma and pred_speed never reach postprocess). An adapter with an empty
+    ENGINE_OUTPUTS gets all outputs (test adapters only; the real adapters list their outputs)."""
+    names = getattr(adapter, "ENGINE_OUTPUTS", ()) or ()
+    if not names:
+        return outs
+    return {k: outs[k] for k in names if k in outs}
+
+
 class ModelWorker(threading.Thread):
     """One worker thread of one model. `entry` is the manager's ModelEntry (duck-typed): it gives
     name, cameras, adapter, engine, scheduler, metrics, stop_event and report_error(text) -> None."""
@@ -255,7 +265,7 @@ class ModelWorker(threading.Thread):
             t_pre = time.monotonic()
             outs, infer_ms = self.slot.infer(inputs)
             t_inf = time.monotonic()
-            parts = e.adapter.postprocess(outs, frame, ctx)
+            parts = e.adapter.postprocess(adapter_outputs(e.adapter, outs), frame, ctx)
             t_end = time.monotonic()
         except Exception as ex:
             log.warning("model %s cam%d seq %d: %s", e.name, frame.cam, frame.seq, traceback.format_exc())

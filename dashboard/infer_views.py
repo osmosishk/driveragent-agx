@@ -27,7 +27,8 @@ import time
 
 import yaml
 
-from dashboard.collectors.infer_status import NOT_RUNNING, _d, _l, cam_simulated
+from dashboard.collectors.infer_status import (NOT_RUNNING, _d, _l, cam_simulated, model_simulated,
+                                                node_simulated)
 
 log = logging.getLogger("dashboard.views")
 
@@ -35,6 +36,7 @@ NUM_CAMS = 6
 SIM = "SIMULATED"
 GPU_MEM_NOTE = "estimate"
 _LAT_KEYS = ("pre", "infer", "post", "total")
+_ERR_KEYS = ("last_error", "last_error_t", "errors_total", "queue_ms", "auto_restarts")
 HOLD_CAP_EXTRA_S = 0.5  # hold_s <= no_signal_s + this (1.5 s): page NO SIGNAL < 2 s with the 250 ms check
 
 
@@ -142,7 +144,7 @@ class InferViews:
         if status_t is None or (rx is not None and status_t > rx + 1.0):
             status_t = rx  # no (or a wrong) status time: use the receive time
         roles = self.roles()
-        node_sim = bool(st and _d(st.get("node")).get("simulated") is True)
+        node_sim = node_simulated(st.get("node")) if st is not None else False
         by_cam = {}
         if st is not None:
             for c in _l(st.get("cameras")):
@@ -184,6 +186,9 @@ class InferViews:
                 "last_frame_t": lft,
                 "age_ms": round(a * 1000.0, 1) if a is not None else None,
                 "decode_p50_ms": _num(dm.get("p50")),
+                # ingest error text of this camera (agx-infer status), null when there is none
+                "last_error": (str(c["last_error"])[:300]
+                               if isinstance(c.get("last_error"), str) and c["last_error"] else None),
                 "snapshot_t": snap_t,
             })
             cams.append(out)
@@ -239,6 +244,19 @@ class InferViews:
             "engine_note": note,
         }
 
+    @staticmethod
+    def _error_fields(sm: dict) -> dict:
+        """last_error, last_error_t, errors_total, queue_ms, auto_restarts of one model entry of the
+        agx-infer status. A field that is missing or has a wrong type gives None."""
+        le = sm.get("last_error")
+        q = sm.get("queue_ms")
+        q = {p: _num(_d(q).get(p)) for p in ("p50", "p95", "p99")} if isinstance(q, dict) else None
+        ints = {k: (sm[k] if isinstance(sm.get(k), int) and not isinstance(sm.get(k), bool) else None)
+                for k in ("errors_total", "auto_restarts")}
+        return {"last_error": str(le)[:500] if isinstance(le, str) and le else None,
+                "last_error_t": _num(sm.get("last_error_t")),
+                "queue_ms": q, **ints}
+
     def _row(self, mc: dict | None, sm: dict | None, st_ok: bool, node_sim: bool) -> dict:
         mc = mc or {}
         sm = sm if isinstance(sm, dict) else None
@@ -258,8 +276,10 @@ class InferViews:
                     "lat_ms": {k: {"p50": None, "p95": None, "p99": None} for k in _LAT_KEYS},
                     "gpu_mem_mb": None, "gpu_mem_note": GPU_MEM_NOTE, "results_total": None,
                     "live": False, "simulated": False, "label": None})
+        # error / queue fields: null when agx-infer does not send them (no fake values)
+        row.update({k: None for k in _ERR_KEYS})
         if sm is not None:
-            sim = node_sim or sm.get("simulated") is True
+            sim = model_simulated(sm, node_sim)
             lat = _d(sm.get("lat_ms"))
             row.update({
                 "state": sm.get("state") or "NO DATA",
@@ -278,6 +298,7 @@ class InferViews:
                 "simulated": sim,
                 "label": SIM if sim else None,
             })
+            row.update(self._error_fields(sm))
             if _l(sm.get("cameras")):
                 row["cameras"] = list(sm["cameras"])
             if isinstance(sm.get("trt_match"), bool):
@@ -300,7 +321,7 @@ class InferViews:
 
     def models_doc(self) -> dict:
         st, state, reason, age = self.infer.current()
-        node_sim = bool(st and _d(st.get("node")).get("simulated") is True)
+        node_sim = node_simulated(st.get("node")) if st is not None else False
         live = {}
         if st is not None:
             for m in _l(st.get("models")):
@@ -362,6 +383,7 @@ class InferViews:
                         "label": SIM if r["simulated"] else None} for r in md["models"]],
             "cameras": [{k: c[k] for k in ("cam", "state", "fps", "simulated", "label")} for c in cam_items],
             "cameras_summary": {"total": len(cam_items), "states": states, "simulated": csim,
+                                "label": SIM if csim else None,
                                 "state_basis": "calculated now from last_frame_t (see /api/cameras)",
                                 "per_cam": cam_items},
             "results_rate_hz": _num(pub.get("results_rate_hz")),

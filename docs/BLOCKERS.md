@@ -12,7 +12,7 @@ Each item: what is blocked, why, what the owner must do.
 - Blocked: install of `agx-infer.service` and `agx-dashboard.service` into `/etc/systemd/system`. Needs sudo (B1).
 - Done instead: the unit files are ready in `systemd/`. The services run tonight as TRANSIENT systemd USER units (`tools/svc.sh start dashboard|infer|sim`). They write no unit file on disk and they do not start at boot.
 - Risk: transient user units stop when the user manager of `tonyho` stops (Linger=no: when the last session of `tonyho` ends) and at reboot.
-- Owner action: `sudo bash ~/driveragent-agx/systemd/install_units.sh` (stops the transient units, installs, starts; does NOT enable at boot). Enable at boot is a separate approval: `sudo systemctl enable agx-infer.service agx-dashboard.service`.
+- Owner action: run as `tonyho` (NOT with sudo): `bash ~/driveragent-agx/systemd/install_units.sh`. The script asks for the sudo password. It stops the transient user units `agx-infer` and `agx-dashboard`, checks that TCP ports 5560-5563 and 8700 are free, installs and starts the system units. It does NOT enable them at boot. No system unit exists for the simulator: in mode `sim` (`config/sources.yaml`), keep `tools/svc.sh start sim` running, or set `mode: rk`. Enable at boot is a separate approval: `sudo systemctl enable agx-infer.service agx-dashboard.service`.
 
 ## B3. No test with the real RK3588 cameras (T7.1)
 - Blocked: the RK3588 (DA01, rk-v0.4.0) does not send FrameLink yet (TX "deferred", `rk/docs/STATUS.md:291`). Its config sends to `agx_host = 10.42.0.1` (Link C), which is not configured. Over tailscale the board answers only on ports 22, 111, 4000, 5555. Rule R9 allows no change on the board.

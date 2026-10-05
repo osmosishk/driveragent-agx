@@ -16,6 +16,15 @@ bind_host:
   sim: "127.0.0.1"
   rk: "0.0.0.0"
 
+# rk mode only: accept FrameLink datagrams only from these source IP addresses. Datagrams from
+# other addresses are dropped and counted (camera counter foreign_source_drops).
+#   []  = accept all source addresses. infer.main writes a WARNING line at start.
+# The owner sets the RK3588 address:
+#   Link C:     rk_allowed_sources: ["10.42.0.2"]
+#   tailscale:  rk_allowed_sources: ["100.64.0.180"]
+# sim mode: not used (the sockets bind 127.0.0.1).
+rk_allowed_sources: []
+
 # Camera state (FrameStore): STALE after stale_s without a new frame, NO SIGNAL after no_signal_s.
 stale_s: 0.5
 no_signal_s: 1.0

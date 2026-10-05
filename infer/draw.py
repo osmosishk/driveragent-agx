@@ -34,6 +34,7 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 SIM_BGR = (0, 0, 255)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
+TRAJ_DISPLAY_ONLY = "display only, not for control"   # R8: text on every drawn trajectory
 RLE_ENCODING = "rle-u16le-count-u8-value-rowmajor"
 
 
@@ -146,12 +147,16 @@ def _draw_trajectory(img, r, W, H):
         cv2.circle(img, c, r_in, WP_BGR, -1, cv2.LINE_AA)
         (tw, th), _ = cv2.getTextSize(str(i + 1), FONT, fs, 1)
         cv2.putText(img, str(i + 1), (c[0] - tw // 2, c[1] + th // 2), FONT, fs, BLACK, 1, cv2.LINE_AA)
+    # R8: the trajectory is for display only. Two lines, so that the text fits a 320 px snapshot.
     note = "virtual perspective, not calibrated"
     if not tr.get("inputs_valid", False):
         note += "; inputs assumed"
     fs2 = max(0.28, 0.45 * s)
     (tw, th), _ = cv2.getTextSize(note, FONT, fs2, 1)
     _text(img, note, (max(2, W // 2 - tw // 2), H - 6), fs2, WP_BGR)
+    (tw2, _th2), _ = cv2.getTextSize(TRAJ_DISPLAY_ONLY, FONT, fs2, 1)
+    _text(img, TRAJ_DISPLAY_ONLY, (max(2, W // 2 - tw2 // 2), H - 6 - th - max(4, th // 2)), fs2,
+          WP_BGR)
 
 
 def draw_result(bgr: np.ndarray, results, simulated: bool | None = None,

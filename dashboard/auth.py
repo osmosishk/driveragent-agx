@@ -5,7 +5,6 @@ without buffering. The Authorization header is never logged.
 """
 from __future__ import annotations
 
-import asyncio
 import base64
 import binascii
 import ipaddress
@@ -13,23 +12,32 @@ import logging
 import re
 import secrets
 import time
+from collections import OrderedDict
 from typing import Iterable
 
 log = logging.getLogger("dashboard.auth")
 
 REALM = "agx02-dashboard"
 
+# IPv4 only (the socket is IPv4: config bind 0.0.0.0). Same list as config/dashboard.yaml and
+# dashboard/config.py. Docker bridges (172.16.0.0/12), 192.168.0.0/16 and link-local are NOT allowed.
 DEFAULT_ALLOW = (
-    "127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
-    "100.64.0.0/10", "169.254.0.0/16", "fc00::/7", "fe80::/10",
+    "127.0.0.0/8",     # loopback
+    "10.0.0.0/24",     # eno1 LAN
+    "10.42.0.0/30",    # future Link C (direct cable to the RK3588)
+    "100.64.0.0/10",   # tailscale tailnet: the RK3588 and the operator devices
 )
 
 
-# failed-auth throttle: after FAIL_FREE failures from one IP inside FAIL_WINDOW_S, each further
-# failed attempt is delayed (1 s, 2 s, ... up to FAIL_MAX_DELAY_S). A good login clears the count.
+# Failed-login limit per IP: when one IP has FAIL_LIMIT or more failed logins inside FAIL_WINDOW_S,
+# each request from that IP gets 429 at once (no sleep: no task or thread waits), also with the
+# correct password, until fewer than FAIL_LIMIT failures are inside FAIL_WINDOW_S. A good login
+# (below the limit) clears the count of that IP. At most FAIL_MAX_IPS addresses are kept: the
+# oldest go first.
 FAIL_WINDOW_S = 300.0
-FAIL_FREE = 5
-FAIL_MAX_DELAY_S = 5.0
+FAIL_LIMIT = 10
+FAIL_MAX_IPS = 4096
+LOG_MAX_KEYS = 4096
 LOG_EVERY_S = 60.0  # at most one deny / fail log line per IP and kind per minute
 _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -81,8 +89,10 @@ class GuardMiddleware:
         self.user = user
         self.password = password
         self.networks = parse_networks(allow_cidrs)
-        self._fails: dict[str, list[float]] = {}   # ip -> failure times (monotonic)
-        self._logged: dict[tuple[str, str], tuple[float, int]] = {}  # (kind, ip) -> (last log t, skipped)
+        # ip -> failure times (monotonic). Order: the IP with the oldest last failure first.
+        self._fails: OrderedDict[str, list[float]] = OrderedDict()
+        # (kind, ip) -> (last log t, skipped). Order: the oldest log line first.
+        self._logged: OrderedDict[tuple[str, str], tuple[float, int]] = OrderedDict()
 
     def _log_limited(self, kind: str, ip, path):
         """One log line per (kind, ip) per LOG_EVERY_S; the count of skipped lines goes in the next one."""
@@ -92,21 +102,41 @@ class GuardMiddleware:
         if now - last < LOG_EVERY_S and last:
             self._logged[key] = (last, skipped + 1)
             return
-        if len(self._logged) > 4096:  # bound memory under a flood from many addresses
-            self._logged.clear()
         self._logged[key] = (now, 0)
+        self._logged.move_to_end(key)
+        while len(self._logged) > LOG_MAX_KEYS:  # bound memory: remove only the oldest entries
+            self._logged.popitem(last=False)
         log.warning("%s ip %s path %s%s", kind, safe_path(ip), safe_path(path),
                     f" ({skipped} more since last line)" if skipped else "")
 
-    def _fail_delay(self, ip: str) -> float:
+    def _recent_fails(self, ip: str, now: float) -> list[float]:
+        lst = self._fails.get(ip)
+        if not lst:
+            return []
+        lst = [t for t in lst if now - t <= FAIL_WINDOW_S]
+        if lst:
+            self._fails[ip] = lst
+        else:
+            self._fails.pop(ip, None)
+        return lst
+
+    def _blocked_for(self, ip: str) -> float:
+        """Seconds until this IP can try again (0.0 = not blocked). No wait here."""
         now = time.monotonic()
-        lst = [t for t in self._fails.get(ip, []) if now - t <= FAIL_WINDOW_S]
+        lst = self._recent_fails(ip, now)
+        if len(lst) < FAIL_LIMIT:
+            return 0.0
+        # the block ends when enough old failures leave the window
+        return max(1.0, FAIL_WINDOW_S - (now - lst[-FAIL_LIMIT]))
+
+    def _record_fail(self, ip: str) -> None:
+        now = time.monotonic()
+        lst = self._recent_fails(ip, now)
         lst.append(now)
-        if len(self._fails) > 4096:
-            self._fails.clear()
-        self._fails[ip] = lst[-100:]
-        extra = len(lst) - FAIL_FREE
-        return min(FAIL_MAX_DELAY_S, float(extra)) if extra > 0 else 0.0
+        self._fails[ip] = lst[-(FAIL_LIMIT * 2):]
+        self._fails.move_to_end(ip)
+        while len(self._fails) > FAIL_MAX_IPS:  # bound memory: remove only the oldest entries
+            self._fails.popitem(last=False)
 
     async def _send_plain(self, send, status: int, body: bytes, extra_headers=()):
         headers = [(b"content-type", b"text/plain; charset=utf-8"),
@@ -126,6 +156,15 @@ class GuardMiddleware:
             if scope["type"] == "http":
                 return await self._send_plain(send, 403, b"Forbidden: address not allowed\n")
             return  # websocket: close without accept
+        retry = self._blocked_for(str(ip))
+        if retry:
+            # too many failed logins from this IP: 429 at once, the password is not checked
+            self._log_limited("login blocked", ip, scope.get("path"))
+            if scope["type"] == "http":
+                return await self._send_plain(
+                    send, 429, b"Too many failed logins from this address. Try again later.\n",
+                    [(b"retry-after", str(int(retry + 0.999)).encode())])
+            return
         auth = None
         for k, v in scope.get("headers") or []:
             if k == b"authorization":
@@ -135,9 +174,7 @@ class GuardMiddleware:
             if auth is not None:
                 # wrong credentials (a request with no header is the normal browser first try)
                 self._log_limited("auth failed", ip, scope.get("path"))
-                delay = self._fail_delay(str(ip))
-                if delay:
-                    await asyncio.sleep(delay)
+                self._record_fail(str(ip))
             if scope["type"] == "http":
                 return await self._send_plain(
                     send, 401, b"Unauthorized\n",

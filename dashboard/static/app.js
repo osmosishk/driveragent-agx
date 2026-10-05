@@ -251,6 +251,7 @@
         none: el("span", { class: "nopic", text: "No picture" }),
         fps: el("b"), rate: el("b"), lost: el("b"), dec: el("b"), age: el("b"),
         reason: el("div", { class: "note" }),
+        err: el("div", { class: "note lv-warn small", hidden: "" }),
         url: null, snapT: 0, busy: false,
       };
       const kv = (k, v) => el("div", { class: "row" }, el("span", { class: "k" }, k), v);
@@ -258,7 +259,7 @@
         el("div", { class: "tile-h" }, el("b", null, "Camera " + n), " ", t.role, el("span", { class: "sp" }), t.sim, " ", t.state),
         el("div", { class: "snap" }, t.none, t.img, t.over),
         kv("Frames per second", t.fps), kv("Bit rate", t.rate), kv("Lost packets (frames)", t.lost),
-        kv("Decode time p50", t.dec), kv("Frame age", t.age), t.reason);
+        kv("Decode time p50", t.dec), kv("Frame age", t.age), t.reason, t.err);
       t.img.hidden = true;
       tiles.push(t);
       box.append(t.root);
@@ -300,6 +301,10 @@
       // OK / SIMULATED: the age that agx-infer measured; else the time since the newest known frame
       t.age.textContent = (r.state === "OK" || r.state === "SIMULATED") && num(c.frame_age_ms) ? c.frame_age_ms.toFixed(0) + " ms"
         : num(r.age_s) ? (r.age_s * 1000).toFixed(0) + " ms" : NA;
+      // last ingest error of this camera (agx-infer status); not shown without a current status
+      const ce = !nd && typeof c.last_error === "string" && c.last_error ? c.last_error : "";
+      t.err.textContent = ce ? "Last error: " + ce : "";
+      t.err.hidden = !ce;
       t.reason.textContent = nd ? ((camDoc && camDoc.reason) || "No status from agx-infer") : (r.state === "NO SIGNAL" || r.state === "STALE" ? (num(r.age_s) ? "Last frame " + r.age_s.toFixed(1) + " s ago." : "No frame received.") : "");
     }
   }
@@ -367,6 +372,9 @@
           ioCell(m.inputs, m.outputs),
           el("td", null, el("span", { class: "badge " + (STATE_LV[st] || "lv-na") }, st), " ", simBadge(m.simulated),
             m.error ? el("div", { class: "lv-crit small" }, m.error) : null,
+            m.last_error && m.last_error !== m.error ? el("div", { class: "lv-warn small" }, "Last error" +
+              (num(m.last_error_t) ? " (" + new Date(m.last_error_t * 1000).toLocaleTimeString() + ")" : "") + ": " + m.last_error) : null,
+            num(m.errors_total) && m.errors_total > 0 ? el("div", { class: "muted small" }, "Errors: " + m.errors_total) : null,
             m.reason ? el("div", { class: "muted small" }, m.reason) : null),
           el("td", null, (m.cameras || []).join(", ") || "-"),
           el("td", { class: "n" }, fmt(m.fps, 1)),
@@ -375,7 +383,11 @@
         rows.push(el("tr", { class: "detail" }, el("td", { colspan: "11" },
           "Latency per stage p50 / p95 / p99 (ms): pre " + p3(lat.pre) + ", infer " + p3(lat.infer) + ", post " + p3(lat.post) +
           ". sha256 (16): " + (m.sha256_16 || NA) + ". Path: " + (m.engine_realpath || NA) +
-          (num(m.results_total) ? ". Results: " + m.results_total : "") + ".")));
+          (num(m.results_total) ? ". Results: " + m.results_total : "") +
+          (m.queue_ms ? ". Queue wait p50 / p95 / p99 (ms): " + p3(m.queue_ms) : "") +
+          (num(m.errors_total) ? ". Errors: " + m.errors_total : "") +
+          (num(m.auto_restarts) ? ". Automatic restarts: " + m.auto_restarts : "") +
+          (m.last_error ? ". Last error: " + m.last_error : "") + ".")));
       }
       fill($("models-tbl").tBodies[0], rows);
       const ex = d.engines_not_in_config || [];
@@ -442,7 +454,8 @@
     try {
       const d = await getJSON("/api/services/logs?unit=" + encodeURIComponent(unit));
       $("logs").textContent = d.lines && d.lines.length ? d.lines.join("\n") : "No log lines for " + unit + "." + (d.error ? " " + d.error : "");
-      setText("logs-t", "Updated " + new Date(d.t * 1000).toLocaleTimeString());
+      setText("logs-t", "Updated " + new Date(d.t * 1000).toLocaleTimeString() +
+        (d.source ? (d.source === "system" ? " (system unit)" : " (user unit)") : ""));
     } catch (e) { $("logs").textContent = "Cannot read logs: " + e.message; }
   }
   $("logs-det").addEventListener("toggle", () => {

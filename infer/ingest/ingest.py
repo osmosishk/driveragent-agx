@@ -3,9 +3,15 @@
 mode sim  FrameLink UDP from tools.rk_sim on this AGX (bind 127.0.0.1). All frames are simulated.
 mode rk   FrameLink UDP from the RK3588 (bind 0.0.0.0). Frames with source byte LIVE are "live".
 mode file decode local recordings directly (no network). All frames are simulated ("file").
+
+rk mode source filter: config key rk_allowed_sources (list of IP addresses). Not empty = the
+receivers drop datagrams from other addresses (counter foreign_source_drops in the camera
+metrics). Empty = accept all, with a WARNING line at start. Sim and file mode: no filter.
 """
 from __future__ import annotations
 
+import ipaddress
+import logging
 import os
 import sys
 
@@ -18,6 +24,24 @@ from infer.ingest.metrics import CameraMetrics
 DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "..", "..", "config", "sources.yaml")
 ROLES = {0: "front", 1: "right", 2: "left", 3: "right-back", 4: "left-back", 5: "back"}
 MODES = ("sim", "rk", "file")
+
+log = logging.getLogger("infer.ingest")
+
+
+def parse_allowed_sources(value) -> tuple[str, ...]:
+    """rk_allowed_sources -> tuple of IPv4 address strings. Raises ValueError for a bad entry
+    (fail closed: a typing error must not open the filter)."""
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        value = [value]
+    out = []
+    for v in value:
+        a = ipaddress.ip_address(str(v).strip())
+        if a.version != 4:
+            raise ValueError(f"rk_allowed_sources: {v!r} is not an IPv4 address (the sockets are IPv4)")
+        out.append(str(a))
+    return tuple(out)
 
 
 def load_config(cfg=None) -> dict:
@@ -40,6 +64,9 @@ class Ingest:
             self.bind_host = bh.get(self.mode, "127.0.0.1" if self.mode == "sim" else "0.0.0.0")
         else:
             self.bind_host = bh
+        # source filter: rk mode only (sim binds loopback, file has no network)
+        self.allowed_sources = parse_allowed_sources(self.cfg.get("rk_allowed_sources")) \
+            if self.mode == "rk" else ()
         cams_cfg = {int(c["cam"]): c for c in self.cfg.get("cameras", [])}
         self.cams = list(range(6))  # always six cameras, even without config / signal
         self.store = FrameStore(self.cams, stale_s=float(self.cfg.get("stale_s", 0.5)),
@@ -70,12 +97,21 @@ class Ingest:
                     use_process=bool(self.cfg.get("rx_process", True)),
                     ring_slots=int(self.cfg.get("ring_slots", 8)),
                     max_frame=int(self.cfg.get("max_frame_bytes", 2 * 1024 * 1024)),
-                    decoder_prestart=bool(self.cfg.get("decoder_prestart", True))))
+                    decoder_prestart=bool(self.cfg.get("decoder_prestart", True)),
+                    allowed_sources=self.allowed_sources))
         self._started = False
 
     def start(self) -> None:
         # Only for rx_process: false (receive threads in this process share the GIL; the default
         # switch interval of 5 ms lets a socket overflow). Process-wide setting.
+        if self.mode == "rk":
+            if self.allowed_sources:
+                log.info("rk mode: accept FrameLink datagrams only from %s",
+                         ", ".join(self.allowed_sources))
+            else:
+                log.warning("rk mode: rk_allowed_sources is empty: FrameLink datagrams from ANY "
+                            "source address are accepted on %s (set it in config/sources.yaml)",
+                            self.bind_host)
         si = self.cfg.get("gil_switch_interval_s", 0)
         if si and self.mode != "file":
             sys.setswitchinterval(float(si))
@@ -99,7 +135,13 @@ class Ingest:
         self._started = False
 
     def metrics_snapshot(self) -> list[dict]:
-        return [self.metrics[c].snapshot() for c in self.cams]
+        out = []
+        for c in self.cams:
+            m = self.metrics[c]
+            snap = m.snapshot()
+            snap["foreign_source_drops"] = int(m.c.get("foreign_source_drops") or 0)
+            out.append(snap)
+        return out
 
     def __enter__(self):
         self.start()

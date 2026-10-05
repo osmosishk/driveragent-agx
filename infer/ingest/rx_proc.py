@@ -13,6 +13,10 @@ overrun) and does the CRC check and the rest.
 
 Slot layout: u64 generation (0 while the slot is written) + frame bytes (FrameLink header+payload).
 
+Source filter (rk mode): when `allowed_sources` is not empty, the loop uses recvfrom_into and drops
+each datagram whose source IP address is not in the list (counter foreign_source_drops). When the
+list is empty, the loop uses recv_into (fast path, no address check).
+
 Keep the imports small: the spawn start method imports this module in the child.
 """
 from __future__ import annotations
@@ -177,7 +181,7 @@ class ShmReassembler:
 
 def run(cam: int, bind_host: str, port: int, rcvbuf: int, shm_name: str, nslots: int,
         slot_size: int, conn, stop_evt, reassembly_timeout_s: float = 0.2,
-        stats_interval_s: float = 0.05) -> None:
+        stats_interval_s: float = 0.05, allowed_sources=()) -> None:
     import gc
     from multiprocessing import shared_memory
 
@@ -206,6 +210,9 @@ def run(cam: int, bind_host: str, port: int, rcvbuf: int, shm_name: str, nslots:
     buf = bytearray(DGRAM_MAX)
     mv = memoryview(buf)
     recv_into = sock.recv_into
+    recvfrom_into = sock.recvfrom_into
+    allowed = frozenset(str(a) for a in allowed_sources) if allowed_sources else None
+    drops = [0]          # foreign_source_drops: datagrams from an address not in `allowed`
     push = r.push
     mono = time.monotonic
     send = conn.send
@@ -214,12 +221,24 @@ def run(cam: int, bind_host: str, port: int, rcvbuf: int, shm_name: str, nslots:
 
     def stats():
         send(("s", r.datagrams, r.bytes, r.lost_fragments, r.abandoned, r.bad, r.last_error,
-              r.late, r.new_streams, r.start_partial))
+              r.late, r.new_streams, r.start_partial, drops[0]))
 
     try:
         while True:
             try:
-                n = recv_into(buf)
+                if allowed is None:
+                    n = recv_into(buf)            # fast path: no source filter
+                else:
+                    n, addr = recvfrom_into(buf)
+                    if addr[0] not in allowed:
+                        drops[0] += 1
+                        now = mono()
+                        if now - t_stats >= stats_interval_s:   # also during a flood
+                            t_stats = now
+                            stats()
+                            if stop_evt.is_set() or os.getppid() != ppid:
+                                break
+                        continue
             except socket.timeout:
                 now = mono()
                 # no r.expire(now) here: a quiet socket (sender pause) is not a loss. The

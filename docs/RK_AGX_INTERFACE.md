@@ -88,7 +88,7 @@ Note (AGX proposal): FrameLink at full rate does not fit the tailscale path (DER
 | 6000-6005 | UDP | RK -> AGX | `0.0.0.0` (mode rk), `127.0.0.1` (mode sim) | FrameLink, camera N on 6000+N | RK repo (`RK3588_AGENT_KICKOFF.md:86`, `:135`) |
 | 5560 | TCP | AGX -> RK | `0.0.0.0` | ZMQ PUB `AgxPerceptionResult` | Night-task Section 6 default |
 | 5561 | TCP | AGX -> RK | `0.0.0.0` | ZMQ PUB `AgxInferStatus`, 1 Hz | Night-task Section 6 default |
-| 5562 | TCP | local | `127.0.0.1` | Internal JSON status + JPEG snapshots for the dashboard | AGX proposal; check `config/dashboard.yaml:28` |
+| 5562 | TCP | local | `127.0.0.1` | Internal JSON status + JPEG snapshots for the dashboard | AGX proposal; check `config/infer.yaml:11`, `config/dashboard.yaml:35` |
 | 5563 | TCP | local | `127.0.0.1` | Local admin socket: model stop/start for tests. Not reachable from the network. The dashboard stays read-only. | AGX proposal |
 | 8700 | TCP | any -> AGX | `0.0.0.0` | Dashboard, HTTP GET `/api/health`. If 8700 is in use, the next free port (8701, ...). | Night-task Section 6/7 default; check `config/dashboard.yaml:2-4` |
 
@@ -139,11 +139,11 @@ CRC-32C = Castagnoli, the same function as the dabus envelope: reflected polynom
 
 Receiver checks, in this order (AGX code):
 1. Length >= 40, magic, version, header CRC (`common/framelink.py:90-100`).
-2. `cam` agrees with the UDP port (`infer/ingest/framelink_rx.py:336-339`).
-3. A frame with the same `seq` as the last frame is a duplicate. The receiver drops it and does not count it (`infer/ingest/framelink_rx.py:342-345`).
-4. Payload CRC (`infer/ingest/framelink_rx.py:352-359`).
+2. `cam` agrees with the UDP port (`infer/ingest/framelink_rx.py:505-509`). A frame of another camera is dropped and counted in `foreign_frames`.
+3. A frame with the same `seq` as the last frame is a duplicate. The receiver drops it and does not count it (`infer/ingest/framelink_rx.py:512-515`).
+4. Payload CRC (`infer/ingest/framelink_rx.py:526-533`).
 
-The receiver drops a frame that fails check 1, 2 or 4 and counts it in `bad_frames` (`infer/ingest/framelink_rx.py:328-359`).
+The receiver drops a frame that fails check 1 or 4 and counts it in `bad_frames`. It drops a frame that fails check 2 and counts it in `foreign_frames` (`infer/ingest/framelink_rx.py:497-533`).
 
 ### 3.3 `fmt` codes
 
@@ -152,7 +152,7 @@ The receiver drops a frame that fails check 1, 2 or 4 and counts it in `bad_fram
 | 1 | NV12 | Y plane (`stride * h`), then interleaved UV plane (`stride * h / 2`). Size = 1.5 x `stride * h`. | Code: AGX proposal (`common/framelink.py:33`). Layout: RK repo (`rk/camd/src/rga_scaler.cpp:35-43`) |
 | 2 | H.265 | One H.265 access unit, Annex-B byte stream. VPS/SPS/PPS come before each IDR. Optional payload to save bandwidth. | AGX proposal (`common/framelink.py:34`). Codec: Night-task Section 6 default, carried inside FrameLink. |
 
-H.265 receiver rule (AGX proposal): after a lost frame, the receiver drops frames until the next random access picture (`h265_resync_on_loss: true`, `config/sources.yaml:45`). At start, this picture must come with VPS/SPS/PPS. After a loss, an IDR or CRA picture is sufficient when the parameter sets were received before (`infer/ingest/framelink_rx.py:54-61`). No B-frames (Night-task Section 6 default).
+H.265 receiver rule (AGX proposal): after a lost frame, the receiver drops frames until the next random access picture (`h265_resync_on_loss: true`, `config/sources.yaml:55`). At start, this picture must come with VPS/SPS/PPS. After a loss, an IDR or CRA picture is sufficient when the parameter sets were received before (`infer/ingest/framelink_rx.py:71-99`). No B-frames (Night-task Section 6 default).
 
 ### 3.4 `health` codes (rk-camd LinkState)
 
@@ -173,7 +173,7 @@ Use of LinkState in the FrameLink `health` byte: AGX proposal (the kick-off defi
 | 1 | LIVE | Live only in AGX mode `rk` | RK repo (`RK3588_AGENT_KICKOFF.md:86`) |
 | 2 | REPLAY | Simulated | AGX proposal (`common/framelink.py:38`) |
 | 3 | TEST_PATTERN | Simulated | AGX proposal (`common/framelink.py:39`) |
-| other | unknown | Simulated | AGX proposal (`infer/ingest/framelink_rx.py:85-91`) |
+| other | unknown | Simulated | AGX proposal (`infer/ingest/framelink_rx.py:102-108`) |
 
 ### 3.6 Fragment header (16 bytes, little-endian)
 
@@ -190,7 +190,7 @@ The kick-off says only "16 B fragment header" (`RK3588_AGENT_KICKOFF.md:86`; `rk
 | 12 | 4 | `offset` | Byte offset of this chunk in (40-byte frame header + payload) |
 | 16 | n | chunk | Data |
 
-Each fragment is one UDP datagram (RK repo, `rk/docs/BRINGUP_REPORT.md:783`). The fragment header has no CRC. The frame header CRCs protect the reassembled frame. The receiver drops a datagram with a bad fragment header (magic, version, `count` = 0, `idx` >= `count`, or `offset` + chunk > max frame). It counts the datagram in `bad` (`common/framelink.py:172-182`). The receiver does not check the fragment `cam` byte.
+Each fragment is one UDP datagram (RK repo, `rk/docs/BRINGUP_REPORT.md:783`). The fragment header has no CRC. The frame header CRCs protect the reassembled frame. The receiver drops a datagram with a bad fragment header (magic, version, `count` = 0, `idx` >= `count`, or `offset` + chunk > max frame). It counts the datagram in `bad` (`common/framelink.py:180-190`). The receiver does not check the fragment `cam` byte.
 
 ### 3.7 Fragment size and receiver behaviour
 
@@ -198,12 +198,12 @@ Each fragment is one UDP datagram (RK repo, `rk/docs/BRINGUP_REPORT.md:783`). Th
 |---|---|---|
 | Chunk at MTU 9000 | 8896 B | RK repo (`RK3588_AGENT_KICKOFF.md:86`); AGX `common/framelink.py:52` |
 | Chunk at MTU 1500 | 1456 B (UDP payload 1472 B). The kick-off value 1472 B + 16 B overflows MTU 1500. | RK repo (`rk/docs/BRINGUP_REPORT.md:1593`, gap row `:1631`). Not agreed yet: open question `:1711`. AGX uses it (`common/framelink.py:53`) |
-| Chunk size on the receiver | Any size. The receiver uses `offset`. | AGX proposal (`common/framelink.py:176-204`) |
-| Max frame | 2 MiB in the receive processes (4 MiB in the thread-mode reassembler) | AGX proposal (`max_frame_bytes` in `config/sources.yaml`; `common/framelink.py` Reassembler default) |
-| Frames in flight per camera | 4 | AGX proposal (`common/framelink.py:148`) |
-| Partial frame timeout | 200 ms, then the frame is abandoned | AGX proposal (`common/framelink.py:149`, `:205-208`; `reassembly_timeout_s: 0.2`, `config/sources.yaml:42`) |
-| Newest frame wins | A complete frame abandons all older partial frames of that camera | AGX proposal (`common/framelink.py:212-215`) |
-| Duplicates | Dropped | AGX proposal (`common/framelink.py:197-198`) |
+| Chunk size on the receiver | Any size. The receiver uses `offset`. | AGX proposal (`common/framelink.py:184-187`, `:212`) |
+| Max frame | 2 MiB in the receive processes (4 MiB in the thread-mode reassembler) | AGX proposal (`max_frame_bytes`, `config/sources.yaml:37`; Reassembler default, `common/framelink.py:154`) |
+| Frames in flight per camera | 4 | AGX proposal (`common/framelink.py:154`) |
+| Partial frame timeout | 200 ms, then the frame is abandoned | AGX proposal (`common/framelink.py:155`, `:217-220`; `reassembly_timeout_s: 0.2`, `config/sources.yaml:51`) |
+| Newest frame wins | A complete frame abandons all older partial frames of that camera | AGX proposal (`common/framelink.py:225-228`) |
+| Duplicates | Dropped | AGX proposal (`common/framelink.py:191-194`, `:209-210`) |
 
 ### 3.8 Frame sizes, colour and identity
 
@@ -452,9 +452,9 @@ struct AgxInferStatus {
 | Item | Value | Source |
 |---|---|---|
 | URL | HTTP GET `http://<agx>:8700/api/health` | Night-task Section 6/7 default; check `dashboard/app.py` route `/api/health` |
-| Auth | HTTP Basic auth, realm `agx02-dashboard` | AGX proposal; check `dashboard/auth.py:17` |
-| Allowed sources | Private addresses only: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 (tailscale), 169.254.0.0/16, ::1, fc00::/7, fe80::/10 | AGX proposal; check `config/dashboard.yaml:7-16` |
-| Methods | GET only (POST gives 405) | Check `tests/test_dashboard.py:170` |
+| Auth | HTTP Basic auth, realm `agx02-dashboard` | AGX proposal; check `dashboard/auth.py:20` |
+| Allowed sources | Private addresses only: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 (tailscale), 169.254.0.0/16, ::1, fc00::/7, fe80::/10 | AGX proposal; check `config/dashboard.yaml:14-23` |
+| Methods | GET only (POST gives 405) | Check `tests/test_dashboard.py:184` |
 | RK client | None. The RK repo has no HTTP client for this. The RK reads nothing from the AGX over HTTP. | RK repo (`T1_rk-repo.md` section 4; the only HTTP use is the rk-updater download, `rk/updater/rk_updater.py:53-54`, `:126`) |
 
 ## 6. Time
@@ -476,7 +476,7 @@ A frame is simulated when one of these is true:
 - The FrameLink `source` byte is not 1 (LIVE).
 - The AGX source mode is not `rk` (`config/sources.yaml:3-9`: `sim` or `file`).
 
-Source: Night-task rule R13; implemented in `infer/ingest/framelink_rx.py:7-9`, `:85-91`.
+Source: Night-task rule R13; implemented in `infer/ingest/framelink_rx.py:24-26`, `:102-108`.
 
 | Output | Marking | Source |
 |---|---|---|

@@ -1,0 +1,33 @@
+# Packages installed IN the venv only (.venv). Source: on agx02, 2026-10-05:
+#   /home/tonyho/driveragent-agx/.venv/bin/python -m pip list --local --format=freeze
+# pip==22.0.2 and setuptools==59.6.0 are also in that list. They come with "python3 -m venv",
+# so they are not pinned here.
+#
+# The venv uses --system-site-packages (pyvenv.cfg: include-system-site-packages = true).
+# Python 3.10.12, JetPack 6.2.1 (L4T R36.4.7). Many packages come from OUTSIDE the venv:
+#
+#   From JetPack / apt (/usr/lib/python3*/dist-packages):
+#     tensorrt 10.3.0, cv2 (OpenCV) 4.10.0, PyGObject (gi) 3.42.1 + GStreamer, PyYAML 5.4.1,
+#     psutil 5.9.0, Pillow 9.0.1
+#   From the user site of tonyho (~/.local/lib/python3.10/site-packages, pip --user, NOT in this file):
+#     torch 2.8.0, pycuda 2022.2.2, pyzmq 27.1.0, pycapnp 2.2.0, numpy 1.26.4, onnx 1.21.0,
+#     httpx 0.28.1, httpcore 1.0.9, anyio 4.13.0, h11 0.16.0
+#   A new machine must have these packages too (same versions), or the node does not start.
+#
+# Set-up: see README.md section "Set-up".
+annotated-types==0.8.0
+crc32c==2.9.post0
+fastapi==0.142.2
+iniconfig==2.3.0
+opentelemetry-api==1.45.0
+paho-mqtt==2.1.0
+pluggy==1.6.0
+pydantic==2.13.5
+pydantic_core==2.46.5
+pytest==9.1.1
+starlette==1.7.0
+tomli==2.4.1
+typing-inspection==0.4.4
+uvicorn==0.54.0
+# Optional, only for the QuickJS page test (tests skip it when it is missing):
+quickjs==1.19.4

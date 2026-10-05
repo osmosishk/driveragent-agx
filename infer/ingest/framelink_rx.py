@@ -21,6 +21,10 @@ Robustness:
   - The spawn start method imports the caller's main module in the child: a caller script must use
     `if __name__ == "__main__":`.
 
+Source filter (M4, rk mode): allowed_sources = list of source IP addresses. When it is not empty,
+a datagram from another address is dropped before the reassembly and counted in
+foreign_source_drops. Empty list = accept all (fast path: recv_into, no address check).
+
 Source label (R13): Frame.source is "live" only when the FrameLink source byte is SOURCE_LIVE AND
 the configured mode is "rk" (expect_simulated False). In sim mode every frame is simulated: a frame
 with source byte LIVE gets the label "replay" and the counter source_mismatch goes up.
@@ -113,7 +117,7 @@ class _RemoteCounters:
     receive process: `base` holds the totals of the earlier processes."""
 
     FIELDS = ("datagrams", "bytes", "lost_fragments", "abandoned", "bad", "late", "new_streams",
-              "start_partial")
+              "start_partial", "foreign_source_drops")
 
     def __init__(self):
         for k in self.FIELDS:
@@ -192,8 +196,11 @@ class FrameLinkReceiver:
                  h265_resync_on_loss: bool = True, rcvbuf: int = 0,
                  reassembly_timeout_s: float = 0.2, use_process: bool = True,
                  ring_slots: int = 8, max_frame: int = 2 * 1024 * 1024,
-                 decoder_prestart: bool = False):
+                 decoder_prestart: bool = False, allowed_sources=()):
         self.cam = cam
+        # source IP addresses accepted (empty = all); see the module doc
+        self.allowed_sources = tuple(str(a) for a in (allowed_sources or ()))
+        self.foreign_source_drops = 0   # thread mode only (process mode: in self.reasm)
         self.port = port
         self.bind_host = bind_host
         self.store = store
@@ -295,7 +302,8 @@ class FrameLinkReceiver:
         self._proc = ctx.Process(
             target=rx_proc.run, name=f"flrx-cam{self.cam}", daemon=True,
             args=(self.cam, self.bind_host, self.port, self.rcvbuf_req, self._shm.name,
-                  self.ring_slots, self.max_frame, wr, self._stop_evt, self.reassembly_timeout_s))
+                  self.ring_slots, self.max_frame, wr, self._stop_evt, self.reassembly_timeout_s,
+                  0.05, self.allowed_sources))
         self._proc.start()
         wr.close()
         self._conn = rd
@@ -407,11 +415,13 @@ class FrameLinkReceiver:
                             continue
                         self._on_complete(raw, t_recv_ns, nfrags)
                     elif kind == "s":
-                        _, dg, nb, lf, ab, bad, err, late, ns, sp = msg
+                        _, dg, nb, lf, ab, bad, err, late, ns, sp = msg[:10]
+                        fsd = msg[10] if len(msg) > 10 else 0
                         ddg, dnb = dg - (r.datagrams - r.base["datagrams"]), \
                             nb - (r.bytes - r.base["bytes"])
                         r.update(dict(datagrams=dg, bytes=nb, lost_fragments=lf, abandoned=ab,
-                                      bad=bad, late=late, new_streams=ns, start_partial=sp))
+                                      bad=bad, late=late, new_streams=ns, start_partial=sp,
+                                      foreign_source_drops=fsd))
                         if ddg:
                             self._pend_dg += ddg
                             self._pend_bytes += dnb
@@ -435,9 +445,16 @@ class FrameLinkReceiver:
         buf = bytearray(DGRAM_MAX)
         mv = memoryview(buf)
         sock = self._sock
+        allowed = frozenset(self.allowed_sources) if self.allowed_sources else None
         while not self._stop.is_set():
             try:
-                n = sock.recv_into(buf)
+                if allowed is None:
+                    n = sock.recv_into(buf)
+                else:
+                    n, addr = sock.recvfrom_into(buf)
+                    if addr[0] not in allowed:
+                        self.foreign_source_drops += 1
+                        continue
             except socket.timeout:
                 self.housekeeping()
                 continue
@@ -481,6 +498,7 @@ class FrameLinkReceiver:
             late_datagrams=getattr(r, "late", 0), new_streams=getattr(r, "new_streams", 0),
             start_partial=getattr(r, "start_partial", 0),
             foreign_frames=self.foreign_frames, rx_restarts=self.rx_restarts,
+            foreign_source_drops=getattr(r, "foreign_source_drops", 0) + self.foreign_source_drops,
             internal_errors=self.internal_errors,
             waiting_idr=self.waiting_idr, seq_resets=self.seq_resets,
             source_mismatch=self.source_mismatch, ring_overruns=self.ring_overruns,

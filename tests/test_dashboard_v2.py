@@ -10,6 +10,7 @@ The password is read from .env in this process and is never printed.
 
 Optional env:
   AGX_DASH_TEST_OUT      directory for the test files (default tests/out)
+  AGX_DASH_TEST_PORT_MIN / AGX_DASH_TEST_PORT_MAX   test port range (default 18800-18899)
   AGX_DASH_TEST_PYLIB    directory with the quickjs Python package (page JS test); without it the
                          JS test is skipped when quickjs cannot be imported.
 """
@@ -37,7 +38,10 @@ from common.env import load_env  # noqa: E402
 from dashboard.collectors.engines import file_key  # noqa: E402
 
 OUT = Path(os.environ.get("AGX_DASH_TEST_OUT") or (ROOT / "tests" / "out"))
-PORT_MIN, PORT_MAX = 18800, 18899
+# AGX_DASH_TEST_PORT_MIN / AGX_DASH_TEST_PORT_MAX override the default test ports 18800-18899
+PORT_MIN = int(os.environ.get("AGX_DASH_TEST_PORT_MIN") or 18800)
+PORT_MAX = int(os.environ.get("AGX_DASH_TEST_PORT_MAX") or 18899)
+FAKE_PORT = PORT_MIN + 62 if PORT_MIN + 62 <= PORT_MAX else PORT_MIN
 NOW_LOG: list[str] = []
 
 
@@ -169,7 +173,7 @@ def creds():
 
 @pytest.fixture(scope="module")
 def fake():
-    port = 18862 if _port_free(18862) else _free_port()
+    port = FAKE_PORT if _port_free(FAKE_PORT) else _free_port()
     f = FakeInfer(f"tcp://127.0.0.1:{port}")
     yield f
     f.stop()
@@ -603,8 +607,11 @@ def test_hold_cap_and_status_gap():
     c.period_s = 1.8
     assert v.hold_s() == 1.5
     now = time.time()
+    # explicit live flags: a missing flag means SIMULATED (R13 fail-safe, L4)
     c._status, c._status_rx, c._status_rx_mono = ({"schema": "agx-infer-status/1", "t": now - 0.3,
-                                                   "cameras": [{"cam": 0, "last_frame_t": now - 0.33}]},
+                                                   "node": {"simulated": False},
+                                                   "cameras": [{"cam": 0, "simulated": False,
+                                                                "last_frame_t": now - 0.33}]},
                                                   now, time.monotonic())
     assert v.cameras_doc(now + 1.16)["cameras"][0]["state"] == "OK"
     assert v.cameras_doc(now + 1.18)["cameras"][0]["state"] == "NO SIGNAL"  # 1.51 s after the last frame

@@ -29,6 +29,7 @@ from zmq.utils.monitor import recv_monitor_message
 
 from common import envelope as env
 from infer.publish import schema as sch
+from infer.publish.internal import PUB_MAX_IN_BYTES, RateLimitedLog
 
 log = logging.getLogger("infer.results")
 
@@ -198,6 +199,10 @@ class ResultPublisher:
         self._sock = self._ctx.socket(zmq.PUB)
         self._sock.setsockopt(zmq.SNDHWM, sndhwm)
         self._sock.setsockopt(zmq.LINGER, 0)
+        # A PUB socket receives only subscriptions: a larger inbound message closes that peer.
+        self._sock.setsockopt(zmq.MAXMSGSIZE, PUB_MAX_IN_BYTES)
+        # Bind address from config/infer.yaml (now 0.0.0.0: the RK3588 connects over the link).
+        # The owner can later bind only the link address (100.64.0.20 now, 10.42.0.1 on Link C).
         self._mon = self._sock.get_monitor_socket(zmq.EVENT_ACCEPTED | zmq.EVENT_DISCONNECTED)
         self._sock.bind(self.endpoint)
         self._seq = env.Sequencer()
@@ -214,6 +219,7 @@ class ResultPublisher:
         self.last_result_t: float | None = None
         self.multi_segment = 0
         self._last_id: dict[tuple, tuple] = {}
+        self._rlog = RateLimitedLog(log)   # repeated errors: 1 line per 10 s per kind
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="results-pub", daemon=True)
         self._thread.start()
@@ -260,7 +266,7 @@ class ResultPublisher:
             payload, flags, r = self._build(result)
         except Exception:  # noqa: BLE001
             self.errors += 1
-            log.exception("cannot build result message")
+            self._rlog.error("build", "cannot build result message", exc_info=True)
             return None
         with self._build_lock:
             if self._stop.is_set():
@@ -275,7 +281,7 @@ class ResultPublisher:
                                src_board=env.SRC_AGX)
             except Exception:  # noqa: BLE001
                 self.errors += 1
-                log.exception("cannot pack result message")
+                self._rlog.error("pack", "cannot pack result message", exc_info=True)
                 return None
             try:
                 self._q.put_nowait(msg)   # only full at close (the None stop marker)
@@ -318,7 +324,7 @@ class ResultPublisher:
                 continue
             except zmq.ZMQError as e:
                 self.errors += 1
-                log.error("results send failed: %s", e)
+                self._rlog.error("send", "results send failed: %s", e)
                 continue
             now = time.monotonic()
             with self._lock:

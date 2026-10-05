@@ -22,6 +22,7 @@ import zmq
 
 from common import envelope as env
 from infer.publish import schema as sch
+from infer.publish.internal import PUB_MAX_IN_BYTES, RateLimitedLog
 
 log = logging.getLogger("infer.status")
 
@@ -116,7 +117,12 @@ class StatusPublisher:
         self._sock = self._ctx.socket(zmq.PUB)
         self._sock.setsockopt(zmq.SNDHWM, 20)
         self._sock.setsockopt(zmq.LINGER, 0)
+        # A PUB socket receives only subscriptions: a larger inbound message closes that peer.
+        self._sock.setsockopt(zmq.MAXMSGSIZE, PUB_MAX_IN_BYTES)
+        # Bind address from config/infer.yaml (now 0.0.0.0: the RK3588 connects over the link).
+        # The owner can later bind only the link address (100.64.0.20 now, 10.42.0.1 on Link C).
         self._sock.bind(self.endpoint)
+        self._rlog = RateLimitedLog(log)
         self._seq = env.Sequencer()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -269,7 +275,7 @@ class StatusPublisher:
         try:
             self._sock.send(msg, zmq.NOBLOCK)
         except zmq.ZMQError as e:
-            log.warning("status send failed: %s", e)
+            self._rlog.warning("send", "status send failed: %s", e)
         js = self.build_json(models, cams, t_ns / 1e9)
         if self.internal is not None:
             self.internal.send(b"status", json.dumps(_finite(js), default=str,

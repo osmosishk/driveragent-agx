@@ -10,6 +10,13 @@ Model states (dashboard contract):
 Isolation: an exception in the load or in a worker of one model sets only that model FAILED.
 The other models continue.
 
+Automatic restart: a model that is FAILED because of worker errors is started again with
+start_model() after a backoff: restart_backoff_s (30 s), then 60 s, 120 s ... up to
+restart_backoff_max_s (600 s). The counter "auto_restarts" is in the status. A model that ran for
+restart_backoff_max_s or more before it failed starts again with the first backoff. A load error
+(no engine) is NOT restarted. A model stopped with stop_model() or ModelManager.stop() is NOT
+restarted.
+
 Engine rule: the configured engine is never written. When it does not load and an ONNX file exists,
 a new engine is built with trtexec into engines_dir (<name>_fp16.engine) and that engine is loaded.
 """
@@ -104,26 +111,53 @@ class ModelEntry:
         self.build_proc: subprocess.Popen | None = None
         self.build_thread: threading.Thread | None = None
         self.cancel_build = threading.Event()
+        # automatic restart after worker errors (see the module doc)
+        self.auto_restarts = 0
+        self.restart_due: float | None = None      # time.monotonic() of the next attempt
+        self.restart_backoff: float = float(manager.restart_backoff_s)
 
     # called from worker threads
     def report_error(self, text: str, fatal: bool = False) -> None:
         n = self.metrics.add_error(text)
         if fatal or n >= self.manager.fail_after_errors:
-            self.fail(f"worker: {text}" + ("" if fatal else f" ({n} errors in sequence)"))
+            self.fail(f"worker: {text}" + ("" if fatal else f" ({n} errors in sequence)"),
+                      restart=True)
 
-    def fail(self, text: str) -> None:
+    def fail(self, text: str, restart: bool = False) -> None:
+        """-> FAILED. restart=True (worker errors only): schedule an automatic restart."""
+        delay = None
         with self.lock:
+            if restart and self.state != RUNNING:
+                # a second worker of the same model, or the model was stopped meanwhile
+                if self.state == FAILED:
+                    return
+                restart = False
             self.state = FAILED
             self.error = text
             self.error_t = time.time()
             self.stop_event.set()
+            if restart and self.enabled and self.manager.auto_restart_allowed():
+                mgr = self.manager
+                ran = self.metrics.running_since
+                if ran is not None and time.monotonic() - ran >= mgr.restart_backoff_max_s:
+                    self.restart_backoff = float(mgr.restart_backoff_s)   # it ran well: reset
+                delay = self.restart_backoff
+                self.restart_due = time.monotonic() + delay
+                self.restart_backoff = min(float(mgr.restart_backoff_max_s), delay * 2.0)
+            else:
+                self.restart_due = None
         log.error("model %s FAILED: %s", self.name, text)
+        if delay is not None:
+            log.warning("model %s: automatic restart in %.1f s (restarts so far: %d)",
+                        self.name, delay, self.auto_restarts)
+            self.manager._ensure_supervisor()
 
 
 class ModelManager:
     def __init__(self, models_cfg, store, on_result, engines_dir: str = DEFAULT_ENGINES_DIR,
                  trtexec: str = TRTEXEC, build_timeout_s: float = 3600.0, fail_after_errors: int = 3,
-                 warmup: bool = True):
+                 warmup: bool = True, restart_backoff_s: float = 30.0,
+                 restart_backoff_max_s: float = 600.0):
         if isinstance(models_cfg, dict):
             models_cfg = models_cfg.get("models") or []
         self.store = store
@@ -136,6 +170,11 @@ class ModelManager:
         self.build_timeout_s = float(build_timeout_s)
         self.fail_after_errors = max(1, int(fail_after_errors))
         self.warmup = warmup
+        self.restart_backoff_s = max(0.01, float(restart_backoff_s))
+        self.restart_backoff_max_s = max(self.restart_backoff_s, float(restart_backoff_max_s))
+        self._sup_stop = threading.Event()        # set by stop(): no automatic restart
+        self._sup_thread: threading.Thread | None = None
+        self._sup_lock = threading.Lock()
         self._lock = threading.Lock()
         self.models: dict[str, ModelEntry] = {}
         self.order: list[str] = []
@@ -158,6 +197,7 @@ class ModelManager:
         should_stop: optional function; when it returns True (for example SIGTERM during the start),
         the models that are not loaded yet are not loaded and no more workers start."""
         self._started = True
+        self._sup_stop.clear()
         for name in self.order:
             e = self.models[name]
             if not e.enabled or e.state == FAILED:
@@ -168,7 +208,14 @@ class ModelManager:
             self._load_and_run(e, should_stop)
 
     def stop(self) -> None:
-        """Stop all workers and engine builds. Engines stay loaded."""
+        """Stop all workers and engine builds. Engines stay loaded. No automatic restart after it."""
+        self._sup_stop.set()
+        for e in self.models.values():
+            with e.lock:
+                e.restart_due = None
+        t = self._sup_thread
+        if t is not None and t is not threading.current_thread():
+            t.join(timeout=10)
         for name in self.order:
             e = self.models[name]
             self._cancel_build(e)
@@ -199,6 +246,9 @@ class ModelManager:
         e = self.models.get(name)
         if e is None:
             return {"ok": False, "error": f"no model {name!r}"}
+        with e.lock:   # first: no automatic restart of a model the operator stops
+            e.enabled = False
+            e.restart_due = None
         self._cancel_build(e)
         self._stop_workers(e)
         with e.lock:
@@ -223,6 +273,7 @@ class ModelManager:
                 return {"ok": False, "state": e.state,
                         "error": "model has no adapter or no engine: it cannot run"}
             e.enabled = True
+            e.restart_due = None   # a manual start replaces a pending automatic restart
         self._load_and_run(e)
         with e.lock:
             return {"ok": e.state in (RUNNING, LOADING), "state": e.state, "error": e.error}
@@ -238,6 +289,53 @@ class ModelManager:
 
     def status(self) -> list[dict]:
         return [self._status_one(self.models[n]) for n in self.order]
+
+    # -- automatic restart ----------------------------------------------------------------------------
+    def auto_restart_allowed(self) -> bool:
+        return not self._sup_stop.is_set()
+
+    def _ensure_supervisor(self) -> None:
+        with self._sup_lock:
+            if self._sup_stop.is_set():
+                return
+            if self._sup_thread is not None and self._sup_thread.is_alive():
+                return
+            self._sup_thread = threading.Thread(target=self._supervise, name="model-supervisor",
+                                                daemon=True)
+            self._sup_thread.start()
+
+    def _supervise(self) -> None:
+        """Start FAILED models again when their restart time is reached."""
+        tick = min(1.0, self.restart_backoff_s / 4.0)
+        while not self._sup_stop.wait(tick):
+            now = time.monotonic()
+            for name in list(self.order):
+                e = self.models[name]
+                with e.lock:
+                    due = e.restart_due
+                    if due is None or now < due:
+                        continue
+                    e.restart_due = None
+                    if e.state != FAILED or not e.enabled or self._sup_stop.is_set():
+                        continue
+                    if e.engine is None:   # only worker failures (engine loaded) are restarted
+                        continue
+                    e.auto_restarts += 1
+                    n = e.auto_restarts
+                    log.warning("model %s: automatic restart %d (after FAILED: %s)", e.name, n, e.error)
+                    try:
+                        # under e.lock: stop_model() cannot run between the check and the start
+                        res = self.start_model(name)
+                    except Exception as ex:  # noqa: BLE001
+                        res = {"ok": False, "error": f"{type(ex).__name__}: {ex}"}
+                    if not res.get("ok"):
+                        delay = e.restart_backoff
+                        e.restart_due = time.monotonic() + delay
+                        e.restart_backoff = min(self.restart_backoff_max_s, delay * 2.0)
+                        log.warning("model %s: automatic restart %d failed (%s); next try in %.1f s",
+                                    e.name, n, res.get("error"), delay)
+                    else:
+                        log.warning("model %s: automatic restart %d -> %s", e.name, n, res.get("state"))
 
     # -- loading ------------------------------------------------------------------------------------
     def _load_and_run(self, e: ModelEntry, should_stop=None) -> None:
@@ -442,6 +540,9 @@ class ModelManager:
                 "outputs": [{"name": t.name, "shape": list(t.shape), "dtype": t.dtype} for t in eng.outputs()]
                 if eng is not None else [],
                 "results_total": m.results_total,
+                "auto_restarts": e.auto_restarts,
+                "restart_in_s": (round(max(0.0, e.restart_due - time.monotonic()), 1)
+                                 if e.restart_due is not None else None),
                 # extra fields (not in the dashboard contract; the dashboard ignores them)
                 "group": e.group,
                 "adapter": e.adapter_name,

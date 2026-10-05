@@ -40,12 +40,33 @@ def _num(v):
     return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
 
-def cam_simulated(c: dict, node_sim: bool) -> bool:
-    """A camera is simulated when its own flag says so. The node flag is used only when the camera
-    has no flag (agx-infer sets node.simulated when ONE camera is simulated: mixed mode)."""
-    if isinstance(c.get("simulated"), bool):
-        return c["simulated"]
-    return node_sim
+# R13 fail-safe: a "simulated" flag that is missing or is not a bool (true / false) means SIMULATED.
+# Data is shown as live only when the status says simulated = false.
+
+def node_simulated(node) -> bool:
+    """node.simulated of the status. Missing, non-bool, or no node object -> True (fail-safe)."""
+    v = _d(node).get("simulated")
+    return v if isinstance(v, bool) else True
+
+
+def cam_simulated(c: dict, node_sim: bool = True) -> bool:
+    """A camera uses its own flag (agx-infer sets node.simulated when ONE camera is simulated: mixed
+    mode, so a camera with simulated = false stays live). A camera with a missing or non-bool flag is
+    simulated (fail-safe, R13). node_sim is kept for the call signature: it cannot make such a camera live."""
+    v = _d(c).get("simulated")
+    if isinstance(v, bool):
+        return v
+    return True
+
+
+def model_simulated(m: dict, node_sim: bool) -> bool:
+    """A model entry of the 5562 contract has no own flag: it uses node.simulated (already fail-safe,
+    see node_simulated). An own flag true, or an own flag that is present but not a bool, also gives
+    simulated. An own flag false does not make a model live when the node is simulated."""
+    v = _d(m).get("simulated")
+    if v is True or (v is not None and not isinstance(v, bool)):
+        return True
+    return bool(node_sim)
 
 
 class InferStatusClient:
@@ -173,9 +194,6 @@ class InferStatusClient:
             rx = self._status_rx_mono
         return None if rx is None else time.monotonic() - rx
 
-    @staticmethod
-    def _is_sim(x) -> bool:
-        return isinstance(x, dict) and x.get("simulated") is True
 
     def summary(self) -> dict:
         """Health-level infer part. infer is None (+ reason) when agx-infer is not running."""
@@ -191,11 +209,14 @@ class InferStatusClient:
         mod_states: dict[str, int] = {}
         for m in models:
             mod_states[str(m.get("state"))] = mod_states.get(str(m.get("state")), 0) + 1
-        node_sim = self._is_sim(node)
+        node_sim = node_simulated(node)
         cams_sim = any(cam_simulated(c, node_sim) for c in cams)
+        mods_sim = bool(node_sim or any(model_simulated(m, node_sim) for m in models))
+        any_sim = bool(node_sim or cams_sim or mods_sim)
         infer = {
             "state": state,
-            "simulated": bool(node_sim or cams_sim or any(self._is_sim(m) for m in models)),
+            "simulated": any_sim,
+            "label": SIM if any_sim else None,
             "node_simulated": node_sim,
             "version": node.get("version"),
             "uptime_s": node.get("uptime_s"),
@@ -203,17 +224,21 @@ class InferStatusClient:
             "age_s": age,
             "cameras_summary": {
                 "total": len(cams), "states": cam_states, "simulated": cams_sim,
+                "label": SIM if cams_sim else None,
                 "per_cam": [{"cam": c.get("cam"), "role": c.get("role"), "state": c.get("state"),
                              "fps": c.get("fps"), "frame_age_ms": c.get("frame_age_ms"),
-                             "simulated": cam_simulated(c, node_sim)} for c in cams],
+                             "simulated": cam_simulated(c, node_sim),
+                             "label": SIM if cam_simulated(c, node_sim) else None} for c in cams],
             },
             "models_summary": {
                 "total": len(models), "states": mod_states,
-                "simulated": bool(node_sim or any(self._is_sim(m) for m in models)),
+                "simulated": mods_sim,
+                "label": SIM if mods_sim else None,
                 "per_model": [{"name": m.get("name"), "state": m.get("state"), "fps": m.get("fps"),
                                "lat_total_p50_ms": _num(_d(_d(m.get("lat_ms")).get("total")).get("p50")),
                                "error": m.get("error"),
-                               "simulated": bool(node_sim or self._is_sim(m))} for m in models],
+                               "simulated": model_simulated(m, node_sim),
+                               "label": SIM if model_simulated(m, node_sim) else None} for m in models],
             },
             "errors": [str(e) for e in _l(node.get("errors"))],
         }
@@ -260,7 +285,7 @@ class InferStatusClient:
                 val, basis = max(0.0, status_t - last), "agx-infer status (newer frames are possible)"
             else:
                 val, basis = upper, "now - newest frame (upper limit)"
-        node_sim = self._is_sim(st.get("node"))
+        node_sim = node_simulated(st.get("node"))
         sim = bool(node_sim or any(isinstance(c, dict) and cam_simulated(c, node_sim)
                                    for c in _l(st.get("cameras"))))
         return {"time_since_last_frame_ms": round(val * 1000.0, 1) if val is not None else None,
@@ -278,13 +303,14 @@ class InferStatusClient:
         st, state, reason, age = self.current()
         if st is None:
             return {"available": False, "reason": reason or NOT_RUNNING, "state": state}
+        sim = node_simulated(st.get("node"))
         return {"available": True, "state": state, "age_s": age, "t": st.get("t"),
-                "simulated": bool(self._is_sim(st.get("node"))), key: _l(st.get(key))}
+                "simulated": sim, "label": SIM if sim else None, key: _l(st.get(key))}
 
     def metrics(self) -> dict:
         """History metrics: fps per camera, latency p50 per model (only when fresh).
 
-        R13: values from a simulated source (node, camera or model simulated=true) are stored
+        R13: values from a simulated source (node, camera or model simulated=true, or a missing flag) are stored
         under a "sim_" prefix (sim_fps.camN, sim_lat_p50.<model>) so that they never mix with
         real data in the history; the page labels them SIMULATED.
         """
@@ -292,7 +318,7 @@ class InferStatusClient:
         out: dict[str, float | None] = {}
         if st is None:
             return out
-        node_sim = self._is_sim(st.get("node"))
+        node_sim = node_simulated(st.get("node"))
         for c in _l(st.get("cameras")):
             if isinstance(c, dict) and c.get("cam") is not None and _num(c.get("fps")) is not None:
                 pre = "sim_fps" if cam_simulated(c, node_sim) else "fps"
@@ -305,7 +331,7 @@ class InferStatusClient:
                 continue
             p50 = _num(_d(_d(m.get("lat_ms")).get("total")).get("p50"))
             if p50 is not None:
-                pre = "sim_lat_p50." if (node_sim or self._is_sim(m)) else "lat_p50."
+                pre = "sim_lat_p50." if model_simulated(m, node_sim) else "lat_p50."
                 out[pre + re.sub(r"[^A-Za-z0-9_.-]", "_", str(m["name"]))[:48]] = float(p50)
         return out
 

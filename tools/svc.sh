@@ -26,12 +26,16 @@ case "$cmd" in
     [ -n "$name" ] || { echo "name?"; exit 2; }
     u="$(unit_of "$name")"; e="$(exec_of "$name")" || exit 2
     if systemctl --user is-active --quiet "$u"; then echo "$u already active"; exit 0; fi
+    # A failed unit stays loaded (no --collect), so that its exit status stays visible in
+    # "tools/svc.sh status". reset-failed removes the old failed unit before the new start.
     systemctl --user reset-failed "$u" 2>/dev/null || true
+    # PWD: pycapnp reads PWD. Without it, capnp writes a warning in the log.
     # shellcheck disable=SC2086
-    systemd-run --user --unit="$u" --collect \
+    systemd-run --user --unit="$u" \
       --property=Restart=on-failure --property=RestartSec=3 \
       --property=StartLimitIntervalSec=120 --property=StartLimitBurst=10 \
-      --working-directory="$P" --setenv=PYTHONUNBUFFERED=1 --setenv=PYTHONPATH="$P" \
+      --working-directory="$P" --setenv=PWD="$P" \
+      --setenv=PYTHONUNBUFFERED=1 --setenv=PYTHONPATH="$P" \
       --description="driveragent-agx $name (transient user unit, night run)" \
       $e "$@"
     ;;

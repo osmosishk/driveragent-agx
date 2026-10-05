@@ -3,6 +3,11 @@
 DISABLED by default. When AGX_MQTT_ENABLED != 1 or AGX_MQTT_HOST is empty, start_mqtt() returns
 None and nothing is imported or opened (no socket). Credentials are never logged.
 Topic: <AGX_MQTT_TOPIC_PREFIX>/agx02/health (prefix optional).
+
+Rule R11: enabling MQTT sends data off this machine. Owner approval is needed before you enable it.
+When AGX_MQTT_USER is set and AGX_MQTT_TLS is not 1, the publisher does not start (the user name
+and password would go to the broker in clear text).
+The payload is the /api/health document: it has "simulated" (and "label": "SIMULATED") (R13).
 """
 from __future__ import annotations
 
@@ -17,9 +22,20 @@ from common.env import get, truthy
 log = logging.getLogger("dashboard.mqtt")
 
 
+CLEAR_TEXT_REFUSED = ("mqtt NOT started: AGX_MQTT_USER is set but AGX_MQTT_TLS is not 1, so the MQTT "
+                      "credentials would go to the broker in clear text. Set AGX_MQTT_TLS=1.")
+
+
+def credentials_without_tls(env: dict) -> bool:
+    """True when a user name is set and TLS is off (the publisher must not start)."""
+    return bool(get(env, "AGX_MQTT_USER")) and not truthy(get(env, "AGX_MQTT_TLS"))
+
+
 class MqttPublisher:
     def __init__(self, env: dict, health_fn: Callable[[], dict], interval_s: float = 5.0,
                  node: str = "agx02"):
+        if credentials_without_tls(env):
+            raise ValueError(CLEAR_TEXT_REFUSED)
         import paho.mqtt.client as mqtt  # imported only when enabled
 
         self._mqtt = mqtt
@@ -39,11 +55,6 @@ class MqttPublisher:
             self.client = mqtt.Client(client_id=f"{node}-dashboard")
         user = get(env, "AGX_MQTT_USER")
         if user:
-            if not self.tls:
-                # the user name and password go to the broker in clear text without TLS
-                log.warning("mqtt: AGX_MQTT_USER is set but AGX_MQTT_TLS is not 1: the MQTT "
-                            "credentials are sent without encryption. Set AGX_MQTT_TLS=1 or use "
-                            "a broker that is reachable only on a trusted network (tailscale).")
             self.client.username_pw_set(user, get(env, "AGX_MQTT_PASSWORD") or None)
         if self.tls:
             self.client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
@@ -76,6 +87,9 @@ class MqttPublisher:
 def start_mqtt(env: dict, health_fn: Callable[[], dict], interval_s: float = 5.0) -> MqttPublisher | None:
     if not truthy(get(env, "AGX_MQTT_ENABLED")) or not get(env, "AGX_MQTT_HOST"):
         log.info("mqtt disabled (AGX_MQTT_ENABLED!=1 or AGX_MQTT_HOST empty)")
+        return None
+    if credentials_without_tls(env):
+        log.error(CLEAR_TEXT_REFUSED)
         return None
     pub = MqttPublisher(env, health_fn, interval_s)
     pub.start()

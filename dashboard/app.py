@@ -38,6 +38,20 @@ CSP = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe
        "script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 
 
+def label_simulated(doc, label: str = "SIMULATED"):
+    """R13: each dict (at any depth) with "simulated": true gets "label": "SIMULATED" when its label
+    is missing or empty. Changes doc in place and returns it."""
+    if isinstance(doc, dict):
+        if doc.get("simulated") is True and not doc.get("label"):
+            doc["label"] = label
+        for v in doc.values():
+            label_simulated(v, label)
+    elif isinstance(doc, list):
+        for v in doc:
+            label_simulated(v, label)
+    return doc
+
+
 class SecurityHeaders:
     """Pure ASGI: add security headers to every HTTP response (does not buffer SSE)."""
 
@@ -193,6 +207,7 @@ class Hub:
             "infer_state": inf["infer_state"],
             "infer_reason": inf["infer_reason"],
             "simulated": bool(inf["infer"] and inf["infer"]["simulated"]),
+            "label": "SIMULATED" if (inf["infer"] and inf["infer"]["simulated"]) else None,
             "limits": self.cfg["limits"],
             "errors": list(s["errors"]),
         }
@@ -200,7 +215,7 @@ class Hub:
             doc["errors"].append(f"health sample stale: last good sample {age} s old")
         if self.history.db_error:
             doc["errors"].append(self.history.db_error)
-        return doc
+        return label_simulated(doc)  # R13 safety net: no simulated object without its label
 
 
 def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True) -> FastAPI:

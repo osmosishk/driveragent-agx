@@ -15,10 +15,8 @@ DEFAULTS: dict = {
     "env_file": ".env",
     "tls_certfile": None,
     "tls_keyfile": None,
-    "allow_cidrs": [
-        "127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
-        "100.64.0.0/10", "169.254.0.0/16", "fc00::/7", "fe80::/10",
-    ],
+    # IPv4 only (the socket is IPv4). Same list as dashboard/auth.py DEFAULT_ALLOW.
+    "allow_cidrs": ["127.0.0.0/8", "10.0.0.0/24", "10.42.0.0/30", "100.64.0.0/10"],
     "rk_ip": "100.64.0.180",
     "link": {
         "ping_interval_s": 2,
@@ -42,7 +40,7 @@ DEFAULTS: dict = {
     "docker": True,
     "services": {
         "agx_units": ["agx-dashboard", "agx-infer", "agx-sim"],
-        "log_units": ["agx-infer", "agx-dashboard"],
+        "log_units": ["agx-infer", "agx-dashboard", "agx-sim"],
         "unit_refresh_s": 5,
         "docker_refresh_s": 10,
         "docker_inspect_cache_s": 30,

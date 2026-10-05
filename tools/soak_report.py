@@ -67,7 +67,13 @@ def report(sysmon, status, client=None) -> str:
     L = []
     ts = [s["t"] for s in sysmon]
     dur = (ts[-1] - ts[0]) if len(ts) > 1 else 0
-    L.append(f"Samples: sysmon {len(sysmon)} (1 s), status {len(status)}. Duration {dur/60:.1f} min.")
+    nsim = sum(1 for s in status if (s.get("node") or {}).get("simulated") is not False)
+    if status:
+        src = "SIMULATED" if nsim == len(status) else ("LIVE" if nsim == 0 else "MIXED")
+        L.append(f"INPUT SOURCE: {src} ({nsim} of {len(status)} status samples say simulated; R13)")
+    else:
+        L.append("INPUT SOURCE: unknown (no status samples)")
+    L.append(f"Samples: sysmon {len(sysmon)}, status {len(status)}. Duration {dur/60:.1f} min.")
     L.append("")
     # ---- system
     L.append("| System value | mean | min | max | start (first 60 s) | end (last 60 s) | slope per hour |")
@@ -114,7 +120,8 @@ def report(sysmon, status, client=None) -> str:
     L.append("")
     # ---- cameras from status
     if status:
-        cams = defaultdict(lambda: {"fps": [], "states": defaultdict(int), "first": None, "last": None})
+        cams = defaultdict(lambda: {"fps": [], "states": defaultdict(int), "first": None, "last": None,
+                                    "sim": 0, "n": 0})
         models = defaultdict(lambda: {"fps": [], "p50": [], "p95": [], "p99": [], "states": defaultdict(int),
                                       "first": None, "last": None, "errors": set()})
         node_states = defaultdict(int)
@@ -126,6 +133,8 @@ def report(sysmon, status, client=None) -> str:
             for c in s.get("cameras") or []:
                 k = c.get("cam")
                 cams[k]["fps"].append(c.get("fps"))
+                cams[k]["n"] += 1
+                cams[k]["sim"] += 0 if c.get("simulated") is False else 1
                 cams[k]["states"][c.get("state")] += 1
                 cams[k]["first"] = cams[k]["first"] or c
                 cams[k]["last"] = c
@@ -140,8 +149,8 @@ def report(sysmon, status, client=None) -> str:
                 models[k]["last"] = m
                 if m.get("error"):
                     models[k]["errors"].add(str(m.get("error"))[:160])
-        L.append("| Camera | fps mean / min / max | states (samples) | lost frames (delta) | lost packets (delta) | ring overruns (delta) |")
-        L.append("|---|---|---|---|---|---|")
+        L.append("| Camera | source | fps mean / min / max | states (samples) | lost frames (delta) | lost packets (delta) | ring overruns (delta) |")
+        L.append("|---|---|---|---|---|---|---|")
         for k in sorted(cams, key=lambda x: (x is None, x)):
             c = cams[k]
             m, lo, hi = _stats(c["fps"])
@@ -151,11 +160,13 @@ def report(sysmon, status, client=None) -> str:
                 b = (c["last"] or {}).get(field)
                 return "n/a" if a is None or b is None else str(b - a)
             stx = ", ".join(f"{s}: {n}" for s, n in sorted(c["states"].items(), key=lambda x: str(x[0])))
-            L.append(f"| cam{k} | {_f(m)} / {_f(lo)} / {_f(hi)} | {stx} | {d('lost_frames')} | "
+            csrc = "SIMULATED" if c["sim"] == c["n"] else ("LIVE" if c["sim"] == 0 else "MIXED")
+            L.append(f"| cam{k} | {csrc} | {_f(m)} / {_f(lo)} / {_f(hi)} | {stx} | {d('lost_frames')} | "
                      f"{d('lost_packets')} | {d('ring_overruns')} |")
         L.append("")
-        L.append("| Model | fps mean / min / max | total latency ms p50 / p95 / p99 (mean of 1 s values) | states (samples) | results (delta) | errors |")
-        L.append("|---|---|---|---|---|---|")
+        msrc = "SIMULATED" if nsim == len(status) else ("LIVE" if nsim == 0 else "MIXED")
+        L.append("| Model | source | fps mean / min / max | total latency ms p50 / p95 / p99 (mean of 1 s values) | states (samples) | results (delta) | errors |")
+        L.append("|---|---|---|---|---|---|---|")
         for k in sorted(models):
             mm = models[k]
             m, lo, hi = _stats(mm["fps"])
@@ -165,7 +176,7 @@ def report(sysmon, status, client=None) -> str:
             a = (mm["first"] or {}).get("results_total")
             b = (mm["last"] or {}).get("results_total")
             stx = ", ".join(f"{s}: {n}" for s, n in sorted(mm["states"].items(), key=lambda x: str(x[0])))
-            L.append(f"| {k} | {_f(m)} / {_f(lo)} / {_f(hi)} | {_f(p50)} / {_f(p95)} / {_f(p99)} | {stx} | "
+            L.append(f"| {k} | {msrc} | {_f(m)} / {_f(lo)} / {_f(hi)} | {_f(p50)} / {_f(p95)} / {_f(p99)} | {stx} | "
                      f"{'n/a' if a is None or b is None else b - a} | {'; '.join(sorted(mm['errors'])) or 'none'} |")
         L.append("")
         L.append("Node states (samples): " + ", ".join(f"{s}: {n}" for s, n in node_states.items()))

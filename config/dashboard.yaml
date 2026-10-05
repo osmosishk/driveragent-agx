@@ -9,18 +9,14 @@ env_file: .env             # AGX_DASH_USER / AGX_DASH_PASSWORD / AGX_MQTT_*
 tls_certfile: null
 tls_keyfile: null
 
-# IP allowlist (R12 list). The password is still needed from every address. To narrow it, keep
-# 127.0.0.0/8, 10.0.0.0/24 (eno1) and 100.64.0.0/10 (tailscale). 172.16.0.0/12 includes docker0.
+# IP allowlist. The password is still needed from every address. IPv4 only: the socket is IPv4
+# (bind 0.0.0.0), so IPv6 entries have no effect. Not allowed: docker bridges (172.16.0.0/12,
+# includes docker0), 192.168.0.0/16 and link-local 169.254.0.0/16.
 allow_cidrs:
-  - 127.0.0.0/8
-  - ::1/128
-  - 10.0.0.0/8
-  - 172.16.0.0/12
-  - 192.168.0.0/16
-  - 100.64.0.0/10          # tailscale
-  - 169.254.0.0/16
-  - fc00::/7
-  - fe80::/10
+  - 127.0.0.0/8            # loopback
+  - 10.0.0.0/24            # eno1 LAN
+  - 10.42.0.0/30           # future Link C (direct cable to the RK3588)
+  - 100.64.0.0/10          # tailscale tailnet: the RK3588 and the operator devices
 
 rk_ip: 100.64.0.180
 
@@ -59,7 +55,8 @@ docker: true
 
 services:
   agx_units: [agx-dashboard, agx-infer, agx-sim]
-  log_units: [agx-infer, agx-dashboard]   # whitelist for /api/services/logs
+  log_units: [agx-infer, agx-dashboard, agx-sim]   # whitelist for /api/services/logs. The system
+                                                  # unit is read when it is active, else the user unit.
   unit_refresh_s: 5
   docker_refresh_s: 10
   docker_inspect_cache_s: 30

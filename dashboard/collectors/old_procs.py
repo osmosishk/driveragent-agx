@@ -12,6 +12,13 @@ OLD_ROOT = "/home/tonyho/driveragent"
 PATTERNS = ("camtest", "ui.ui", "control.py", "control-ami", "carstate.readami", "logger.encoder_265",
             "model/driverguard/run.py", "model/system1/run.py")
 NOTE = "No systemd unit exists for the old DriverAgent stack; it starts by hand (~/s.sh)."
+# Legacy reference copies of the old DriverGuard code in this project (infer/models/legacy/driverguard/).
+# They contain old control code: they must never run. A process matches when one of these files is
+# run as a script (absolute path, or relative to the process cwd) or as a module (python -m).
+LEGACY_DIR = "legacy/driverguard"
+LEGACY_SCRIPTS = ("runner.py", "run_driverguard.py", "camera_reader.py")
+LEGACY_MODULES = tuple("infer.models.legacy.driverguard." + n[:-3] for n in LEGACY_SCRIPTS)
+_CWD_NEEDED = ("start.py",) + LEGACY_SCRIPTS
 
 
 def _in_old_root(p: str) -> bool:
@@ -27,6 +34,13 @@ def match(cmdline: list[str], cwd: str | None) -> str | None:
             full = a if os.path.isabs(a) else os.path.join(cwd or "", a)
             if _in_old_root(os.path.normpath(full)):
                 return "start.py"
+    for a in cmdline:
+        if a in LEGACY_MODULES:
+            return a
+        if os.path.basename(a) in LEGACY_SCRIPTS:
+            full = os.path.normpath(a if os.path.isabs(a) else os.path.join(cwd or "", a))
+            if os.path.dirname(full).endswith(LEGACY_DIR):
+                return LEGACY_DIR + "/" + os.path.basename(a)
     for p in PATTERNS:
         if p in joined:
             return p
@@ -48,7 +62,7 @@ def find_old_processes() -> dict:
                 continue
             cmd = [str(x) for x in info["cmdline"]]
             cwd = None
-            if any(os.path.basename(a) == "start.py" for a in cmd):
+            if any(os.path.basename(a) in _CWD_NEEDED for a in cmd):
                 try:
                     cwd = pr.cwd()
                 except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):

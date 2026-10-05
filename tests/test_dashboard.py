@@ -198,8 +198,12 @@ def test_allowlist():
     assert ip_allowed("10.0.0.130")
     assert ip_allowed("100.64.0.180")
     assert ip_allowed("127.0.0.1")
-    assert ip_allowed("::1")
-    assert ip_allowed("::ffff:192.168.1.5")
+    assert ip_allowed("::ffff:127.0.0.1")       # IPv4-mapped form of an allowed address
+    assert ip_allowed("10.42.0.1")              # future Link C
+    # narrowed list (M2): docker bridge, 192.168/16, link-local, other 10/8 and IPv6 are not allowed
+    for bad in ("172.17.0.2", "192.168.1.5", "::ffff:192.168.1.5", "169.254.1.1", "10.0.1.5",
+                "10.42.0.4", "::1", "fe80::1"):
+        assert not ip_allowed(bad), bad
     assert not ip_allowed("1.1.1.1")
     assert not ip_allowed("100.128.0.1")
     assert not ip_allowed("")
@@ -275,6 +279,7 @@ def test_guard_403_and_401_in_process():
             return (await c.get("/api/services/logs?unit=nope", auth=auth)).status_code
 
     assert asyncio.run(go("8.8.8.8", ("u", "test-only-pw"))) == 403
+    assert asyncio.run(go("172.17.0.2", ("u", "test-only-pw"))) == 403  # docker bridge: not allowed (M2)
     assert asyncio.run(go("10.0.0.5", None)) == 401
     assert asyncio.run(go("10.0.0.5", ("u", "bad"))) == 401
     assert asyncio.run(go("100.64.0.180", ("u", "test-only-pw"))) == 400  # allowed, auth ok, unit not in whitelist

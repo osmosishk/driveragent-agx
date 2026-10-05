@@ -91,8 +91,8 @@ All AGX commands start in `/home/tonyho/driveragent-agx`.
 
 | Item | State / value | Command or file |
 |---|---|---|
-| Inference node `agx-infer` | Transient systemd user unit. Not running at the time of writing (`tools/svc.sh status` shows only `agx-dashboard`). | Start: `tools/svc.sh start infer`. Start in rk mode: `tools/svc.sh start infer --mode rk` (`tools/svc.sh:8`, `:18`, `:36`; `infer/main.py:202`). Stop: `tools/svc.sh stop infer`. Logs: `tools/svc.sh logs infer`. |
-| Source mode | `mode: sim` (`config/sources.yaml:9`) | Switch to rk: (a) set `mode: rk` in `config/sources.yaml:9`, or (b) set `AGX_INGEST_MODE=rk` (`infer/ingest/ingest.py:35`), or (c) pass `--mode rk` (`infer/main.py:202`). |
+| Inference node `agx-infer` | Running. `agx-infer`, `agx-dashboard` and `agx-sim` run as transient systemd user units (`agx-dashboard` started 22:43, `agx-infer` 23:11, `agx-sim` 23:16 on 2026-10-05; `tools/svc.sh status`). These units stop when the last session of `tonyho` ends (Linger=no) and at reboot. The input is SIMULATED (mode `sim`). | Start: `tools/svc.sh start infer`. Start in rk mode: `tools/svc.sh start infer --mode rk` (`tools/svc.sh:8`, `:18`, `:40`; `infer/main.py:213`). Stop: `tools/svc.sh stop infer`. Logs: `tools/svc.sh logs infer`. |
+| Source mode | `mode: sim` (`config/sources.yaml:9`) | Switch to rk: (a) set `mode: rk` in `config/sources.yaml:9`, or (b) set `AGX_INGEST_MODE=rk` (`infer/ingest/ingest.py:35`), or (c) pass `--mode rk` (`infer/main.py:213`). |
 | FrameLink receive | UDP 6000-6005. Bind 127.0.0.1 in sim mode, 0.0.0.0 in rk mode. | `config/sources.yaml:15-17` |
 | Results | ZMQ PUB `tcp://0.0.0.0:5560`, `AgxPerceptionResult` v1 | `config/infer.yaml:9`, `:15` |
 | Status | ZMQ PUB `tcp://0.0.0.0:5561`, `AgxInferStatus` v1, 1 Hz | `config/infer.yaml:10`, `:16`, `:25` |

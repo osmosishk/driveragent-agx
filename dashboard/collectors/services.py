@@ -215,13 +215,26 @@ class ServicesCollector:
             "old_processes": len(s["old_processes"].get("processes") or []),
         }
 
+    @staticmethod
+    def system_unit_active(unit: str) -> bool:
+        """True when the SYSTEM unit of this name is active (systemctl is-active, system manager)."""
+        rc, out, _ = _run(["systemctl", "is-active", "--", unit], timeout=5)
+        return rc == 0 and out.strip() == "active"
+
     def logs(self, unit: str, lines: int = 100) -> dict:
-        if unit not in self.log_units:
+        """Last journal lines of a whitelisted unit. When the system unit of this name is active
+        (installed by systemd/install_units.sh), read it with `journalctl -u`; else read the user
+        unit (transient units of tools/svc.sh) with `journalctl --user-unit`."""
+        if unit not in self.log_units or not UNIT_RE.match(unit):
             raise ValueError("unit not allowed")
-        rc, out, err = _run(["journalctl", f"--user-unit={unit}", "-n", str(int(lines)),
-                             "--no-pager", "-o", "short-iso"], timeout=8)
+        if self.system_unit_active(unit):
+            source, sel = "system", ["-u", unit]
+        else:
+            source, sel = "user", [f"--user-unit={unit}"]
+        rc, out, err = _run(["journalctl"] + sel + ["-n", str(int(lines)), "--no-pager", "-o", "short-iso"],
+                            timeout=8)
         ls = out.splitlines()
         if ls and ls[0].strip() == "-- No entries --":
             ls = []
-        return {"unit": unit, "rc": rc, "lines": ls[-lines:],
+        return {"unit": unit, "source": source, "rc": rc, "lines": ls[-lines:],
                 "error": (err.strip()[:300] or None) if rc != 0 else None, "t": time.time()}
