@@ -64,7 +64,7 @@ Thus the AGX cannot get live video tonight. The RK agent must do the tasks below
 |---|---|---|---|
 | Loopback 127.0.0.1 on the RK | K1 and K2 sender tests with a local receiver (K1 test 2a) | - | - |
 | tailscale `tcp://100.64.0.20:5560` and `tcp://100.64.0.20:5561` | K4, K5 (SIMULATED results), K6 | Video. The path goes through the DERP relay `lhr` (RTT about 12.6 ms) and tailscale0 has MTU 1280. NV12 needs 335 Mb/s for cam0 alone. | `docs/research/T1_rk-probe.md` section 1, 2; `docs/RK_AGX_INTERFACE.md:74`; `rk/docs/BRINGUP_REPORT.md:782-800` |
-| tailscale `http://100.64.0.20:8700/api/health` | K6 HTTP test | - | `config/dashboard.yaml:2`, `:20` (100.64.0.0/10 allowed) |
+| tailscale `http://100.64.0.20:8700/api/health` | K6 HTTP test | - | `config/dashboard.yaml` keys `port`, `allow_cidrs` (100.64.0.0/10 allowed) |
 
 Before the tailscale test, check the tailscale mode on the RK: `ip -br addr show tailscale0`. Pass: the interface exists and has `100.64.0.180`. The RK repo says that tailscaled on da02 uses userspace networking (`rk/docs/RECOVERY.md:26`). In that mode, `tailscale0` does not exist, and a local connect to `100.64.0.20` does not go through tailscale. Then the tailscale test is not possible without a SOCKS5 proxy. Tell the owner.
 
@@ -91,21 +91,21 @@ All AGX commands start in `/home/tonyho/driveragent-agx`.
 
 | Item | State / value | Command or file |
 |---|---|---|
-| Inference node `agx-infer` | Running. `agx-infer`, `agx-dashboard` and `agx-sim` run as transient systemd user units (`agx-dashboard` started 22:43, `agx-infer` 23:11, `agx-sim` 23:16 on 2026-10-05; `tools/svc.sh status`). These units stop when the last session of `tonyho` ends (Linger=no) and at reboot. The input is SIMULATED (mode `sim`). | Start: `tools/svc.sh start infer`. Start in rk mode: `tools/svc.sh start infer --mode rk` (`tools/svc.sh:8`, `:18`, `:40`; `infer/main.py:213`). Stop: `tools/svc.sh stop infer`. Logs: `tools/svc.sh logs infer`. |
-| Source mode | `mode: sim` (`config/sources.yaml:9`) | Switch to rk: (a) set `mode: rk` in `config/sources.yaml:9`, or (b) set `AGX_INGEST_MODE=rk` (`infer/ingest/ingest.py:35`), or (c) pass `--mode rk` (`infer/main.py:213`). |
-| FrameLink receive | UDP 6000-6005. Bind 127.0.0.1 in sim mode, 0.0.0.0 in rk mode. | `config/sources.yaml:15-17` |
-| Results | ZMQ PUB `tcp://0.0.0.0:5560`, `AgxPerceptionResult` v1 | `config/infer.yaml:9`, `:15` |
-| Status | ZMQ PUB `tcp://0.0.0.0:5561`, `AgxInferStatus` v1, 1 Hz | `config/infer.yaml:10`, `:16`, `:25` |
-| Dashboard | Running. TCP 8700 (next free port if busy; see `data/dashboard_port`). HTTP Basic auth. `GET /api/health`. | `config/dashboard.yaml:2-4`; `dashboard/app.py:235-237` |
+| Inference node `agx-infer` | Running. `agx-infer`, `agx-dashboard` and `agx-sim` run as transient systemd user units (`agx-dashboard` started 22:43, `agx-infer` 23:11, `agx-sim` 23:16 on 2026-10-05; `tools/svc.sh status`). These units stop when the last session of `tonyho` ends (Linger=no) and at reboot. The input is SIMULATED (mode `sim`). | Start: `tools/svc.sh start infer`. Start in rk mode: `tools/svc.sh start infer --mode rk` (`tools/svc.sh` usage comment, `exec_of()`, `start` case; `infer/main.py` `main()` option `--mode`). Stop: `tools/svc.sh stop infer`. Logs: `tools/svc.sh logs infer`. |
+| Source mode | `mode: sim` (`config/sources.yaml` key `mode`) | Switch to rk: (a) set `mode: rk` in `config/sources.yaml` (key `mode`), or (b) set `AGX_INGEST_MODE=rk` (`infer/ingest/ingest.py` `Ingest.__init__()`), or (c) pass `--mode rk` (`infer/main.py` `main()` option `--mode`). |
+| FrameLink receive | UDP 6000-6005. Bind 127.0.0.1 in sim mode, 0.0.0.0 in rk mode. | `config/sources.yaml` key `bind_host` |
+| Results | ZMQ PUB `tcp://0.0.0.0:5560`, `AgxPerceptionResult` v1 | `config/infer.yaml` keys `ports.results`, `bind.results` |
+| Status | ZMQ PUB `tcp://0.0.0.0:5561`, `AgxInferStatus` v1, 1 Hz | `config/infer.yaml` keys `ports.status`, `bind.status`, `status_period_s` |
+| Dashboard | Running. TCP 8700 (next free port if busy; see `data/dashboard_port`). HTTP Basic auth. `GET /api/health`. | `config/dashboard.yaml` keys `port`, `port_file`, `bind`; `dashboard/app.py` `create_app()` route `/api/health` |
 | Schema | `proto/agx_infer.capnp`. Hashes: `AgxPerceptionResult` = `0xafcaff02`, `AgxInferStatus` = `0x9086fa18` (computed again for this file). | `docs/RK_AGX_INTERFACE.md:267` |
-| Stale rule | No frame for 0.5 s: STALE, no result. No frame for 1.0 s: NO SIGNAL. | `config/sources.yaml:20-21` |
-| Socket receive buffer | `net.core.rmem_max` = 212992 B (Check). `rcvbuf_bytes: 0` = use the maximum. | `config/sources.yaml:25` |
-| Max FrameLink frame | 2097152 B | `config/sources.yaml:37` |
+| Stale rule | No frame for 0.5 s: STALE, no result. No frame for 1.0 s: NO SIGNAL. | `config/sources.yaml` keys `stale_s`, `no_signal_s` |
+| Socket receive buffer | `net.core.rmem_max` = 212992 B (Check). `rcvbuf_bytes: 0` = use the maximum. | `config/sources.yaml` key `rcvbuf_bytes` |
+| Max FrameLink frame | 2097152 B | `config/sources.yaml` key `max_frame_bytes` |
 | Link C | Not configured. No 10.42.0.x address. `eno1` MTU 1500. | Check; `docs/research/T1_rk-probe.md` section 6 |
 | Ingest probe | Prints camera state, fps, loss; writes JSON | `infer/ingest/probe.py`. Stop `agx-infer` first: both bind UDP 6000-6005. |
 | C++ sender reference | `tools/framelink_ref/` (`framelink.h`, `test_framelink.cpp`, `golden_vectors.txt`, `README.md`). Built and run on the AGX for this file: `3 vectors, 0 failed`. | `tools/framelink_ref/README.md` |
-| Python sender reference | `tools/rk_sim/` (pacing in `tools/rk_sim/sender.py:35-120`) | `.venv/bin/python -m tools.rk_sim --config config/sim.yaml --fmt nv12 --host <ip>` |
-| Example subscriber | `tools/rk_result_client/` (`__main__.py`, `README.md`). It checks every envelope and decodes every message. Exit code 0 = all checks pass, 1 = a check failed, 2 = setup error (`tools/rk_result_client/__main__.py:32-34`). | `.venv/bin/python -m tools.rk_result_client --host <agx> --seconds 60 --expect-cams 0,1,2,3,4,5 --json <file>` |
+| Python sender reference | `tools/rk_sim/` (pacing in `tools/rk_sim/sender.py` class `FrameLinkSender`) | `.venv/bin/python -m tools.rk_sim --config config/sim.yaml --fmt nv12 --host <ip>` |
+| Example subscriber | `tools/rk_result_client/` (`__main__.py`, `README.md`). It checks every envelope and decodes every message. Exit code 0 = all checks pass, 1 = a check failed, 2 = setup error (`tools/rk_result_client/__main__.py` module docstring). | `.venv/bin/python -m tools.rk_result_client --host <agx> --seconds 60 --expect-cams 0,1,2,3,4,5 --json <file>` |
 | Measured receive (T3) | H.265, 6 cameras, 300 s: 30.0 fps, 0 lost frames. NV12 at RK sizes, 806 Mb/s, 60 s: 0 to 2 lost frames of about 1830 per camera (0.11 % or less), UDP RcvbufErrors +58, with rmem_max 212992 B. | `docs/test_results/T3_RESULT.md:5-6`, `:100-114` |
 
 ---
@@ -130,26 +130,26 @@ rk-camd sends the SCALED NV12 frames of cam0..cam5 to the AGX with FrameLink ove
 
 ### Exact spec
 
-Frame header (40 bytes, little-endian) and fragment header (16 bytes): `docs/RK_AGX_INTERFACE.md` sections 3.2 and 3.6. Reference code: `tools/framelink_ref/framelink.h:67-87` (`pack_frame`), `:92-112` (`fragments`), `:45-59` (`crc32c`). AGX receiver: `common/framelink.py:77-117`.
+Frame header (40 bytes, little-endian) and fragment header (16 bytes): `docs/RK_AGX_INTERFACE.md` sections 3.2 and 3.6. Reference code: `tools/framelink_ref/framelink.h` `pack_frame()`, `fragments()`, `crc32c()`. AGX receiver: `common/framelink.py` `pack_frame()`, `unpack_frame()`, `fragments()`.
 
 Header fields:
 
 | Field | Value | Source |
 |---|---|---|
-| `magic` | `0x4B4E4C46` (wire `46 4C 4E 4B`) | AGX proposal (`common/framelink.py:27`); confirm in K8 |
-| `ver` | 1 | AGX proposal (`common/framelink.py:28`) |
+| `magic` | `0x4B4E4C46` (wire `46 4C 4E 4B`) | AGX proposal (`common/framelink.py` `MAGIC`); confirm in K8 |
+| `ver` | 1 | AGX proposal (`common/framelink.py` `VERSION`) |
 | `cam` | camN from `camera_map.ini`, 0..5. Never send a stream with cam_id 255 (`--bench`, unlabelled; `rk/camd/src/protocol.h:33`). | RK repo |
-| `fmt` | 1 = NV12 | AGX proposal (`common/framelink.py:33`) |
+| `fmt` | 1 = NV12 | AGX proposal (`common/framelink.py` `FMT_NV12`) |
 | `health` | rk-camd LinkState of the camera at send time: 0 NotStarted, 1 Starting, 2 Live, 3 Stalled, 4 NoSignal. Value from `Camera::state_` (`rk/camd/src/camera.h:106`). | Codes: `rk/camd/src/protocol.h:121`. Use: AGX proposal |
 | `seq` | Low 32 bits of the rk-camd `frame_no` of the SCALED stream (`rk/camd/src/camera.cpp:211`). It increases by 1 for each SCALED frame. | AGX proposal (`docs/RK_AGX_INTERFACE.md:220`) |
 | `t_capture_ptp_ns` | CLOCK_REALTIME at capture, until PTP: `t_capture_ns` (V4L2 timestamp, CLOCK_MONOTONIC, `rk/camd/src/protocol.h:105`) + (CLOCK_REALTIME - CLOCK_MONOTONIC), sampled when you send. rk-recorder uses the same method (`rk/recorder/src/main.cpp:449`). After M3 (PTP), use the same formula: phc2sys then disciplines CLOCK_REALTIME. | AGX proposal (`docs/RK_AGX_INTERFACE.md:221`) |
 | `w`, `h` | Width and height of the SCALED layout. cam0 1280 x 720. cam1-5 704 x 396. | `rk/config/rk.toml:62-90` |
 | `stride` | Luma row bytes of the SCALED layout (= width) | `rk/camd/src/rga_scaler.cpp:35-43` |
 | `exposure_us` | 0 (unknown) | Same rule as `CameraHealth.exposureUs` (`rk/proto/schema/message.capnp:27`) |
-| `source` | 1 = LIVE only for a frame from a real camera with a CONFIRMED camN. 2 = REPLAY. 3 = TEST_PATTERN. | 1: `RK3588_AGENT_KICKOFF.md:86`. 2, 3: AGX proposal (`common/framelink.py:37-39`) |
+| `source` | 1 = LIVE only for a frame from a real camera with a CONFIRMED camN. 2 = REPLAY. 3 = TEST_PATTERN. | 1: `RK3588_AGENT_KICKOFF.md:86`. 2, 3: AGX proposal (`common/framelink.py` `SOURCE_LIVE`, `SOURCE_REPLAY`, `SOURCE_TEST_PATTERN`) |
 | `reserved` | 0, 0, 0 | AGX proposal |
-| `payload_crc32c` | CRC-32C over the payload (bytes 40..end). Compute it first. | AGX proposal (`common/framelink.py:79`) |
-| `header_crc32c` | CRC-32C over header bytes 0..35. These bytes include `payload_crc32c`. | AGX proposal (`common/framelink.py:80-83`) |
+| `payload_crc32c` | CRC-32C over the payload (bytes 40..end). Compute it first. | AGX proposal (`common/framelink.py` `pack_frame()`) |
+| `header_crc32c` | CRC-32C over header bytes 0..35. These bytes include `payload_crc32c`. | AGX proposal (`common/framelink.py` `pack_frame()`) |
 
 CRC-32C: Castagnoli, reflected polynomial `0x82F63B78`, init `0xFFFFFFFF`, final xor `0xFFFFFFFF`. Check value: `crc32c("123456789") = 0xE3069283`. This is the dabus envelope CRC (`rk/proto/envelope/dabus_envelope.py:42-59`, `:158`). Use the ARMv8 CRC32C instructions. A table CRC is also correct.
 
@@ -171,18 +171,18 @@ Transport:
 |---|---|---|
 | Destination | UDP `<agx_host>:6000+cam`. `agx_host` = 10.42.0.1 (Link C). | `RK3588_AGENT_KICKOFF.md:86`, `:135`; `rk/config/rk.toml:152` |
 | Fragment | 16-byte fragment header + chunk. One fragment = one UDP datagram. `offset` = byte offset of the chunk in (header + payload). | `docs/RK_AGX_INTERFACE.md` 3.6; `rk/docs/BRINGUP_REPORT.md:783` |
-| Chunk | 8896 B at MTU 9000. 1456 B at MTU 1500. Set DF (no IP fragmentation). | `common/framelink.py:52-53` |
-| Send buffer | `SO_SNDBUF` 4 MiB (RK `wmem_max` = 8 MiB) | `tools/rk_sim/sender.py:49`; `rk/ops/etc/sysctl-driveragent.conf:9` |
+| Chunk | 8896 B at MTU 9000. 1456 B at MTU 1500. Set DF (no IP fragmentation). | `common/framelink.py` `FRAG_PAYLOAD_JUMBO`, `FRAG_PAYLOAD_1500` |
+| Send buffer | `SO_SNDBUF` 4 MiB (RK `wmem_max` = 8 MiB) | `tools/rk_sim/sender.py` `FrameLinkSender.__init__()` argument `sndbuf`; `rk/ops/etc/sysctl-driveragent.conf:9` |
 | Priority | Set `SO_PRIORITY` below PTP and ZMQ. `mqprio` is not possible on the RK kernel. | `rk/docs/BRINGUP_REPORT.md:1590` |
 
 Pacing (required; the AGX socket buffer is 212992 B until O3, `docs/test_results/T3_RESULT.md:165`):
 
 | Rule | Value | Source |
 |---|---|---|
-| Spread | Send the datagrams of one frame over at most 60 % of the frame interval (cam0 at 30 fps: 20 ms). | `tools/rk_sim/sender.py:73` (`pace_fraction` 0.6) |
-| Gap | gap = span / n. span = min(0.6 x interval, n x 150 us). | `tools/rk_sim/sender.py:49`, `:73-74` |
-| No catch-up burst | Each datagram is due one gap after the previous one. When the thread is late, send at most 4 datagrams back-to-back. Then apply the gap again. | `tools/rk_sim/sender.py:36-46`, `:91` |
-| Batching | `sendmmsg` is permitted with at most 4 datagrams per call. | AGX proposal (same limit as `max_burst`, `tools/rk_sim/sender.py:50`) |
+| Spread | Send the datagrams of one frame over at most 60 % of the frame interval (cam0 at 30 fps: 20 ms). | `tools/rk_sim/sender.py` `FrameLinkSender.__init__()` (`pace_fraction` 0.6) |
+| Gap | gap = span / n. span = min(0.6 x interval, n x 150 us). | `tools/rk_sim/sender.py` `FrameLinkSender.__init__()` argument `gap_s`, `FrameLinkSender.send()` |
+| No catch-up burst | Each datagram is due one gap after the previous one. When the thread is late, send at most 4 datagrams back-to-back. Then apply the gap again. | `tools/rk_sim/sender.py` `FrameLinkSender` docstring, `FrameLinkSender.send()` |
+| Batching | `sendmmsg` is permitted with at most 4 datagrams per call. | AGX proposal (same limit as `max_burst`, `tools/rk_sim/sender.py` `FrameLinkSender.__init__()` argument `max_burst`) |
 | Reason | A late Python sender sent up to 156 x 8912 B = 1.39 MB at once. The AGX lost 1-10 % of cam0 frames. With this rule the loss went to 0.11 % or less. | `docs/test_results/T3_RESULT.md:6`, `:146` |
 
 Sender threads and buffers (AGX proposal; the RK agent selects the details):
@@ -192,8 +192,8 @@ Sender threads and buffers (AGX proposal; the RK agent selects the details):
 | Use one send thread per camera. Do not send in the capture thread. | rk-camd rule: "Capture never waits for a consumer" (`rk/camd/src/protocol.h:23-24`). M1 RGA path p99 <= 4 ms (`RK3588_AGENT_KICKOFF.md:90`). |
 | Copy the NV12 bytes out of the SCALED buffer, or hold the buffer until the last datagram is sent. Do not let RGA rewrite a buffer that you send. | Ownership rule (`rk/camd/src/protocol.h:20-24`). |
 | The SCALED heap is cached (`/dev/dma_heap/system`). Call `DMA_BUF_IOCTL_SYNC` (start, read) before the CPU reads the buffer and (end) after. | `rk/config/rk.toml:15` |
-| When a new frame arrives while the previous frame is still sending: finish the previous frame. Then send only the newest waiting frame. Count each frame that you do not send (`skipped`). | The AGX keeps the newest frame (`common/framelink.py:224-228`). The AGX counts a seq gap as lost frames (`infer/ingest/framelink_rx.py:510-525`). |
-| A seq that goes back, or jumps forward by more than 100000, starts a new stream on the AGX. Restart seq only when rk-camd restarts. | `infer/ingest/framelink_rx.py:516-521` |
+| When a new frame arrives while the previous frame is still sending: finish the previous frame. Then send only the newest waiting frame. Count each frame that you do not send (`skipped`). | The AGX keeps the newest frame (`common/framelink.py` `Reassembler.push()`). The AGX counts a seq gap as lost frames (`infer/ingest/framelink_rx.py` `FrameLinkReceiver._on_complete()`). |
+| A seq that goes back, or jumps forward by more than 100000, starts a new stream on the AGX. Restart seq only when rk-camd restarts. | `infer/ingest/framelink_rx.py` `FrameLinkReceiver._on_complete()` |
 
 Demand-driven cameras: cam0 always sends. cam1-5 send only when they have a SCALED stream (`scaled = true`, `rk/config/rk.toml:59-61`). Today the switch is static. The runtime switch (HmiRequest `selectModel`, `rk/proto/schema/message.capnp:79-92`) is not implemented. rk-camd uses a camera only when its role and link are CONFIRMED (`rk/docs/STATUS.md:100-102`). Today cam1-5 are UNCONFIRMED (O6). Thus:
 
@@ -224,7 +224,7 @@ Sender counters (per camera; log one line every 5 s, for example `framelink_tx c
 | `datagrams`, `bytes` | Datagrams and bytes sent without error |
 | `errors` | Failed `sendto`/`sendmmsg` calls |
 | `skipped` | SCALED frames not sent (sender busy) |
-| `max_burst` | Longest run of datagrams sent less than gap/4 apart (as `max_burst_seen`, `tools/rk_sim/sender.py:79-98`, `:114`) |
+| `max_burst` | Longest run of datagrams sent less than gap/4 apart (as `max_burst_seen`, `tools/rk_sim/sender.py` `FrameLinkSender.send()`, `Stats.max_burst_seen`) |
 | `spread_p99_ms` | p99 of the time from the first to the last datagram of a frame |
 
 ### Test
@@ -243,7 +243,7 @@ Test 2a, loopback on the RK (before Link C):
 
 1. Set `[camd.framelink] host = "127.0.0.1"`.
 2. Copy `common/__init__.py`, `common/framelink.py`, `common/envelope.py` and `common/dabus_envelope.py` from the AGX into a folder `common/` on the RK.
-3. Install the Python package `crc32c` (the AGX uses version 2.9). Without it the CRC is about 1000 times slower (`common/envelope.py:14-23`).
+3. Install the Python package `crc32c` (the AGX uses version 2.9). Without it the CRC is about 1000 times slower (`common/envelope.py` `crc32c()`, `CRC_IMPL`).
 4. Run one receiver per camera for 60 s, in the folder that contains `common/` (example for cam0: `python3 fl_rx.py 0 60`):
 
 ```python
@@ -302,7 +302,7 @@ for c in d["cameras"]:
 EOF
 ```
 
-Pass (each of the six cameras): fmt `nv12`, fps avg >= 29.5, bad 0, lost frames <= 0.1 %. Label: a LIVE camera has state OK (never SIMULATED), `simulated` false, source `live`. A TEST_PATTERN camera (cam1-5 before O6) has state SIMULATED, `simulated` true, source `test-pattern` (`infer/ingest/frame_store.py:107`; `common/framelink.py:40`). The probe prints `ingest mode rk bind 0.0.0.0` on its first line (`infer/ingest/probe.py:129-130`). Note: T3 measured up to 0.11 % NV12 loss with rmem_max 212992 B. Do K3 (8 MiB) before this test.
+Pass (each of the six cameras): fmt `nv12`, fps avg >= 29.5, bad 0, lost frames <= 0.1 %. Label: a LIVE camera has state OK (never SIMULATED), `simulated` false, source `live`. A TEST_PATTERN camera (cam1-5 before O6) has state SIMULATED, `simulated` true, source `test-pattern` (`infer/ingest/frame_store.py` `FrameStore.state()`; `common/framelink.py` `SOURCE_NAMES`). The probe prints `ingest mode rk bind 0.0.0.0` on its first line (`infer/ingest/probe.py` `main()`). Note: T3 measured up to 0.11 % NV12 loss with rmem_max 212992 B. Do K3 (8 MiB) before this test.
 
 Test 3, sender counters (on the RK, same 60 s):
 
@@ -342,16 +342,16 @@ The recorder encodes only while it records (start and stop from HmiRequest, `RK3
 
 | Item | Value | Source |
 |---|---|---|
-| Payload | One H.265 access unit per FrameLink frame, Annex-B byte stream (start codes `00 00 01` / `00 00 00 01`) | AGX proposal (`common/framelink.py:34`; `docs/RK_AGX_INTERFACE.md:153`) |
-| Parameter sets | VPS, SPS and PPS before each IDR (same AU) | `infer/ingest/framelink_rx.py:71-99` |
-| Random access | An IDR or CRA at least every 1 s (30 frames). The AGX recordings use IDR every 256 frames and CRA every 30 frames. The recorder setting `gop = 30` meets the rule. | `infer/ingest/framelink_rx.py:76-77`; `docs/test_results/T3_RESULT.md:44`; `rk/config/rk.toml:109` |
+| Payload | One H.265 access unit per FrameLink frame, Annex-B byte stream (start codes `00 00 01` / `00 00 00 01`) | AGX proposal (`common/framelink.py` `FMT_H265`; `docs/RK_AGX_INTERFACE.md:153`) |
+| Parameter sets | VPS, SPS and PPS before each IDR (same AU) | `infer/ingest/framelink_rx.py` class `IdrGate` |
+| Random access | An IDR or CRA at least every 1 s (30 frames). The AGX recordings use IDR every 256 frames and CRA every 30 frames. The recorder setting `gop = 30` meets the rule. | `infer/ingest/framelink_rx.py` class `IdrGate`; `docs/test_results/T3_RESULT.md:44`; `rk/config/rk.toml:109` |
 | B-frames | None | Night-task Section 6 default (`docs/RK_AGX_INTERFACE.md:155`) |
 | Header `fmt` | 2 | AGX proposal |
 | Header `w`, `h` | The encoded picture size | RK repo field |
 | Header `stride` | 0 | AGX proposal |
 | `seq`, `t_capture_ptp_ns`, `source`, `health` | As K1. One seq per encoded frame, no gaps. | K1 |
-| Max AU | 2097152 B | `config/sources.yaml:37` |
-| Pacing | As K1. A small AU goes out in 1-2 datagrams. | `tools/rk_sim/sender.py:73` |
+| Max AU | 2097152 B | `config/sources.yaml` key `max_frame_bytes` |
+| Pacing | As K1. A small AU goes out in 1-2 datagrams. | `tools/rk_sim/sender.py` `FrameLinkSender.send()` |
 
 Picture size options:
 
@@ -360,7 +360,7 @@ Picture size options:
 | (a) Recommended | SCALED NV12 (cam0 1280x720, cam1-5 704x396), MPP input `MPP_FMT_YUV420SP` | Same as K1 | As K5 |
 | (b) | RAW UYVY 1920x1080, as rk-recorder (`rk/recorder/src/encoder.cpp:57`), about 4 Mb/s | 1920 x 1080 | 1.0 |
 
-The AGX accepts any size from the header and from the decoded picture (`infer/ingest/framelink_rx.py:579-584`). Option (b) changes `frameWidth` and `frameHeight` of every result to 1920 x 1080. The AGX has measured decode time only for 1280x720 (p50 8-20 ms with six streams, `docs/test_results/T3_RESULT.md:164`). 1080p decode is not measured. The RK VPU load for six extra encoders is not measured.
+The AGX accepts any size from the header and from the decoded picture (`infer/ingest/framelink_rx.py` `FrameLinkReceiver._nv12()`, `FrameLinkReceiver._on_decoded()`). Option (b) changes `frameWidth` and `frameHeight` of every result to 1920 x 1080. The AGX has measured decode time only for 1280x720 (p50 8-20 ms with six streams, `docs/test_results/T3_RESULT.md:164`). 1080p decode is not measured. The RK VPU load for six extra encoders is not measured.
 
 ### Test
 
@@ -399,7 +399,7 @@ A direct 1 GbE link between the boards with MTU 9000, and receive buffers large 
 | RK | `rk/ops/etc/sysctl-driveragent.conf:7-9` | Already `net.core.rmem_max = wmem_max = 8388608`. No change. |
 | AGX (owner, sudo) | Link C NIC (O7) | 10.42.0.1/30, MTU 9000 |
 | AGX (owner, sudo) | `/etc/sysctl.d/` | `net.core.rmem_max = 8388608` (O3) |
-| AGX (AGX agent) | `config/sources.yaml:25` | `rcvbuf_bytes: 8388608` (0 already means "the maximum"; the explicit value documents it) |
+| AGX (AGX agent) | `config/sources.yaml` key `rcvbuf_bytes` | `rcvbuf_bytes: 8388608` (0 already means "the maximum"; the explicit value documents it) |
 
 ### Exact spec
 
@@ -481,9 +481,9 @@ max_age_ms = 3000
 | Socket | ZMQ SUB, `connect` to `tcp://<agx_host>:5560` and `:5561`, `SUBSCRIBE ""`. The AGX binds. | `rk/hmi/driveragent_hmi/bus.py:107-112`; `rk/proto/bus_registry.yaml:3` |
 | ZMQ frame | One frame = 32-byte dabus envelope + unpacked single-segment Cap'n Proto message. No topic frame. | `rk/proto/envelope/SPEC.md:3-5` |
 | Envelope checks | magic `0xDA5E`, ver 1, len, CRC-32C; `src_board` = 1 (AGX); `type_id` = 5560 / 5561; `schema_hash` = `0xafcaff02` / `0x9086fa18` | `rk/hmi/driveragent_hmi/bus.py:146-170`; `docs/RK_AGX_INTERFACE.md` 4.2, 5.1 |
-| Envelope flags | bit0 `source_is_replay` = simulated input. bit1 `time_uncertain` = always set. bit2 `degraded` = node DEGRADED. | `infer/publish/results.py:228-232` |
-| Result rate | Up to about 190 messages/s: yolopx on 6 cameras at max 30 fps, dtcp on cam0 at max 10 fps | `config/models.yaml:24-26`, `:39-41` |
-| Status rate | 1 Hz | `config/infer.yaml:25` |
+| Envelope flags | bit0 `source_is_replay` = simulated input. bit1 `time_uncertain` = always set. bit2 `degraded` = node DEGRADED. | `infer/publish/results.py` `ResultPublisher._build()` |
+| Result rate | Up to about 190 messages/s: yolopx on 6 cameras at max 30 fps, dtcp on cam0 at max 10 fps | `config/models.yaml` models `driverguard_yolopx` and `driverguard_dtcp`, keys `cameras`, `max_fps_per_camera` |
+| Status rate | 1 Hz | `config/infer.yaml` key `status_period_s` |
 
 bus.py change (required for 5560):
 
@@ -506,7 +506,7 @@ Consequences:
 | The text `struct AgxPerceptionResult` (or `struct AgxInferStatus`) in a comment above the struct | Different. The search finds the first match in the raw text, comments included (`rk/proto/envelope/dabus_envelope.py:72`). Check: such a comment gives `0x396bd5b0`. |
 | Any other character inside the struct (a field, an ordinal, a type, a name, one extra space between tokens) | Different. Check: one extra space after `x1` in `x1 @3 :Float32;` gives `0xe21f0e26` instead of `0xafcaff02`. |
 
-The AGX computes the hash at runtime from its file `proto/agx_infer.capnp` (`config/infer.yaml:6`; `infer/publish/schema.py:36`). Thus the copy in `message.capnp` must keep the struct text exactly. After a later change on the AGX (additive only, `proto/agx_infer.capnp:14-15`), both files change together.
+The AGX computes the hash at runtime from its file `proto/agx_infer.capnp` (`config/infer.yaml` key `proto`; `infer/publish/schema.py` `Schema.__init__()`). Thus the copy in `message.capnp` must keep the struct text exactly. After a later change on the AGX (additive only, `proto/agx_infer.capnp` header comment "Rules"), both files change together.
 
 Hash check on the RK:
 
@@ -521,7 +521,7 @@ python3 rk/proto/codegen/generate.py --check                                    
 | # | Where | Command | Pass |
 |---|---|---|---|
 | 1 | RK | The three hash commands above | `afcaff02`, `9086fa18`, `generated/ up to date` (exit code 0, `rk/proto/codegen/generate.py:104-109`) |
-| 2 | RK (tailscale before K3, Link C after) | `python -m tools.rk_result_client --host <agx> --seconds 60` (`<agx>` = `100.64.0.20` over tailscale, `10.42.0.1` over Link C). On the RK, run a copy: `tools/rk_result_client/__main__.py` with `--schema` (the schema file) and `--envelope-dir` (folder with `dabus_envelope.py`) (`tools/rk_result_client/__main__.py:4-11`). Add `--expect-cams 0,1,2,3,4,5 --json k4.json`. | Exit code 0. `rejects_total` 0. `duplicates` 0. `out_of_order` 0. `cams_seen` = 0..5. `status.count` >= 55 (1 Hz for 60 s). |
+| 2 | RK (tailscale before K3, Link C after) | `python -m tools.rk_result_client --host <agx> --seconds 60` (`<agx>` = `100.64.0.20` over tailscale, `10.42.0.1` over Link C). On the RK, run a copy: `tools/rk_result_client/__main__.py` with `--schema` (the schema file) and `--envelope-dir` (folder with `dabus_envelope.py`) (`tools/rk_result_client/__main__.py` module docstring). Add `--expect-cams 0,1,2,3,4,5 --json k4.json`. | Exit code 0. `rejects_total` 0. `duplicates` 0. `out_of_order` 0. `cams_seen` = 0..5. `status.count` >= 55 (1 Hz for 60 s). |
 | 3 | RK | Run rk-hmi for 60 s against the running AGX. Log `received` and `rejected` of `agx_perception` and `agx_infer_status` every 10 s (new log line, K4). | `rejected` = 0 for both channels (`rk/hmi/driveragent_hmi/bus.py:56`). No `bus_reject` log line for them. `received` > 0. |
 
 AGX side for the test: `tools/svc.sh start infer` (sim mode is sufficient).
@@ -550,7 +550,7 @@ The HMI draws the AGX results on the camera tiles: boxes, labels, cam0 masks, an
 
 ### Exact spec
 
-Pixel space of a result: `frameWidth` x `frameHeight` (the FrameLink frame), x right, y down, origin at the top-left corner (`proto/agx_infer.capnp:30-31`, `:43`). The RK resizes the full frame with no crop (`rk/camd/src/rga_scaler.cpp:89-90`). The HMI shows the full RAW frame (1920 x 1080) in a 1280 x 720 texture (`rk/hmi/driveragent_hmi/app.py:175`).
+Pixel space of a result: `frameWidth` x `frameHeight` (the FrameLink frame), x right, y down, origin at the top-left corner (`proto/agx_infer.capnp` `AgxPerceptionResult.frameWidth`, `frameHeight`, `Detection.x1`). The RK resizes the full frame with no crop (`rk/camd/src/rga_scaler.cpp:89-90`). The HMI shows the full RAW frame (1920 x 1080) in a 1280 x 720 texture (`rk/hmi/driveragent_hmi/app.py:175`).
 
 Scale (use the capture size from `cameras.toml` `image_width`, `image_height`, as `rk/hmi/driveragent_hmi/screens/maintenance.py:396`, `:460-473`):
 
@@ -570,13 +570,13 @@ Draw:
 
 | Output | Rule | Source |
 |---|---|---|
-| Boxes | `x1, y1` top-left, `x2, y2` bottom-right, Float32 pixels | `proto/agx_infer.capnp:43-47` |
-| Label | `className` + `score` (2 decimals), for example `car 0.87` | `proto/agx_infer.capnp:41-42` |
-| Masks | Only `drivable_area` and `lane_line`. Only cam0 has masks (`masks_cameras: [0]`). | `config/models.yaml:31` |
-| Mask format | `encoding` = `rle-u16le-count-u8-value-rowmajor`: records of 3 bytes = run length (u16 little-endian) + value (u8, 0 or 1). Row-major over `width` x `height`. A run longer than 65535 is split. Use the mask fields `width` x `height`. For DriverGuard they are `frameWidth` x `frameHeight`. Scale the mask like the boxes. | `infer/models/legacy/driverguard/mask_codec.py:14`, `:17-62`; `proto/agx_infer.capnp:62-68`; `infer/models/adapters/yolopx_v2.py:67`, `:83` |
-| Trajectory | Draw only with the text "DISPLAY ONLY". When `inputsValid` = false, show "inputs not valid" and the `note` text. The AGX always sends false: the command and the target are assumed values, and the AGX has no ego speed. | `proto/agx_infer.capnp:50-60`; `config/models.yaml:43-45`; `infer/models/adapters/dtcp_v1.py:58-61` |
-| Trajectory frame | Metres in the DTCP ego frame: "x = lateral, right positive (m); y = forward (m); origin = ego at frame time". This is not the RK vehicle frame (x forward, y left, origin rear axle). Do not draw it on a camera tile without a camera projection. Prefer the World screen. | `infer/models/adapters/dtcp_v1.py:22-23`; `rk/hmi/driveragent_hmi/screens/world.py:6-7` |
-| SIMULATED | When `simulated` = true (or envelope flag bit0): show "SIMULATED" in a warning colour on the tile. | `proto/agx_infer.capnp:32-33`; R13 |
+| Boxes | `x1, y1` top-left, `x2, y2` bottom-right, Float32 pixels | `proto/agx_infer.capnp` `AgxPerceptionResult.Detection` (`x1`, `y1`, `x2`, `y2`) |
+| Label | `className` + `score` (2 decimals), for example `car 0.87` | `proto/agx_infer.capnp` `AgxPerceptionResult.Detection` (`className`, `score`) |
+| Masks | Only `drivable_area` and `lane_line`. Only cam0 has masks (`masks_cameras: [0]`). | `config/models.yaml` key `masks_cameras` |
+| Mask format | `encoding` = `rle-u16le-count-u8-value-rowmajor`: records of 3 bytes = run length (u16 little-endian) + value (u8, 0 or 1). Row-major over `width` x `height`. A run longer than 65535 is split. Use the mask fields `width` x `height`. For DriverGuard they are `frameWidth` x `frameHeight`. Scale the mask like the boxes. | `infer/models/legacy/driverguard/mask_codec.py` `_MAX_RUN`, `encode_rle()`, `decode_rle()`; `proto/agx_infer.capnp` struct `AgxPerceptionResult.Mask`; `infer/models/adapters/yolopx_v2.py` `YolopxV2Adapter.postprocess()` |
+| Trajectory | Draw only with the text "DISPLAY ONLY". When `inputsValid` = false, show "inputs not valid" and the `note` text. The AGX always sends false: the command and the target are assumed values, and the AGX has no ego speed. | `proto/agx_infer.capnp` struct `AgxPerceptionResult.Trajectory`; `config/models.yaml` model `driverguard_dtcp` keys `command`, `target`, `ego_speed_mps`; `infer/models/adapters/dtcp_v1.py` `DtcpV1Adapter.__init__()` (`inputs_valid`) |
+| Trajectory frame | Metres in the DTCP ego frame: "x = lateral, right positive (m); y = forward (m); origin = ego at frame time". This is not the RK vehicle frame (x forward, y left, origin rear axle). Do not draw it on a camera tile without a camera projection. Prefer the World screen. | `infer/models/adapters/dtcp_v1.py` `TRAJ_FRAME`; `rk/hmi/driveragent_hmi/screens/world.py:6-7` |
+| SIMULATED | When `simulated` = true (or envelope flag bit0): show "SIMULATED" in a warning colour on the tile. | `proto/agx_infer.capnp` `AgxPerceptionResult.simulated`, `AgxPerceptionResult.source`; R13 |
 
 Freshness (per (model, camId)):
 
@@ -587,7 +587,7 @@ Freshness (per (model, camId)):
 | 3 | Live (`simulated` = false): draw a result only in one of two cases. (a) It matches the shown frame ("Frame match" below). (b) Its `frameSeq` is newer (mod 2^32) than the last drawn result of that (model, camId). |
 | 4 | Never draw a result that is older than the last drawn result. Never hold a result after 300 ms. Remove it. |
 | 5 | Simulated (`simulated` = true): the frame is not an RK frame. Use rules 1, 2 and 4 only. Show SIMULATED. |
-| 6 | The AGX publishes nothing for a camera without frames for 500 ms (`config/sources.yaml:20`). Thus the overlay of that camera goes away by rule 2. |
+| 6 | The AGX publishes nothing for a camera without frames for 500 ms (`config/sources.yaml` key `stale_s`). Thus the overlay of that camera goes away by rule 2. |
 
 Frame match ("belongs to the shown frame"). The SCALED frame and the RAW frame of one capture have the same `t_capture_ns` and `v4l2_sequence` (`rk/camd/src/camera.cpp:185-188`, `:207`). Their `frame_no` counters are different (`:211`, `:230`). Rule (AGX proposal): convert `tCaptureNs` (RK CLOCK_REALTIME, K1) to CLOCK_MONOTONIC with the RK offset (CLOCK_REALTIME - CLOCK_MONOTONIC, sampled now). The result belongs to the shown frame when the difference to `shown_capture_ns` is <= 10 ms (less than half of the 33.3 ms frame interval). Exact alternative: rk-camd adds the SCALED `frame_no` to the RAW FRAME message (local protocol change, `rk/camd/src/protocol.h:99-110`).
 
@@ -599,7 +599,7 @@ Latency display (optional): RK now (CLOCK_REALTIME) - `tCaptureNs` is valid on t
 
 | # | Setup | Action | Pass |
 |---|---|---|---|
-| 1 | AGX: `tools/svc.sh start infer` (sim mode). RK: K4 done. | Look at each camera tile for 60 s. | Boxes show on 6 of 6 tiles (yolopx runs on cam0-5, `config/models.yaml:24`). "SIMULATED" shows on 6 of 6 tiles. |
+| 1 | AGX: `tools/svc.sh start infer` (sim mode). RK: K4 done. | Look at each camera tile for 60 s. | Boxes show on 6 of 6 tiles (yolopx runs on cam0-5, `config/models.yaml` model `driverguard_yolopx` key `cameras`). "SIMULATED" shows on 6 of 6 tiles. |
 | 2 | Same | AGX: `tools/svc.sh stop infer`. RK: log the time of the last result and the time the overlay goes off (for example `overlay_off cam=0 age_ms=...`). | The overlay goes off within 300 ms after the last result (+ one render frame). No old box stays. |
 | 3 | After K1 + K3, AGX in rk mode | Wave a hand in front of cam0. | Box follows the hand. No "SIMULATED" label. More than 95 % of drawn results meet frame-match rule 3 (log the count). |
 | 4 | Any | HMI frame rate with 6 tiles + overlay | >= 60 FPS p99 (>= 30 accepted) |
@@ -634,32 +634,32 @@ Use the first row that matches (top to bottom).
 |---|---|---|
 | "—" | grey | No `AgxInferStatus` for 3 s |
 | `ERROR` | red | `nodeState` = "ERROR" |
-| `SIM` | amber | `simulated` = true (`proto/agx_infer.capnp:84`). In sim and file mode it is always true (`infer/publish/status.py:173-176`). |
+| `SIM` | amber | `simulated` = true (`proto/agx_infer.capnp` `AgxInferStatus.simulated`). In sim and file mode it is always true (`infer/publish/status.py` `StatusPublisher._simulated()`). |
 | `DEGRADED`, `STARTING` | amber | `nodeState` |
 | `RUNNING` | green | `nodeState` = "RUNNING" and `simulated` = false |
 
-Fields: `proto/agx_infer.capnp:79-123` (`nodeState`, `simulated`, `sourceMode`, `cameras[].state`, `models[].state`, `temps`, `errors`).
+Fields: `proto/agx_infer.capnp` struct `AgxInferStatus` (`nodeState`, `simulated`, `sourceMode`, `cameras[].state`, `models[].state`, `temps`, `errors`).
 
-Optional: HTTP `GET http://<agx>:8700/api/health` (`dashboard/app.py:235-237`).
+Optional: HTTP `GET http://<agx>:8700/api/health` (`dashboard/app.py` `create_app()` route `/api/health`).
 
 | Item | Value | Source |
 |---|---|---|
-| Auth | HTTP Basic, realm `agx02-dashboard` | `dashboard/auth.py:20` |
-| User | `AGX_DASH_USER` (default `agx`) from the AGX `.env` | `dashboard/app.py:208-209` |
-| Password | `AGX_DASH_PASSWORD` from the AGX `.env`. The owner gives it to the RK. | `dashboard/app.py:210-212` |
+| Auth | HTTP Basic, realm `agx02-dashboard` | `dashboard/auth.py` `REALM` |
+| User | `AGX_DASH_USER` (default `agx`) from the AGX `.env` | `dashboard/app.py` `create_app()` (`AGX_DASH_USER`) |
+| Password | `AGX_DASH_PASSWORD` from the AGX `.env`. The owner gives it to the RK. | `dashboard/app.py` `create_app()` (`AGX_DASH_PASSWORD`) |
 | Storage on the RK | `/etc/driveragent/agx-dashboard.netrc`, mode 600, owner = the HMI user. Never in git. | `RK3588_AGENT_KICKOFF.md:117` (credentials from `/etc/driveragent/` only) |
-| Allowed sources | Private ranges incl. 10.0.0.0/8 and 100.64.0.0/10 | `config/dashboard.yaml:14-20` |
+| Allowed sources | Private ranges incl. 10.0.0.0/8 and 100.64.0.0/10 | `config/dashboard.yaml` key `allow_cidrs` |
 | Rate | At most 1 request per second | AGX proposal |
 | Methods | GET only | `docs/RK_AGX_INTERFACE.md:457` |
 
-The HTTP password crosses the link in plain text (`config/dashboard.yaml:6-8`). Use ZMQ 5561 for the chip.
+The HTTP password crosses the link in plain text (`config/dashboard.yaml` comment above `tls_certfile`). Use ZMQ 5561 for the chip.
 
 ### Test
 
 | # | Where | Command / action | Pass |
 |---|---|---|---|
 | 1 | AGX, then RK | AGX: `tools/svc.sh stop infer`. RK: watch the chip. | Chip goes grey "—" within 3 s (+ one render frame). |
-| 2 | AGX, then RK | AGX: `tools/svc.sh start infer`. Find the log line `status PUB bound` (`tools/svc.sh logs infer`; `infer/publish/status.py:128`). | Chip shows `SIM` (sim mode) within 3 s after that log line. |
+| 2 | AGX, then RK | AGX: `tools/svc.sh start infer`. Find the log line `status PUB bound` (`tools/svc.sh logs infer`; `infer/publish/status.py` `StatusPublisher.__init__()`). | Chip shows `SIM` (sim mode) within 3 s after that log line. |
 | 3 | RK | `curl -s -o /dev/null -w '%{http_code}\n' http://<agx>:8700/api/health` | `401` |
 | 4 | RK | `curl -s --netrc-file /etc/driveragent/agx-dashboard.netrc -o /dev/null -w '%{http_code}\n' http://<agx>:8700/api/health` | `200` |
 | 5 | RK | `stat -c '%a %U' /etc/driveragent/agx-dashboard.netrc`; `git -C <rk repo> grep -n AGX_DASH` | `600 <hmi user>`; no password in git |
@@ -688,9 +688,9 @@ Both boards use one time base. Until then, no side compares AGX times with RK ti
 
 | Item | Rule | Source |
 |---|---|---|
-| Until PTP or chrony | Both sides set envelope flag bit1 `time_uncertain` on every message | `rk/proto/envelope/SPEC.md:16`; `RK3588_AGENT_KICKOFF.md:101`; `infer/publish/results.py:228` |
+| Until PTP or chrony | Both sides set envelope flag bit1 `time_uncertain` on every message | `rk/proto/envelope/SPEC.md:16`; `RK3588_AGENT_KICKOFF.md:101`; `infer/publish/results.py` `ResultPublisher._build()` |
 | Until PTP or chrony | The RK must not subtract AGX times (`tAgxRecvNs`, `tAgxReadyNs`, `tAgxResultNs`, envelope `t_ptp_ns`) from RK times. | `docs/RK_AGX_INTERFACE.md:469-470` |
-| Valid without sync | AGX-internal latency: `timing.*` and `tAgxResultNs - tAgxRecvNs`. RK-internal: RK now - `tCaptureNs` (both RK clock). | `proto/agx_infer.capnp:70-76` |
+| Valid without sync | AGX-internal latency: `timing.*` and `tAgxResultNs - tAgxRecvNs`. RK-internal: RK now - `tCaptureNs` (both RK clock). | `proto/agx_infer.capnp` struct `AgxPerceptionResult.Timing` |
 | PTP target | Offset <= 10 us p99 over 24 h | `RK3588_AGENT_KICKOFF.md:102` |
 | chrony target | Both boards synchronised, offset <= 1 ms each | AGX proposal |
 | After sync | Holdover > 60 s: set `time_uncertain` again | `RK3588_AGENT_KICKOFF.md:101` |
@@ -701,7 +701,7 @@ Both boards use one time base. Until then, no side compares AGX times with RK ti
 |---|---|---|---|
 | PTP | RK | `ptp-check` (M3 tool) over 24 h | offset p99 <= 10 us |
 | chrony | RK and AGX | `chronyc tracking` | `Leap status : Normal`, `System time` offset <= 1 ms on both |
-| Flag | RK | `python -m tools.rk_result_client --host <agx> --seconds 60 --json k7.json` | Before sync: `envelope_flags.result_bit1_time_uncertain` = `messages.result_ok` (`tools/rk_result_client/__main__.py:321-324`). The RK HMI shows no cross-board latency. |
+| Flag | RK | `python -m tools.rk_result_client --host <agx> --seconds 60 --json k7.json` | Before sync: `envelope_flags.result_bit1_time_uncertain` = `messages.result_ok` (`tools/rk_result_client/__main__.py` `Client.handle_result()`). The RK HMI shows no cross-board latency. |
 
 ### Depends on
 
@@ -723,23 +723,23 @@ Both sides use the same bytes. The RK repository defines these items nowhere (`d
 
 | # | Item | AGX proposal | AGX file |
 |---|---|---|---|
-| 1 | Frame magic | `0x4B4E4C46` ("FLNK") | `common/framelink.py:27`; `framelink.h:17` |
-| 2 | Frame version | 1 | `common/framelink.py:28`; `framelink.h:18` |
-| 3 | `fmt` codes | 1 = NV12, 2 = H.265 (Annex-B AU) | `common/framelink.py:33-34`; `framelink.h:27` |
-| 4 | `source` codes | 1 = LIVE (RK), 2 = REPLAY, 3 = TEST_PATTERN; other = simulated | `common/framelink.py:37-39`; `infer/ingest/framelink_rx.py:102-108` |
-| 5 | `health` byte | rk-camd LinkState 0..4 | `common/framelink.py:42`; `framelink.h:29` |
-| 6 | CRC | CRC-32C. `payload_crc32c` over the payload. `header_crc32c` over bytes 0..35 (includes `payload_crc32c`). | `common/framelink.py:77-83`; `framelink.h:83-84` |
-| 7 | Fragment header | 16 B: magic u16 `0x4C46` ("FL"), ver u8 1, cam u8, seq u32, idx u16, count u16, offset u32 | `common/framelink.py:47-51`; `framelink.h:19-20`, `:90` |
-| 8 | Chunk at MTU 1500 | 1456 B (open RK question 15, `rk/docs/BRINGUP_REPORT.md:1711`) | `common/framelink.py:53` |
-| 9 | `stride` for H.265 | 0 | `framelink.h:39` |
-| 10 | `exposure_us` | 0 = unknown | `framelink.h:40` |
+| 1 | Frame magic | `0x4B4E4C46` ("FLNK") | `common/framelink.py` `MAGIC`; `framelink.h` `kMagic` |
+| 2 | Frame version | 1 | `common/framelink.py` `VERSION`; `framelink.h` `kVersion` |
+| 3 | `fmt` codes | 1 = NV12, 2 = H.265 (Annex-B AU) | `common/framelink.py` `FMT_NV12`, `FMT_H265`; `framelink.h` `enum Fmt` |
+| 4 | `source` codes | 1 = LIVE (RK), 2 = REPLAY, 3 = TEST_PATTERN; other = simulated | `common/framelink.py` `SOURCE_LIVE`, `SOURCE_REPLAY`, `SOURCE_TEST_PATTERN`; `infer/ingest/framelink_rx.py` `source_label()` |
+| 5 | `health` byte | rk-camd LinkState 0..4 | `common/framelink.py` `HEALTH_NOT_STARTED` .. `HEALTH_NO_SIGNAL`; `framelink.h` `enum Health` |
+| 6 | CRC | CRC-32C. `payload_crc32c` over the payload. `header_crc32c` over bytes 0..35 (includes `payload_crc32c`). | `common/framelink.py` `pack_frame()`; `framelink.h` `pack_frame()` |
+| 7 | Fragment header | 16 B: magic u16 `0x4C46` ("FL"), ver u8 1, cam u8, seq u32, idx u16, count u16, offset u32 | `common/framelink.py` `FRAG_MAGIC`, `FRAG_VERSION`, `FRAG`, `FRAG_LEN`; `framelink.h` `kFragMagic`, `kFragVersion`, `fragments()` |
+| 8 | Chunk at MTU 1500 | 1456 B (open RK question 15, `rk/docs/BRINGUP_REPORT.md:1711`) | `common/framelink.py` `FRAG_PAYLOAD_1500` |
+| 9 | `stride` for H.265 | 0 | `framelink.h` `Header::stride` |
+| 10 | `exposure_us` | 0 = unknown | `framelink.h` `Header::exposure_us` |
 | 11 | `seq` and `t_capture_ptp_ns` meaning | K1 table | `docs/RK_AGX_INTERFACE.md:220-221` |
 
 Change rule: if the RK changes any value, both sides change together:
 
 1. The RK agent writes the change in `rk/docs/STATUS.md` and tells the AGX side.
 2. The AGX side changes `common/framelink.py` and `tools/framelink_ref/framelink.h`.
-3. The AGX side writes `tools/framelink_ref/golden_vectors.txt` again (written by `common/framelink.py`, `golden_vectors.txt:2`).
+3. The AGX side writes `tools/framelink_ref/golden_vectors.txt` again (written by `common/framelink.py`, `golden_vectors.txt` header comment).
 4. Both sides run their tests again.
 
 ### Test
