@@ -1,0 +1,18 @@
+# Copied files
+
+Each file below is a COPY. The source file is not changed. Source repositories are read-only.
+
+| Copy in this repository | Source path | Source version | Reason |
+|---|---|---|---|
+| `common/dabus_envelope.py` | `ref/driveragent-hmi/rk/proto/envelope/dabus_envelope.py` (repo `osmosishk/driveragent-proto`) | submodule commit `6874e6127ba1b457f4ae110abfa4780c94cce044` (RK repo tag `rk-v0.4.0`) | Reference implementation of the 32-byte dabus envelope. Used unchanged. |
+| `tests/dabus_golden_vectors.txt` | `ref/driveragent-hmi/rk/proto/envelope/golden_vectors.txt` | same | Golden vectors. The AGX envelope code must reproduce them. |
+| `infer/models/legacy/driverguard/preprocess.py` | `/home/tonyho/model/jetson_bundle/jetson_runtime/preprocess.py` | sha256[:16] `a3cd59d98f5f46bf` (copy = source). Source is not in a git repo. | Library. `preprocess_yolopx` (letterbox 384x640) and `preprocess_dtcp` (stretch 928x256). Imports without the old repo. |
+| `infer/models/legacy/driverguard/yolopx_postprocess.py` | `/home/tonyho/model/jetson_bundle/jetson_runtime/yolopx_postprocess.py` | sha256[:16] `6b6fdc538ccc60b0` (copy = source). Source is not in a git repo. | Library. `CLASS_NAMES`, `nms_yolopx`, `scale_coords`, `segmasks_from_logits`. Imports without the old repo. |
+| `infer/models/legacy/driverguard/beta_mode.py` | `/home/tonyho/model/jetson_bundle/jetson_runtime/beta_mode.py` | sha256[:16] `72c7453e69ee03be` (copy = source). Source is not in a git repo. | Library, kept for reference. The new node does not publish control values (rule R8). Imports without the old repo. |
+| `infer/models/legacy/driverguard/trt_runner.py` | `/home/tonyho/model/jetson_bundle/jetson_runtime/trt_runner.py` | sha256[:16] `ee98714e45d71df8` (copy = source). Source is not in a git repo. | Reference only. Old pycuda `TRTRunner` (TRT 10 tensor API). Imports in `.venv` (it creates a CUDA context through `pycuda.autoinit`). |
+| `infer/models/legacy/driverguard/viz_helpers.py` | `/home/tonyho/model/jetson_bundle/jetson_runtime/viz_helpers.py` | sha256[:16] `457ea17375978bd1` (copy = source). Source is not in a git repo. | Reference only (optional drawing helpers, `CLASS_COLORS_BGR`). Imports without the old repo. |
+| `infer/models/legacy/driverguard/mask_codec.py` | `/home/tonyho/model/driverguard/runner/mask_codec.py` | sha256[:16] `94c4104f0752603a` (copy = source). Source is not in a git repo. | Library. `encode_rle` / `decode_rle` for `rle-u16le-count-u8-value-rowmajor` masks. Imports without the old repo. |
+| `infer/models/legacy/driverguard/runner.py` | `/home/tonyho/model/driverguard/runner/runner.py` | sha256[:16] `3db784e0e371bdd8` (copy = source). Source is not in a git repo. | Reference only. Old main loop (thresholds, field mapping). Does NOT import: needs the old repo (`message.capnp_pubsub`) and the old flat module names. |
+| `infer/models/legacy/driverguard/camera_reader.py` | `/home/tonyho/model/driverguard/runner/camera_reader.py` | sha256[:16] `bf127099e22d1349` (copy = source). Source is not in a git repo. | Reference only. Contains the old colour bug at line 88 (`COLOR_BGRA2BGR` on RGBA). Do not use. |
+| `infer/models/legacy/driverguard/run_driverguard.py` | `/home/tonyho/model/driverguard/run.py` | sha256[:16] `600506684cbaf1f0` (copy = source). Source is not in a git repo. | Reference only. Old CLI defaults: command 2=STRAIGHT, target (0, 20) m (lines 39-45). |
+| `infer/models/legacy/message_old_agx.capnp` | `/home/tonyho/driveragent/message/message.capnp` | sha256[:16] `e99b5063b71a35fb` (copy = source). Git `bf78af3` (repo `/home/tonyho/driveragent`, file unchanged against HEAD). | Reference only. Old `DriverGuardResult` / `Point2D` schema (lines 218-221, 310-338). Not used on the wire. |
