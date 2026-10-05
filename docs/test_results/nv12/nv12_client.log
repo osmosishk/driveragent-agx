@@ -1,0 +1,26 @@
+rk_result_client: tcp://127.0.0.1:5560 (results) tcp://127.0.0.1:5561 (status), schema hash AgxPerceptionResult 0xafcaff02, AgxInferStatus 0x9086fa18, host local=True, 300.0 s
+
+=== rk_result_client summary: host 127.0.0.1 (local=True), 300.0 s, crc crc32c package (checked against the reference) ===
+messages {'result_frames': 16417, 'result_ok': 16417, 'status_frames': 300, 'status_ok': 300}  flags {'result_bit0_source_is_replay': 16417, 'result_bit1_time_uncertain': 16417, 'result_bit2_degraded': 0}  envelope seq lost {'result': 0, 'status': 0}
+model                    cam  count     Hz   sim     agx_ms p50/p95/p99/max    e2e_recv_ms p50/p95/p99/max     capture_ms p50/p95/p99/max
+driverguard_dtcp           0   3000   10.0  3000       54.6/77.7/92.1/109.9           56.0/79.1/93.5/111.0         79.8/103.3/116.8/135.5
+driverguard_yolopx         0   2237    7.5  2237     72.8/106.3/121.9/156.2         75.0/109.2/126.2/158.5         98.9/133.6/149.1/181.3
+driverguard_yolopx         1   2236    7.5  2236      59.0/80.5/100.7/115.4          60.6/82.2/101.8/117.6          68.4/90.0/109.7/126.0
+driverguard_yolopx         2   2236    7.5  2236       57.0/79.0/98.4/118.1          58.5/80.9/100.1/119.6          66.9/89.3/108.5/127.8
+driverguard_yolopx         3   2236    7.5  2236       61.8/84.0/94.6/116.0           63.1/86.3/97.4/117.6          72.1/95.6/105.9/127.0
+driverguard_yolopx         4   2236    7.5  2236      63.9/89.2/105.6/127.2          65.2/90.8/107.8/128.5         74.2/100.1/117.3/137.2
+driverguard_yolopx         5   2236    7.5  2236      60.9/85.0/101.3/121.4          62.2/86.5/103.8/122.9          71.2/95.1/112.4/132.4
+status: 300 messages, interval mean 1.000 s, max 1.039 s
+status last: node RUNNING SIMULATED, 6 cameras, 4 models, subscribers 1, rate 56.6 Hz
+rejects {'result': {}, 'status': {}}  duplicates 0  restarts 0  out_of_order 0
+cameras seen [0, 1, 2, 3, 4, 5]  expected []  missing []
+latency validity: e2e_recv_ms valid (client and AGX on one clock)
+client processing ms p50/p99/max: 0.33/0.77/2.38
+check results_received: PASS
+check expected_cameras: PASS
+check no_rejects: PASS
+check no_duplicates: PASS
+check frame_seq_increases: PASS
+check status_received: PASS
+exit code 0
+json: docs/test_results/nv12/nv12_client.json

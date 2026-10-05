@@ -1,0 +1,26 @@
+rk_result_client: tcp://127.0.0.1:5560 (results) tcp://127.0.0.1:5561 (status), schema hash AgxPerceptionResult 0xafcaff02, AgxInferStatus 0x9086fa18, host local=True, 1800.0 s
+
+=== rk_result_client summary: host 127.0.0.1 (local=True), 1800.0 s, crc crc32c package (checked against the reference) ===
+messages {'result_frames': 95893, 'result_ok': 95893, 'status_frames': 1800, 'status_ok': 1800}  flags {'result_bit0_source_is_replay': 95893, 'result_bit1_time_uncertain': 95893, 'result_bit2_degraded': 0}  envelope seq lost {'result': 0, 'status': 0}
+model                    cam  count     Hz   sim     agx_ms p50/p95/p99/max    e2e_recv_ms p50/p95/p99/max     capture_ms p50/p95/p99/max
+driverguard_dtcp           0  18000   10.0 18000      50.8/90.0/119.3/148.8          52.2/91.6/120.8/150.3          53.4/92.7/122.1/150.9
+driverguard_yolopx         0  12982    7.2 12982     87.2/128.8/153.8/181.1         90.1/132.2/157.1/186.5         91.3/133.3/158.1/187.4
+driverguard_yolopx         1  12982    7.2 12982     80.7/107.6/127.8/161.4         82.2/109.9/130.0/162.9         83.0/110.7/130.9/163.3
+driverguard_yolopx         2  12982    7.2 12982     83.8/116.9/138.7/174.1         85.4/119.0/141.2/175.4         86.4/120.2/142.2/176.2
+driverguard_yolopx         3  12983    7.2 12983     79.2/109.0/127.6/158.7         80.9/111.5/130.5/161.1         82.0/112.5/131.5/162.0
+driverguard_yolopx         4  12982    7.2 12982     89.1/119.9/138.8/164.0         90.6/121.6/140.9/166.6         90.9/121.9/141.2/166.9
+driverguard_yolopx         5  12982    7.2 12982     71.4/101.7/119.7/151.4         72.8/104.5/121.6/153.1         73.1/104.7/121.9/153.4
+status: 1800 messages, interval mean 1.000 s, max 1.071 s
+status last: node RUNNING SIMULATED, 6 cameras, 4 models, subscribers 1, rate 52.6 Hz
+rejects {'result': {}, 'status': {}}  duplicates 0  restarts 0  out_of_order 0
+cameras seen [0, 1, 2, 3, 4, 5]  expected []  missing []
+latency validity: e2e_recv_ms valid (client and AGX on one clock)
+client processing ms p50/p99/max: 0.35/0.81/5.00
+check results_received: PASS
+check expected_cameras: PASS
+check no_rejects: PASS
+check no_duplicates: PASS
+check frame_seq_increases: PASS
+check status_received: PASS
+exit code 0
+json: docs/test_results/t8/soak_client.json
