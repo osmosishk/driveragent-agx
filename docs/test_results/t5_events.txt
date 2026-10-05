@@ -1,0 +1,6 @@
+before: 23:12:17.465 driverguard_yolopx:total=3144,dropped_stale=0,dropped_old=0 driverguard_dtcp:total=689,dropped_stale=0,dropped_old=0
+client start 1791238338.586832710
+SIGSTOP 1791238398.594460420
+SIGCONT 1791238401.612831583
+client exit code 0
+after: 23:14:21.775 driverguard_yolopx:total=8461,dropped_stale=0,dropped_old=0 driverguard_dtcp:total=1903,dropped_stale=0,dropped_old=0

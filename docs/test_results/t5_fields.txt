@@ -1,0 +1,39 @@
+=== SIMULATED result (source=replay, simulated=True) envelope: {'src_board': 1, 'type_id': 5560, 'flags': 3, 'schema_hash': '0xafcaff02', 'seq': 13689, 't_ptp_ns': 1791238522849969882}
+schemaVersion=1 model=driverguard_dtcp modelVersion=dtcp_v1_fp16.engine:1071ea90213eddc2 camId=0
+frameSeq=7661 tCaptureNs=1791238522779421973 tAgxRecvNs=1791238522779772935 tAgxReadyNs=1791238522813478859 tAgxResultNs=1791238522849969882
+frameWidth x frameHeight = 1280 x 720
+detections: 0
+trajectory: points=4 inputsValid=False
+  frame='DTCP ego frame: x = lateral, right positive (m); y = forward (m); origin = ego at frame time (model convention)'
+  note='display only, not for control; assumed inputs: ego speed 0 m/s (no CarState on the AGX), command STRAIGHT, target (0, 20) m'
+masks: 
+timing ms: queue=4.4 pre=21.5 infer=10.4 post=0.1 total=36.5
+=== SIMULATED result (source=replay, simulated=True) envelope: {'src_board': 1, 'type_id': 5560, 'flags': 3, 'schema_hash': '0xafcaff02', 'seq': 13690, 't_ptp_ns': 1791238522866800173}
+schemaVersion=1 model=driverguard_yolopx modelVersion=yolopx_v2_fp16.engine:3412bafa057a3a76 camId=2
+frameSeq=7660 tCaptureNs=1791238522747452519 tAgxRecvNs=1791238522747906899 tAgxReadyNs=1791238522777679648 tAgxResultNs=1791238522866800173
+frameWidth x frameHeight = 1280 x 720
+detections: 7
+  classId=2 className=car score=0.777 box=(1140.8,536.8,1197.2,588.2) trackId=0
+  classId=4 className=truck score=0.556 box=(1082.7,504.8,1133.3,568.2) trackId=0
+  classId=3 className=bus score=0.532 box=(722.6,446.2,967.4,587.8) trackId=0
+trajectory: points=0 inputsValid=False
+  frame=''
+  note='no trajectory from this model'
+masks: 
+timing ms: queue=40.0 pre=22.5 infer=25.0 post=1.5 total=89.1
+=== status: schemaVersion=1 host=agx02 version=72fe859-dirty nodeState=RUNNING simulated=True sourceMode=sim uptimeS=259 resultsPort=5560 subscribers=1 rateHz=53.8
+  cameras: 0/front:SIMULATED:31.0fps 1/right:SIMULATED:30.0fps 2/left:SIMULATED:30.0fps 3/right-back:SIMULATED:30.0fps 4/left-back:SIMULATED:30.0fps 5/back:SIMULATED:30.0fps
+  models: driverguard_yolopx:RUNNING driverguard_dtcp:RUNNING system1:OFF sparsedrive_convnext_orin:OFF
+  temps: cpu-thermal=62.6C gpu-thermal=57.2C soc0-thermal=59.0C soc1-thermal=58.6C soc2-thermal=59.1C tj-thermal=62.6C
+  errors: []
+=== masks per (model, cam) in 5 s (SIMULATED data) ===
+('driverguard_dtcp', 0, 'results') 51
+('driverguard_yolopx', 0, 'drivable_area') 31
+('driverguard_yolopx', 0, 'lane_line') 31
+('driverguard_yolopx', 0, 'results') 31
+('driverguard_yolopx', 1, 'results') 31
+('driverguard_yolopx', 2, 'results') 32
+('driverguard_yolopx', 3, 'results') 31
+('driverguard_yolopx', 4, 'results') 32
+('driverguard_yolopx', 5, 'results') 32
+{'drivable_area': '1280x720 enc=rle-u16le-count-u8-value-rowmajor 3054 B', 'lane_line': '1280x720 enc=rle-u16le-count-u8-value-rowmajor 4674 B'}

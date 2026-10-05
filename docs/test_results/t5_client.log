@@ -1,0 +1,26 @@
+rk_result_client: tcp://127.0.0.1:5560 (results) tcp://127.0.0.1:5561 (status), schema hash AgxPerceptionResult 0xafcaff02, AgxInferStatus 0x9086fa18, host local=True, 120.0 s
+
+=== rk_result_client summary: host 127.0.0.1 (local=True), 120.0 s, crc crc32c package (checked against the reference) ===
+messages {'result_frames': 6298, 'result_ok': 6298, 'status_frames': 120, 'status_ok': 120}  flags {'result_bit0_source_is_replay': 6298, 'result_bit1_time_uncertain': 6298, 'result_bit2_degraded': 0}  envelope seq lost {'result': 0, 'status': 0}
+model                    cam  count     Hz   sim     agx_ms p50/p95/p99/max    e2e_recv_ms p50/p95/p99/max     capture_ms p50/p95/p99/max
+driverguard_dtcp           0   1171    9.8  1171      56.5/95.0/119.1/146.5          57.9/96.4/120.4/148.3          58.6/97.2/120.9/150.0
+driverguard_yolopx         0    855    7.1   855     94.3/129.4/148.1/164.8         97.1/134.2/150.4/168.3         97.9/134.9/151.4/168.8
+driverguard_yolopx         1    855    7.1   855     81.0/108.0/123.1/146.8         82.8/110.3/124.7/148.7         83.7/111.4/125.4/149.5
+driverguard_yolopx         2    855    7.1   855     85.0/113.7/130.9/161.8         86.9/115.9/132.2/164.7         87.6/116.9/133.1/166.5
+driverguard_yolopx         3    854    7.1   854     82.7/115.6/137.9/157.2         84.4/117.3/139.9/158.2         85.2/118.6/140.5/158.6
+driverguard_yolopx         4    854    7.1   854     75.3/104.2/121.4/158.7         76.9/105.8/122.5/160.5         77.1/106.2/122.8/160.9
+driverguard_yolopx         5    854    7.1   854      70.5/93.0/109.4/128.5          72.2/95.0/113.0/130.0          72.4/95.3/113.4/130.3
+status: 120 messages, interval mean 1.000 s, max 1.064 s
+status last: node RUNNING SIMULATED, 6 cameras, 4 models, subscribers 2, rate 51.6 Hz
+rejects {'result': {}, 'status': {}}  duplicates 0  restarts 0  out_of_order 0
+cameras seen [0, 1, 2, 3, 4, 5]  expected []  missing []
+latency validity: e2e_recv_ms valid (client and AGX on one clock)
+client processing ms p50/p99/max: 0.34/0.80/1.78
+check results_received: PASS
+check expected_cameras: PASS
+check no_rejects: PASS
+check no_duplicates: PASS
+check frame_seq_increases: PASS
+check status_received: PASS
+exit code 0
+json: /home/tonyho/driveragent-agx/docs/test_results/t5_client.json

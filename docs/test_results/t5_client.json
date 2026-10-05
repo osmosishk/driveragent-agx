@@ -1,0 +1,562 @@
+{
+ "tool": "rk_result_client",
+ "host": "127.0.0.1",
+ "host_is_local": true,
+ "results_port": 5560,
+ "status_port": 5561,
+ "type_id": {
+  "result": 5560,
+  "status": 5561
+ },
+ "schema": "/home/tonyho/driveragent-agx/proto/agx_infer.capnp",
+ "schema_hash": {
+  "AgxPerceptionResult": "0xafcaff02",
+  "AgxInferStatus": "0x9086fa18"
+ },
+ "envelope_module": "/home/tonyho/driveragent-agx/common/dabus_envelope.py",
+ "crc_impl": "crc32c package (checked against the reference)",
+ "duration_s": 120.0,
+ "messages": {
+  "result_frames": 6298,
+  "result_ok": 6298,
+  "status_frames": 120,
+  "status_ok": 120
+ },
+ "envelope_flags": {
+  "result_bit0_source_is_replay": 6298,
+  "result_bit1_time_uncertain": 6298,
+  "result_bit2_degraded": 0
+ },
+ "envelope_seq_lost": {
+  "result": 0,
+  "status": 0
+ },
+ "rejects": {
+  "result": {},
+  "status": {}
+ },
+ "rejects_total": 0,
+ "duplicates": 0,
+ "duplicate_examples": [],
+ "restarts": 0,
+ "restart_examples": [],
+ "out_of_order": 0,
+ "out_of_order_examples": [],
+ "simulated_flag_mismatch": 0,
+ "expect_cams": [],
+ "cams_seen": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "cams_missing": [],
+ "latency_validity": {
+  "agx_ms": "valid (one clock: AGX)",
+  "e2e_recv_ms": "valid (client and AGX on one clock)",
+  "capture_ms": "valid only when the client and the frame sender use one clock (same host, or PTP)"
+ },
+ "client_proc_ms": {
+  "n": 6418,
+  "p50": 0.344,
+  "p95": 0.469,
+  "p99": 0.797,
+  "max": 1.779,
+  "min": 0.07,
+  "negative": 0
+ },
+ "per_stream": [
+  {
+   "model": "driverguard_dtcp",
+   "cam": 0,
+   "count": 1171,
+   "rate_hz": 9.76,
+   "first_seq": 2230,
+   "last_seq": 5738,
+   "skipped_frames": 2338,
+   "duplicates": 0,
+   "restarts": 0,
+   "out_of_order": 0,
+   "simulated": 1171,
+   "degraded": 0,
+   "detections": 0,
+   "top_classes": {},
+   "agx_ms": {
+    "n": 1171,
+    "p50": 56.495,
+    "p95": 95.018,
+    "p99": 119.097,
+    "max": 146.485,
+    "min": 42.094,
+    "negative": 0
+   },
+   "e2e_recv_ms": {
+    "n": 1171,
+    "p50": 57.917,
+    "p95": 96.367,
+    "p99": 120.351,
+    "max": 148.28,
+    "min": 42.834,
+    "negative": 0
+   },
+   "capture_ms": {
+    "n": 1171,
+    "p50": 58.646,
+    "p95": 97.168,
+    "p99": 120.934,
+    "max": 149.966,
+    "min": 43.353,
+    "negative": 0
+   }
+  },
+  {
+   "model": "driverguard_yolopx",
+   "cam": 0,
+   "count": 855,
+   "rate_hz": 7.12,
+   "first_seq": 2228,
+   "last_seq": 5736,
+   "skipped_frames": 2654,
+   "duplicates": 0,
+   "restarts": 0,
+   "out_of_order": 0,
+   "simulated": 855,
+   "degraded": 0,
+   "detections": 6012,
+   "top_classes": {
+    "car": 5114,
+    "traffic sign": 471,
+    "truck": 392,
+    "bus": 35
+   },
+   "agx_ms": {
+    "n": 855,
+    "p50": 94.307,
+    "p95": 129.354,
+    "p99": 148.064,
+    "max": 164.798,
+    "min": 57.364,
+    "negative": 0
+   },
+   "e2e_recv_ms": {
+    "n": 855,
+    "p50": 97.06,
+    "p95": 134.245,
+    "p99": 150.443,
+    "max": 168.256,
+    "min": 59.042,
+    "negative": 0
+   },
+   "capture_ms": {
+    "n": 855,
+    "p50": 97.906,
+    "p95": 134.94,
+    "p99": 151.421,
+    "max": 168.765,
+    "min": 59.603,
+    "negative": 0
+   }
+  },
+  {
+   "model": "driverguard_yolopx",
+   "cam": 1,
+   "count": 855,
+   "rate_hz": 7.12,
+   "first_seq": 2229,
+   "last_seq": 5737,
+   "skipped_frames": 2654,
+   "duplicates": 0,
+   "restarts": 0,
+   "out_of_order": 0,
+   "simulated": 855,
+   "degraded": 0,
+   "detections": 5193,
+   "top_classes": {
+    "car": 4631,
+    "traffic sign": 294,
+    "truck": 248,
+    "bus": 18,
+    "traffic light": 1
+   },
+   "agx_ms": {
+    "n": 855,
+    "p50": 81.031,
+    "p95": 107.955,
+    "p99": 123.068,
+    "max": 146.79,
+    "min": 46.506,
+    "negative": 0
+   },
+   "e2e_recv_ms": {
+    "n": 855,
+    "p50": 82.809,
+    "p95": 110.255,
+    "p99": 124.714,
+    "max": 148.735,
+    "min": 47.764,
+    "negative": 0
+   },
+   "capture_ms": {
+    "n": 855,
+    "p50": 83.678,
+    "p95": 111.417,
+    "p99": 125.443,
+    "max": 149.487,
+    "min": 49.048,
+    "negative": 0
+   }
+  },
+  {
+   "model": "driverguard_yolopx",
+   "cam": 2,
+   "count": 855,
+   "rate_hz": 7.13,
+   "first_seq": 2230,
+   "last_seq": 5734,
+   "skipped_frames": 2650,
+   "duplicates": 0,
+   "restarts": 0,
+   "out_of_order": 0,
+   "simulated": 855,
+   "degraded": 0,
+   "detections": 4863,
+   "top_classes": {
+    "car": 3964,
+    "traffic sign": 570,
+    "truck": 302,
+    "bus": 27
+   },
+   "agx_ms": {
+    "n": 855,
+    "p50": 84.958,
+    "p95": 113.696,
+    "p99": 130.912,
+    "max": 161.805,
+    "min": 47.319,
+    "negative": 0
+   },
+   "e2e_recv_ms": {
+    "n": 855,
+    "p50": 86.857,
+    "p95": 115.892,
+    "p99": 132.18,
+    "max": 164.666,
+    "min": 49.217,
+    "negative": 0
+   },
+   "capture_ms": {
+    "n": 855,
+    "p50": 87.582,
+    "p95": 116.865,
+    "p99": 133.119,
+    "max": 166.453,
+    "min": 49.667,
+    "negative": 0
+   }
+  },
+  {
+   "model": "driverguard_yolopx",
+   "cam": 3,
+   "count": 854,
+   "rate_hz": 7.13,
+   "first_seq": 2231,
+   "last_seq": 5733,
+   "skipped_frames": 2649,
+   "duplicates": 0,
+   "restarts": 0,
+   "out_of_order": 0,
+   "simulated": 854,
+   "degraded": 0,
+   "detections": 2610,
+   "top_classes": {
+    "car": 2367,
+    "traffic sign": 150,
+    "truck": 89,
+    "bus": 4
+   },
+   "agx_ms": {
+    "n": 854,
+    "p50": 82.721,
+    "p95": 115.634,
+    "p99": 137.864,
+    "max": 157.163,
+    "min": 37.998,
+    "negative": 0
+   },
+   "e2e_recv_ms": {
+    "n": 854,
+    "p50": 84.43,
+    "p95": 117.265,
+    "p99": 139.865,
+    "max": 158.168,
+    "min": 39.51,
+    "negative": 0
+   },
+   "capture_ms": {
+    "n": 854,
+    "p50": 85.207,
+    "p95": 118.618,
+    "p99": 140.526,
+    "max": 158.614,
+    "min": 40.137,
+    "negative": 0
+   }
+  },
+  {
+   "model": "driverguard_yolopx",
+   "cam": 4,
+   "count": 854,
+   "rate_hz": 7.12,
+   "first_seq": 2231,
+   "last_seq": 5734,
+   "skipped_frames": 2650,
+   "duplicates": 0,
+   "restarts": 0,
+   "out_of_order": 0,
+   "simulated": 854,
+   "degraded": 0,
+   "detections": 0,
+   "top_classes": {},
+   "agx_ms": {
+    "n": 854,
+    "p50": 75.263,
+    "p95": 104.203,
+    "p99": 121.422,
+    "max": 158.719,
+    "min": 39.144,
+    "negative": 0
+   },
+   "e2e_recv_ms": {
+    "n": 854,
+    "p50": 76.851,
+    "p95": 105.837,
+    "p99": 122.471,
+    "max": 160.486,
+    "min": 40.631,
+    "negative": 0
+   },
+   "capture_ms": {
+    "n": 854,
+    "p50": 77.139,
+    "p95": 106.194,
+    "p99": 122.79,
+    "max": 160.867,
+    "min": 41.03,
+    "negative": 0
+   }
+  },
+  {
+   "model": "driverguard_yolopx",
+   "cam": 5,
+   "count": 854,
+   "rate_hz": 7.12,
+   "first_seq": 2233,
+   "last_seq": 5736,
+   "skipped_frames": 2650,
+   "duplicates": 0,
+   "restarts": 0,
+   "out_of_order": 0,
+   "simulated": 854,
+   "degraded": 0,
+   "detections": 103,
+   "top_classes": {
+    "traffic sign": 103
+   },
+   "agx_ms": {
+    "n": 854,
+    "p50": 70.54,
+    "p95": 92.956,
+    "p99": 109.389,
+    "max": 128.494,
+    "min": 37.677,
+    "negative": 0
+   },
+   "e2e_recv_ms": {
+    "n": 854,
+    "p50": 72.181,
+    "p95": 95.013,
+    "p99": 113.032,
+    "max": 129.999,
+    "min": 38.803,
+    "negative": 0
+   },
+   "capture_ms": {
+    "n": 854,
+    "p50": 72.416,
+    "p95": 95.35,
+    "p99": 113.378,
+    "max": 130.277,
+    "min": 39.028,
+    "negative": 0
+   }
+  }
+ ],
+ "status": {
+  "count": 120,
+  "interval": {
+   "n": 119,
+   "mean_s": 1.0,
+   "max_s": 1.0636,
+   "min_s": 0.935
+  },
+  "last": {
+   "hostname": "agx02",
+   "version": "72fe859-dirty",
+   "node_state": "RUNNING",
+   "simulated": true,
+   "uptime_s": 193,
+   "t_status_ns": 1791238457832681427,
+   "source_mode": "sim",
+   "flags": "SIMULATED,time_uncertain",
+   "cameras": [
+    {
+     "cam": 0,
+     "role": "front",
+     "state": "SIMULATED",
+     "simulated": true,
+     "fps": 30.0,
+     "frame_age_ms": 0.9,
+     "lost_frames": 5,
+     "lost_packets": 0,
+     "last_frame_seq": 5711
+    },
+    {
+     "cam": 1,
+     "role": "right",
+     "state": "SIMULATED",
+     "simulated": true,
+     "fps": 30.0,
+     "frame_age_ms": 7.9,
+     "lost_frames": 5,
+     "lost_packets": 0,
+     "last_frame_seq": 5711
+    },
+    {
+     "cam": 2,
+     "role": "left",
+     "state": "SIMULATED",
+     "simulated": true,
+     "fps": 30.0,
+     "frame_age_ms": 20.7,
+     "lost_frames": 5,
+     "lost_packets": 0,
+     "last_frame_seq": 5711
+    },
+    {
+     "cam": 3,
+     "role": "right-back",
+     "state": "SIMULATED",
+     "simulated": true,
+     "fps": 30.0,
+     "frame_age_ms": 6.7,
+     "lost_frames": 5,
+     "lost_packets": 0,
+     "last_frame_seq": 5711
+    },
+    {
+     "cam": 4,
+     "role": "left-back",
+     "state": "SIMULATED",
+     "simulated": true,
+     "fps": 30.0,
+     "frame_age_ms": 34.2,
+     "lost_frames": 5,
+     "lost_packets": 0,
+     "last_frame_seq": 5711
+    },
+    {
+     "cam": 5,
+     "role": "back",
+     "state": "SIMULATED",
+     "simulated": true,
+     "fps": 30.0,
+     "frame_age_ms": 32.4,
+     "lost_frames": 4,
+     "lost_packets": 0,
+     "last_frame_seq": 5711
+    }
+   ],
+   "models": [
+    {
+     "name": "driverguard_yolopx",
+     "state": "RUNNING",
+     "error": "",
+     "cameras": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "fps": 42.0,
+     "p50_ms": 63.73,
+     "p95_ms": 98.35,
+     "p99_ms": 118.79
+    },
+    {
+     "name": "driverguard_dtcp",
+     "state": "RUNNING",
+     "error": "",
+     "cameras": [
+      0
+     ],
+     "fps": 10.0,
+     "p50_ms": 37.95,
+     "p95_ms": 70.86,
+     "p99_ms": 98.82
+    },
+    {
+     "name": "system1",
+     "state": "OFF",
+     "error": "",
+     "cameras": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "fps": 0.0,
+     "p50_ms": null,
+     "p95_ms": null,
+     "p99_ms": null
+    },
+    {
+     "name": "sparsedrive_convnext_orin",
+     "state": "OFF",
+     "error": "",
+     "cameras": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "fps": 0.0,
+     "p50_ms": null,
+     "p95_ms": null,
+     "p99_ms": null
+    }
+   ],
+   "errors": [],
+   "results_port": 5560,
+   "subscribers": 2,
+   "results_rate_hz": 51.6
+  }
+ },
+ "warnings": [],
+ "checks": {
+  "results_received": true,
+  "expected_cameras": true,
+  "no_rejects": true,
+  "no_duplicates": true,
+  "frame_seq_increases": true,
+  "status_received": true
+ },
+ "exit_code": 0
+}

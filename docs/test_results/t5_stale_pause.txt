@@ -1,0 +1,21 @@
+recorder: 6516 results, 124 status
+recorder duplicates (model,cam,frameSeq seen twice): 0
+all results: max (tAgxResultNs - tAgxReadyNs) = 147.3 ms; max (t_client - tAgxRecvNs) = 168.1 ms
+pause: SIGSTOP at +0.000 s, SIGCONT at +3.018 s
+stream                 last result before resume (t rel SIGSTOP, frame recv rel SIGSTOP, age at result)   first result after resume
+driverguard_dtcp   cam0  last: client +0.040 s, frame recv -0.014 s, seq 4025, frame age at result 35.8 ms | results in pause window 1 | first after: client +3.168 s seq 4026 (seq jump 1), frame recv +3.020 s
+driverguard_yolopx cam0  last: client +0.089 s, frame recv -0.014 s, seq 4025, frame age at result 82.4 ms | results in pause window 1 | first after: client +3.298 s seq 4030 (seq jump 5), frame recv +3.152 s
+driverguard_yolopx cam1  last: client +0.092 s, frame recv -0.014 s, seq 4025, frame age at result 91.0 ms | results in pause window 1 | first after: client +3.325 s seq 4033 (seq jump 8), frame recv +3.252 s
+driverguard_yolopx cam2  last: client +0.117 s, frame recv -0.015 s, seq 4025, frame age at result 115.6 ms | results in pause window 2 | first after: client +3.181 s seq 4026 (seq jump 1), frame recv +3.020 s
+driverguard_yolopx cam3  last: client +0.124 s, frame recv -0.017 s, seq 4025, frame age at result 131.5 ms | results in pause window 2 | first after: client +3.382 s seq 4033 (seq jump 8), frame recv +3.253 s
+driverguard_yolopx cam4  last: client +0.041 s, frame recv -0.015 s, seq 4025, frame age at result 44.6 ms | results in pause window 1 | first after: client +3.177 s seq 4026 (seq jump 1), frame recv +3.017 s
+driverguard_yolopx cam5  last: client +0.052 s, frame recv -0.017 s, seq 4025, frame age at result 55.7 ms | results in pause window 1 | first after: client +3.269 s seq 4030 (seq jump 5), frame recv +3.151 s
+results received between SIGSTOP and SIGCONT: 9; of these, frame received at the AGX > 500 ms before: 0
+  latest result in the window: 124.0 ms after SIGSTOP; max e2e_recv in window 141.4 ms
+status messages from SIGSTOP-1 s to SIGCONT+2 s (camera state:frameAgeMs):
+  -0.708 s node RUNNING | 0:SIMULATED:1 1:SIMULATED:5 2:SIMULATED:19 3:SIMULATED:13 4:SIMULATED:24 5:SIMULATED:33 | driverguard_yolopx:RUNNING:42.8 driverguard_dtcp:RUNNING:10.0 system1:OFF:0.0 sparsedrive_convnext_orin:OFF:0.0
+  +0.226 s node RUNNING | 0:SIMULATED:201 1:SIMULATED:207 2:SIMULATED:209 3:SIMULATED:220 4:SIMULATED:219 5:SIMULATED:222 | driverguard_yolopx:RUNNING:41.2 driverguard_dtcp:RUNNING:9.8 system1:OFF:0.0 sparsedrive_convnext_orin:OFF:0.0
+  +1.225 s node RUNNING | 0:NO SIGNAL:1202 1:NO SIGNAL:1208 2:NO SIGNAL:1210 3:NO SIGNAL:1221 4:NO SIGNAL:1220 5:NO SIGNAL:1222 | driverguard_yolopx:RUNNING:33.0 driverguard_dtcp:RUNNING:7.8 system1:OFF:0.0 sparsedrive_convnext_orin:OFF:0.0
+  +2.226 s node RUNNING | 0:NO SIGNAL:2202 1:NO SIGNAL:2208 2:NO SIGNAL:2210 3:NO SIGNAL:2221 4:NO SIGNAL:2220 5:NO SIGNAL:2223 | driverguard_yolopx:RUNNING:24.8 driverguard_dtcp:RUNNING:5.8 system1:OFF:0.0 sparsedrive_convnext_orin:OFF:0.0
+  +3.240 s node RUNNING | 0:SIMULATED:14 1:SIMULATED:16 2:SIMULATED:11 3:SIMULATED:10 4:SIMULATED:23 5:SIMULATED:31 | driverguard_yolopx:RUNNING:16.4 driverguard_dtcp:RUNNING:4.2 system1:OFF:0.0 sparsedrive_convnext_orin:OFF:0.0
+  +4.264 s node RUNNING | 0:SIMULATED:5 1:SIMULATED:46 2:SIMULATED:9 3:SIMULATED:20 4:SIMULATED:25 5:SIMULATED:21 | driverguard_yolopx:RUNNING:13.8 driverguard_dtcp:RUNNING:4.2 system1:OFF:0.0 sparsedrive_convnext_orin:OFF:0.0
