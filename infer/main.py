@@ -1,0 +1,256 @@
+"""AGX inference node.
+
+  python -m infer.main --config config/infer.yaml [--mode sim|rk|file] [--seconds N]
+
+Parts: Ingest (six cameras -> FrameStore), ModelManager (TensorRT models; on_result ->
+ResultPublisher 5560 + result cache), StatusPublisher (5561 AgxInferStatus + 127.0.0.1:5562 JSON),
+SnapshotTask (127.0.0.1:5562 JPEG), AdminServer (127.0.0.1:5563).
+Logs go to stdout (journald). SIGTERM / SIGINT: clean stop of all parts within 5 s.
+Rule R8: this node publishes perception results only. Rule R13: results from simulated frames have
+simulated = true and envelope flag bit0.
+"""
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import signal
+import sys
+import threading
+import time
+
+import yaml
+import zmq
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+log = logging.getLogger("infer.main")
+
+
+def _path(p: str | None) -> str | None:
+    if p is None:
+        return None
+    return p if os.path.isabs(p) else os.path.join(ROOT, p)
+
+
+def load_config(path: str) -> dict:
+    with open(path) as f:
+        cfg = yaml.safe_load(f) or {}
+    return cfg
+
+
+class FallbackManager:
+    """Used only when the ModelManager cannot be created: every enabled model is FAILED with the
+    reason, so the status shows the problem (node state ERROR)."""
+
+    def __init__(self, models_cfg: dict, error: str):
+        self.error = error
+        self.models = list((models_cfg or {}).get("models") or [])
+
+    def start(self, should_stop=None):
+        pass
+
+    def stop(self):
+        pass
+
+    def stop_model(self, name):
+        return {"ok": False, "error": self.error}
+
+    start_model = stop_model
+
+    def status(self):
+        out = []
+        for m in self.models:
+            en = bool(m.get("enabled"))
+            out.append({"name": m.get("name"), "engine": m.get("engine"), "engine_version": None,
+                        "state": "FAILED" if en else "OFF", "error": self.error if en else None,
+                        "reason": m.get("reason"), "enabled": en, "cameras": m.get("cameras") or [],
+                        "fps": 0.0, "results_total": 0})
+        return out
+
+
+class Node:
+    def __init__(self, cfg: dict, mode: str | None = None):
+        from infer.admin import AdminServer
+        from infer.draw import SnapshotTask
+        from infer.ingest.ingest import Ingest
+        from infer.publish import schema as sch
+        from infer.publish.cache import ResultCache
+        from infer.publish.internal import InternalPub
+        from infer.publish.results import ResultPublisher
+        from infer.publish.status import StatusPublisher
+        from infer.status import NodeState, git_version
+
+        self.cfg = cfg
+        ports = cfg.get("ports") or {}
+        bind = cfg.get("bind") or {}
+        node_cfg = cfg.get("node") or {}
+        self.stop_timeout_s = float(node_cfg.get("stop_timeout_s", 5.0))
+        self.state = NodeState(version=git_version(ROOT),
+                               no_signal_degraded_s=float(node_cfg.get("no_signal_degraded_s", 10.0)))
+        log.info("driveragent-agx infer node %s pid %d", self.state.version, self.state.pid)
+        proto = _path(cfg.get("proto", "proto/agx_infer.capnp"))
+        sch.load(proto)  # logs the runtime schema hashes
+        self.ctx = zmq.Context()
+        self._parts: list = []   # (name, stop function), stopped in reverse order
+        try:
+            rc = cfg.get("results") or {}
+            self.results = ResultPublisher(
+                bind.get("results", "0.0.0.0"), int(ports.get("results", 5560)), proto,
+                degraded_fn=self.state.degraded, sndhwm=int(rc.get("sndhwm", 100)),
+                queue_max=int(rc.get("queue_max", 1000)),
+                rate_window_s=float(rc.get("rate_window_s", 5.0)), ctx=self.ctx)
+            self._parts.append(("results publisher", self.results.close))
+            self.internal = InternalPub(bind.get("internal", "127.0.0.1"),
+                                        int(ports.get("internal", 5562)), ctx=self.ctx)
+            self._parts.append(("internal publisher", self.internal.close))
+            self.cache = ResultCache()
+            self.ingest = Ingest(_path(cfg.get("sources_config", "config/sources.yaml")), mode=mode)
+            log.info("ingest mode %s", self.ingest.mode)
+            with open(_path(cfg.get("models_config", "config/models.yaml"))) as f:
+                self.models_cfg = yaml.safe_load(f) or {}
+            self.manager = self._make_manager()
+            self.status = StatusPublisher(
+                self.state, self.ingest, self.manager, self.results, self.internal,
+                bind.get("status", "0.0.0.0"), int(ports.get("status", 5561)),
+                float(cfg.get("status_period_s", 1.0)), proto, ctx=self.ctx)
+            self._parts.append(("status publisher", self.status.stop))
+            sc = cfg.get("snapshot") or {}
+            self.snapshots = SnapshotTask(self.ingest.store, self.cache, self.internal,
+                                          int(sc.get("width", 320)), float(sc.get("period_s", 1.0)),
+                                          int(sc.get("jpeg_quality", 80)), cams=self.ingest.cams)
+            ac = cfg.get("admin") or {}
+            self.admin = AdminServer(self.ingest.store, self.manager, bind.get("admin", "127.0.0.1"),
+                                     int(ports.get("admin", 5563)),
+                                     int(ac.get("frame_jpeg_quality", 90)), ctx=self.ctx)
+            self._parts.append(("admin server", self.admin.stop))
+        except Exception:
+            self._stop_parts()
+            raise
+
+    def _make_manager(self):
+        engines_dir = _path(self.cfg.get("engines_dir", "engines"))
+        try:
+            from infer.models.manager import ModelManager
+            return ModelManager(self.models_cfg, self.ingest.store, self.on_result, engines_dir)
+        except Exception as e:  # noqa: BLE001
+            msg = f"ModelManager not available: {type(e).__name__}: {e}"
+            log.exception(msg)
+            self.state.add_error(msg)
+            return FallbackManager(self.models_cfg, msg)
+
+    def on_result(self, result: dict) -> None:
+        """ModelManager callback (model worker threads)."""
+        try:
+            r = self.results.publish(result)
+        except Exception as e:  # noqa: BLE001
+            log.exception("publish failed")
+            self.state.add_error(f"result publish failed: {e}")
+            return
+        if r is not None:
+            self.cache.add(r)
+
+    def start(self, should_stop=None) -> bool:
+        """Start all parts. should_stop: optional function (True after SIGTERM / SIGINT); the start
+        then ends early (no more engine loads, no workers, no snapshots). Returns False when it ended
+        early."""
+        stop_now = should_stop or (lambda: False)
+        self.status.start()          # status shows STARTING from now
+        self.admin.start()
+        self.ingest.start()
+        self._parts.insert(0, ("ingest", self.ingest.stop))
+        self._parts.insert(0, ("model manager", self.manager.stop))
+        if stop_now():
+            log.info("stop requested during start: models not started")
+            return False
+        try:
+            self.manager.start(should_stop=stop_now)
+        except Exception as e:  # noqa: BLE001
+            log.exception("ModelManager.start failed")
+            self.state.add_error(f"ModelManager.start failed: {e}")
+        if stop_now():
+            log.info("stop requested during start: snapshots not started")
+            return False
+        self.snapshots.start()
+        self._parts.insert(0, ("snapshots", self.snapshots.stop))
+        self.state.started = True
+        log.info("node started")
+        return True
+
+    def _stop_parts(self) -> None:
+        # order: snapshots, models, ingest, then the sockets (admin, status, internal, results)
+        parts = list(self._parts)
+        self._parts.clear()
+        first = [p for p in parts if p[0] in ("snapshots", "model manager", "ingest")]
+        rest = [p for p in reversed(parts) if p not in first]
+        for name, fn in first + rest:
+            t0 = time.monotonic()
+            try:
+                fn()
+            except Exception:  # noqa: BLE001
+                log.exception("stop %s failed", name)
+            log.info("stopped %s (%.2f s)", name, time.monotonic() - t0)
+        try:
+            self.ctx.destroy(linger=0)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def stop(self) -> None:
+        self.state.stopping = True
+        t0 = time.monotonic()
+        th = threading.Thread(target=self._stop_parts, name="stop", daemon=True)
+        th.start()
+        th.join(self.stop_timeout_s)
+        if th.is_alive():
+            log.error("clean stop took more than %.1f s: exit now", self.stop_timeout_s)
+            logging.shutdown()
+            os._exit(3)
+        log.info("node stopped in %.2f s", time.monotonic() - t0)
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="driveragent-agx inference node")
+    ap.add_argument("--config", default=os.path.join(ROOT, "config", "infer.yaml"))
+    ap.add_argument("--mode", choices=("sim", "rk", "file"), default=None,
+                    help="ingest mode (default: config/sources.yaml or AGX_INGEST_MODE)")
+    ap.add_argument("--seconds", type=float, default=None, help="stop after N seconds")
+    a = ap.parse_args(argv)
+    cfg = load_config(_path(a.config))
+    logging.basicConfig(stream=sys.stdout, level=getattr(logging, str(cfg.get("log_level", "INFO")).upper(),
+                                                         logging.INFO),
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    stop_ev = threading.Event()
+    n_sig = [0]
+
+    def on_signal(signum, _frame):
+        n_sig[0] += 1
+        log.info("signal %s: stop", signal.Signals(signum).name)
+        if n_sig[0] > 1:
+            log.error("second signal: exit now")
+            os._exit(4)
+        stop_ev.set()
+
+    signal.signal(signal.SIGTERM, on_signal)
+    signal.signal(signal.SIGINT, on_signal)
+    try:
+        node = Node(cfg, mode=a.mode)
+    except Exception:  # noqa: BLE001
+        log.exception("node start failed")
+        return 2
+    try:
+        node.start(should_stop=stop_ev.is_set)
+    except Exception:  # noqa: BLE001
+        log.exception("node start failed")
+        node.stop()
+        return 2
+    t_end = None if a.seconds is None else time.monotonic() + a.seconds
+    while not stop_ev.is_set():
+        if t_end is not None and time.monotonic() >= t_end:
+            log.info("--seconds %.0f reached: stop", a.seconds)
+            break
+        stop_ev.wait(0.2)
+    node.stop()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,43 @@
+2026-10-05 23:01:30,151 INFO infer.main: driveragent-agx infer node 72fe859-dirty pid 1999473
+2026-10-05 23:01:30,155 INFO infer.schema: schema hash AgxPerceptionResult = 0xafcaff02 (OK, /home/tonyho/driveragent-agx/proto/agx_infer.capnp)
+2026-10-05 23:01:30,155 INFO infer.schema: schema hash AgxInferStatus = 0x9086fa18 (OK, /home/tonyho/driveragent-agx/proto/agx_infer.capnp)
+2026-10-05 23:01:30,157 INFO infer.results: results PUB bound tcp://0.0.0.0:5560 (schema hash 0xafcaff02)
+2026-10-05 23:01:30,157 INFO infer.internal: internal PUB bound tcp://127.0.0.1:5562
+2026-10-05 23:01:30,192 INFO infer.main: ingest mode sim
+2026-10-05 23:01:30,204 INFO infer.status: status PUB bound tcp://0.0.0.0:5561 (schema hash 0x9086fa18)
+2026-10-05 23:01:30,204 INFO infer.admin: admin REP bound tcp://127.0.0.1:5563
+2026-10-05 23:01:30,268 INFO infer.status: node state None -> STARTING ['starting']
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+NvMMLiteOpen : Block : BlockType = 279 
+NvMMLiteBlockCreate : Block : BlockType = 279 
+2026-10-05 23:01:33,836 INFO agx.infer.manager: model driverguard_yolopx loaded: yolopx_v2_fp16.engine:3412bafa057a3a76 (config)
+2026-10-05 23:01:33,838 INFO agx.infer.manager: model driverguard_yolopx RUNNING (2 workers, cams [0, 1, 2, 3, 4, 5])
+2026-10-05 23:01:34,001 INFO agx.infer.manager: model driverguard_dtcp loaded: dtcp_v1_fp16.engine:1071ea90213eddc2 (config)
+2026-10-05 23:01:34,002 INFO agx.infer.manager: model driverguard_dtcp RUNNING (1 workers, cams [0])
+2026-10-05 23:01:34,003 INFO infer.main: node started
+2026-10-05 23:01:34,210 INFO infer.status: node state STARTING -> RUNNING []
+2026-10-05 23:07:25,313 INFO infer.main: signal SIGTERM: stop
+2026-10-05 23:07:25,314 INFO infer.main: stopped snapshots (0.00 s)
+2026-10-05 23:07:25,380 INFO infer.main: stopped model manager (0.07 s)
+2026-10-05 23:07:25,720 INFO infer.main: stopped ingest (0.34 s)
+2026-10-05 23:07:25,914 INFO infer.main: stopped admin server (0.19 s)
+2026-10-05 23:07:25,914 INFO infer.main: stopped status publisher (0.00 s)
+2026-10-05 23:07:25,914 INFO infer.main: stopped internal publisher (0.00 s)
+2026-10-05 23:07:25,915 INFO infer.results: results PUB closed (20056 results sent)
+2026-10-05 23:07:25,915 INFO infer.main: stopped results publisher (0.00 s)
+2026-10-05 23:07:25,915 INFO infer.main: node stopped in 0.60 s
+Opening in BLOCKING MODE 
+Opening in BLOCKING MODE 
+Opening in BLOCKING MODE 
+Opening in BLOCKING MODE 
+Opening in BLOCKING MODE 
+Opening in BLOCKING MODE 

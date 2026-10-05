@@ -1,0 +1,116 @@
+# T4 TEST COPY of config/sim.yaml: REAL DRIVING recordings (2025-11-09 sessions 090744, 090844,
+# 090944). cam4 and cam5 are almost black in these sessions: that is real data.
+# RK3588 simulator (tools/rk_sim). It sends FrameLink frames on UDP, like the RK3588 will do.
+# Run:   .venv/bin/python -m tools.rk_sim --config config/sim.yaml [--seconds N] [--fmt h265|nv12]
+#        [--cams 0,1,2,3,4,5] [--host 127.0.0.1] [--base-port 6000] [--source file|test-pattern]
+#        [--sessions bench|road|S1,S2] [--transcode] [--status-interval S] [--no-pace]
+# Command line options replace the values in this file.
+#
+# IMPORTANT: every frame from the simulator has source = REPLAY (2) or TEST_PATTERN (3) in the
+# FrameLink header. The simulator NEVER sends source = LIVE (1).
+# t_capture_ns = CLOCK_REALTIME (time.time_ns()) on this computer at the moment the frame leaves
+# the GStreamer appsink. The simulator has no camera capture clock and no PTP clock.
+
+host: 127.0.0.1           # destination IPv4 address (the AGX ingest)
+base_port: 6000           # camera N goes to UDP port base_port + N (RK design: 6000..6005)
+fps: 30                   # frame rate of test-pattern sources. File sources use the file PTS (30/1).
+fmt: h265                 # h265 = one H.265 access unit per frame (Annex-B, VPS/SPS/PPS before each IDR)
+                          # nv12 = raw NV12 at the camera size (width x height), stride = width
+fragment_payload: 8896    # bytes of FrameLink data per datagram: 8896 (MTU 9000) or 1456 (MTU 1500)
+pace: true                # true: spread the datagrams of one frame over pace_fraction of the frame interval
+pace_fraction: 0.6        # at most 60 % of the frame interval (socket receive buffer max is 212992 B)
+                          # A late sender thread sends at most 4 datagrams back-to-back (no catch-up
+                          # burst). Status line "burst" = longest back-to-back run seen.
+sndbuf: 4194304           # requested SO_SNDBUF. The kernel limits it (wmem_max).
+status_interval_s: 5      # one status line per camera group every N seconds
+measure_idr: true         # h265 passthrough: count the AUs between IDR frames of the first file, print once
+
+# H.265 settings for transcode and for test-pattern sources (night-task Section 6 codec).
+h265:
+  width: 1280             # all cameras use 1280x720 in fmt h265 (file passthrough keeps the file size)
+  height: 720
+  bitrate: 4000000
+  iframeinterval: 15      # short GOP: one IDR every 15 frames (0.5 s at 30 fps)
+  idrinterval: 15
+
+# transcode: false -> fmt h265 sends the recorded H.265 access units unchanged (passthrough).
+#   The recordings have one IDR every 256 frames (8.5 s), thus a receiver that starts late
+#   must wait up to 8.5 s for the first picture.
+# transcode: true  -> decode + nvv4l2h265enc (settings above): one IDR every 15 frames.
+transcode: false
+
+# Old recordings (READ-ONLY). Camera roles of the old stack.
+# Files of one camera are played in this order, then again from the first file (loop forever).
+# Default: three consecutive full sessions (6 cameras each): 8003-20260510_151020, _151120 and the
+# newest full session _151220. Each file is about 58.5 s, thus one loop is about 175 s.
+# CAUTION (checked 2026-10-05): the 2026-05-10 sessions show an INDOOR BENCH (room, door, cables),
+# NOT a road. Road video is in the 2025-10/11 sessions, but there cam4 and cam5 are almost black
+# (files of 1-2 MB). Use "--sessions road" to replace the file list of all cameras with the road set.
+# All recordings: one IDR every 256 AU (8.53 s), VPS/SPS/PPS before every IDR, no B-frames.
+# width/height = RK design size of the camera for fmt nv12 (cam0 1280x720, cam1-5 704x396).
+video_root: /home/tonyho/driveragent/logger/video
+# --sessions NAME: camera N plays <video_root>/<session>/*/camN_*.mp4 of each session, in this order.
+session_sets:
+  bench:                  # same files as the cameras list below
+    - 8003-20260510_151020
+    - 8003-20260510_151120
+    - 8003-20260510_151220
+  road:                   # motorway, overcast day. cam0-3 road, cam4 + cam5 almost black
+    - 8003-20251109_105508
+    - 8003-20251109_105608
+    - 8003-20251109_105708
+cameras:
+  - cam: 0
+    role: front
+    source: file
+    width: 1280
+    height: 720
+    files:
+      - 8003-20251109_090744/front/cam0_20251109_090744.mp4
+      - 8003-20251109_090844/front/cam0_20251109_090844.mp4
+      - 8003-20251109_090944/front/cam0_20251109_090944.mp4
+  - cam: 1
+    role: right
+    source: file
+    width: 704
+    height: 396
+    files:
+      - 8003-20251109_090744/right/cam1_20251109_090744.mp4
+      - 8003-20251109_090844/right/cam1_20251109_090844.mp4
+      - 8003-20251109_090944/right/cam1_20251109_090944.mp4
+  - cam: 2
+    role: left
+    source: file
+    width: 704
+    height: 396
+    files:
+      - 8003-20251109_090744/left/cam2_20251109_090744.mp4
+      - 8003-20251109_090844/left/cam2_20251109_090844.mp4
+      - 8003-20251109_090944/left/cam2_20251109_090944.mp4
+  - cam: 3
+    role: right-back
+    source: file
+    width: 704
+    height: 396
+    files:
+      - 8003-20251109_090744/right-back/cam3_20251109_090744.mp4
+      - 8003-20251109_090844/right-back/cam3_20251109_090844.mp4
+      - 8003-20251109_090944/right-back/cam3_20251109_090945.mp4
+  - cam: 4
+    role: left-back
+    source: file
+    width: 704
+    height: 396
+    files:
+      - 8003-20251109_090744/left-back/cam4_20251109_090744.mp4
+      - 8003-20251109_090844/left-back/cam4_20251109_090844.mp4
+      - 8003-20251109_090944/left-back/cam4_20251109_090945.mp4
+  - cam: 5
+    role: back
+    source: file
+    width: 704
+    height: 396
+    files:
+      - 8003-20251109_090744/back/cam5_20251109_090744.mp4
+      - 8003-20251109_090844/back/cam5_20251109_090844.mp4
+      - 8003-20251109_090944/back/cam5_20251109_090945.mp4

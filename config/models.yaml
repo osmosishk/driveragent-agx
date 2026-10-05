@@ -1,0 +1,61 @@
+# Model plug-ins of the AGX inference node. Facts and reasons: docs/MODELS.md.
+#
+# Fields:
+#   name       unique model name (used in results, status and the dashboard)
+#   group      optional group (the old "DriverGuard" = YOLOPX + DTCP)
+#   enabled    true = load and run; false = state OFF (reason is shown)
+#   engine     TensorRT engine file (read-only; never overwritten)
+#   onnx       ONNX file. Only used when the engine does not load: then a new engine is built into
+#              engines/ of this project (the old engine stays as it is)
+#   adapter    preprocessing + postprocessing plug-in in infer/models/adapters/<adapter>.py
+#   cameras    FrameLink camera ids this model runs on
+#   workers    execution contexts (threads) for this engine
+#   max_fps_per_camera   upper limit of results per second for one camera
+#   options    adapter options (thresholds etc. from the old code, see docs/MODELS.md)
+#   reason     why a disabled model is OFF
+
+models:
+  - name: driverguard_yolopx
+    group: driverguard
+    enabled: true
+    engine: /home/tonyho/model/jetson_bundle/engines/yolopx_v2_fp16.engine
+    onnx: /home/tonyho/model/jetson_bundle/onnx/yolopx_v2.onnx
+    adapter: yolopx_v2
+    cameras: [0, 1, 2, 3, 4, 5]
+    workers: 2
+    max_fps_per_camera: 30
+    options:
+      conf_thres: 0.30          # old runner.py:78
+      iou_thres: 0.45           # old runner.py:78
+      max_det: 300              # old yolopx_postprocess.py
+      masks_cameras: [0]        # drivable area + lane masks only for the front camera (as the old stack)
+
+  - name: driverguard_dtcp
+    group: driverguard
+    enabled: true
+    engine: /home/tonyho/model/jetson_bundle/engines/dtcp_v1_fp16.engine
+    onnx: /home/tonyho/model/jetson_bundle/onnx/dtcp_v1.onnx
+    adapter: dtcp_v1
+    cameras: [0]
+    workers: 1
+    max_fps_per_camera: 10      # old DriverGuard rate 10 Hz (run.py:30)
+    options:
+      command: 2                # STRAIGHT: old supervisor default (run.py:39)
+      target: [0.0, 20.0]       # [lateral right m, forward m]: old default (run.py:42)
+      ego_speed_mps: null       # no CarState on the AGX: 0 m/s is used and inputsValid=false
+      # Published: 4 waypoints only, display only. NOT published (rule R8): throttle, steer, brake,
+      # mu, sigma, pred_speed.
+
+  - name: system1
+    enabled: false
+    engine: null
+    adapter: none
+    cameras: [0, 1, 2, 3, 4, 5]
+    reason: "Not a TensorRT model: PyTorch only (system1_deploy.pth), about 200 ms per inference; known defects B1-B5 in the old runner. See docs/MODELS.md."
+
+  - name: sparsedrive_convnext_orin
+    enabled: false
+    engine: /home/tonyho/model/sparsedrive/run/convnext_backbone_fp16_orin.trt
+    adapter: none
+    cameras: [0, 1, 2, 3, 4, 5]
+    reason: "Backbone engine only; output is wrong (cosine 0.39 against its ONNX); the head is PyTorch only (0.5-0.7 FPS); calibration is a placeholder. See docs/MODELS.md."
