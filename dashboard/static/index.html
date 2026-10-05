@@ -25,6 +25,31 @@
 <div id="state-reasons" class="reasons" hidden></div>
 
 <main class="grid">
+  <section class="card wide" id="c-cams">
+    <h2>Cameras <span id="cams-sim" class="badge sim" hidden>SIMULATED</span> <span id="cams-note" class="muted"></span></h2>
+    <div id="cam-tiles" class="tiles"></div>
+    <p class="note" id="cams-limits">STALE: agx-infer gives a frame age of 0.5 s or more. NO SIGNAL: no new frame for 1.0 s. This page shows NO SIGNAL 1.0 s to 1.6 s after the last frame. NO DATA: no status from agx-infer for 3 s.</p>
+  </section>
+
+  <section class="card wide" id="c-models">
+    <h2>Models <span id="models-sim" class="badge sim" hidden>SIMULATED</span> <span id="models-note" class="muted"></span></h2>
+    <p class="note" id="models-reason"></p>
+    <div class="scroll">
+    <table class="tbl" id="models-tbl">
+      <thead><tr><th>Name</th><th>Engine file</th><th class="n">Size</th><th>Date</th><th>TensorRT match</th><th>Inputs and outputs</th><th>State</th><th>Cameras</th><th class="n">fps</th><th class="n" title="Total time. The detail row shows each stage.">Latency p50 / p95 / p99</th><th class="n">GPU memory (estimate)</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+    <h3>Engine files not in the configuration <span id="extra-sum" class="muted"></span></h3>
+    <div class="scroll">
+    <table class="tbl" id="extra-tbl">
+      <thead><tr><th>Engine file</th><th class="n">Size</th><th>Date</th><th>sha256 (16)</th><th>TensorRT match</th><th>Inputs and outputs</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+    <p class="note" id="scan-note"></p>
+  </section>
+
   <section class="card" id="c-cpu">
     <h2>CPU <span class="big" id="cpu-avg">-</span></h2>
     <div id="cpu-cores" class="cores"></div>
@@ -78,9 +103,12 @@
     <div class="row"><span class="k" id="loss-k">Packet loss</span><span id="loss" class="v">-</span></div>
     <div class="row"><span class="k">Clock offset (RK - AGX)</span><span id="clock" class="v">-</span></div>
     <p class="note" id="clock-note"></p>
+    <h3>From agx-infer <span id="link-sim" class="badge sim" hidden>SIMULATED</span></h3>
     <div class="row"><span class="k">Time since last frame</span><span id="frame-age" class="v">-</span></div>
     <div class="row"><span class="k">Result publish rate</span><span id="res-rate" class="v">-</span></div>
     <div class="row"><span class="k">Subscribers</span><span id="subs" class="v">-</span></div>
+    <div class="row"><span class="k">Results total</span><span id="res-total" class="v">-</span></div>
+    <div class="row"><span class="k">Last result</span><span id="res-last" class="v">-</span></div>
   </section>
 
   <section class="card" id="c-infer">
@@ -106,6 +134,14 @@
     <div class="scroll">
     <table class="tbl" id="docker-tbl">
       <thead><tr><th>Name</th><th>State</th><th>Status</th><th>Restart policy</th><th>Image</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+    <h3>Old DriverAgent processes <span id="oldp-sum" class="muted"></span></h3>
+    <p class="note" id="oldp-note">No systemd unit exists for the old DriverAgent stack; it starts by hand (~/s.sh).</p>
+    <div class="scroll">
+    <table class="tbl" id="oldp-tbl">
+      <thead><tr><th class="n">PID</th><th>User</th><th>Match</th><th>Command line</th></tr></thead>
       <tbody></tbody>
     </table>
     </div>
@@ -154,8 +190,9 @@
     </div>
   </section>
 </main>
-<footer class="foot">Read-only page. Data comes from this machine (/proc, /sys, systemd, docker). Values that are not available show "n/a".</footer>
+<footer class="foot">Read-only page. Data comes from this machine (/proc, /sys, systemd, docker, agx-infer status). Values that are not available show "n/a". Values from a simulated source show SIMULATED.</footer>
 <script src="/static/vendor/uPlot.iife.min.js"></script>
+<script src="/static/tiles.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

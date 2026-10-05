@@ -1,0 +1,24 @@
+time 2026-10-05 23:17:43
+=== GET /api/health -> HTTP 200, 7097 B ===
+{"schema": "agx-health/1", "hostname": "agx02", "time_iso": "2026-10-05T22:17:43.049+00:00", "age_s": 0.6, "stale": false, "node_state": "OK", "node_state_reasons": [], "infer_state": "RUNNING", "infer_reason": null, "simulated": true, "errors": []}
+infer: {"state": "RUNNING", "simulated": true, "version": "72fe859-dirty", "uptime_s": 398.2, "age_s": 0.78}
+infer.cameras_summary.states: {"SIMULATED": 6}
+gpu: {"load_pct": 0.6, "freq_mhz": 612} | temps.max_c: 63.1 cpu-thermal | ram pct: 14.0
+=== GET /api/link -> HTTP 200, 19396 B ===
+{"rk_ip": "100.64.0.180", "ping_ms": 11.2, "ping_t": 1791238662.2340322, "ping_error": null, "loss_pct": 0.0, "loss_window_s": 60.0, "loss_samples": 30, "clock_offset_ms": null, "clock_method": "none", "clock_uncertainty_ms": null, "clock_note": "n/a (no method; RK gives no time service); no HTTP Date on ports 80,8080,8000; clockdiff not installed", "clock_t": 1791238656.6672616, "time_since_last_frame_ms": 8.3, "time_since_last_frame_basis": "agx-infer status (newer frames are possible)", "last_frame_t": 1791238662.8424845, "results_rate_hz": 55.6, "subscribers": 0, "results_total": 20698, "last_result_t": 1791238662.90883, "infer_na": null, "simulated": true, "label": "SIMULATED"}
+ping_history: 2 entries
+=== GET /api/services -> HTTP 200, 5262 B ===
+summary: {"t": 1791238659.2082746, "user": {"agx-dashboard": "active (running)", "agx-infer": "active (running)", "agx-sim": "active (running)"}, "system": {"agx-dashboard": "not installed", "agx-infer": "not installed", "agx-sim": "not installed"}, "old_units": {"total": 14, "active": 13, "failed": 0}, "docker": {"available": true, "total": 1, "running": 1, "error": null}, "old_processes": 0}
+  user unit agx-dashboard.service    active/running  pid 1976454  restarts 0  started Mon 2026-10-05 22:43:03 BST
+  user unit agx-infer.service        active/running  pid 2009184  restarts 0  started Mon 2026-10-05 23:11:04 BST
+  user unit agx-sim.service          active/running  pid 2014499  restarts 0  started Mon 2026-10-05 23:16:26 BST
+=== GET /api/services/logs?unit=not-a-unit -> HTTP 400, 68 B ===
+{"error": "unit not allowed", "allowed": ["agx-infer", "agx-dashboard"]}
+=== GET /api/services/logs?unit=agx-infer -> HTTP 200, 10396 B ===
+   keys ['unit', 'rc', 'lines', 'error', 't']; lines: 87
+   | 2026-10-05T23:17:12+0100 agx02 python[2009184]: 2026-10-05 23:17:12,111 INFO agx.infer.manager: model driverguard_dtcp RUNNING (1 workers, cams [0])
+   | 2026-10-05T23:17:12+0100 agx02 python[2009184]: 2026-10-05 23:17:12,111 INFO infer.admin: admin start driverguard_dtcp -> {'ok': True, 'state': 'RUNNING', 'error': None}
+=== GET /api/services/logs?unit=agx-dashboard -> HTTP 200, 3663 B ===
+   keys ['unit', 'rc', 'lines', 'error', 't']; lines: 29
+   | 2026-10-05T22:43:05+0100 agx02 python[1976454]: 2026-10-05 22:43:05,847 INFO dashboard.engines: engine inspected /home/tonyho/model/sparsedrive/run/convnext_backbone_fp16_orin.trt load OK (0.3 s)
+   | 2026-10-05T22:43:06+0100 agx02 python[1976454]: 2026-10-05 22:43:06,181 INFO dashboard.engines: engine inspected /home/tonyho/model/sparsedrive/run/resnet_backbone_fp16_orin.trt load OK (0.3 s)

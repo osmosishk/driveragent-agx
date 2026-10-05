@@ -1,0 +1,52 @@
+before:   0.01 s | dtcp RUNNING  fps  10.0 results_total   3389 | yolopx RUNNING  fps  44.6 results_total  14908
+$ python -m tools.model_ctl stop driverguard_dtcp  (rc 0)
+{
+  "ok": true,
+  "cmd": "stop",
+  "model": "driverguard_dtcp",
+  "result": {
+    "ok": true,
+    "state": "OFF"
+  }
+}
+  0.01 s | dtcp RUNNING  fps  10.0 results_total   3399 | yolopx RUNNING  fps  45.4 results_total  14959
+  1.02 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  45.2 results_total  15008
+  2.03 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  45.0 results_total  15051
+  3.03 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  46.6 results_total  15096
+  4.04 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  49.8 results_total  15157
+  5.05 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  48.6 results_total  15202
+  6.06 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  46.6 results_total  15241
+  7.07 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  46.4 results_total  15283
+  8.08 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  45.8 results_total  15325
+  9.09 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  42.0 results_total  15368
+ 10.10 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  40.8 results_total  15406
+ 11.11 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  41.8 results_total  15450
+ 12.12 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  41.4 results_total  15490
+ 13.13 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  41.8 results_total  15534
+ 14.14 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  42.6 results_total  15581
+check while stopped: PASS
+$ python -m tools.model_ctl start driverguard_dtcp  (rc 0)
+{
+  "ok": true,
+  "cmd": "start",
+  "model": "driverguard_dtcp",
+  "result": {
+    "ok": true,
+    "state": "RUNNING",
+    "error": null
+  }
+}
+  0.01 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  44.4 results_total  15629
+  0.52 s | dtcp OFF      fps   0.0 results_total   3399 | yolopx RUNNING  fps  44.4 results_total  15629
+  1.03 s | dtcp RUNNING  fps  10.0 results_total   3406 | yolopx RUNNING  fps  46.4 results_total  15682
+  1.54 s | dtcp RUNNING  fps  10.0 results_total   3406 | yolopx RUNNING  fps  46.4 results_total  15682
+  2.05 s | dtcp RUNNING  fps  10.6 results_total   3417 | yolopx RUNNING  fps  48.8 results_total  15734
+  2.56 s | dtcp RUNNING  fps  10.6 results_total   3417 | yolopx RUNNING  fps  48.8 results_total  15734
+  3.07 s | dtcp RUNNING  fps  10.4 results_total   3427 | yolopx RUNNING  fps  49.6 results_total  15783
+dtcp RUNNING with fps > 0 again after 1.03 s
+$ python -m tools.model_ctl list  (rc 0)
+NAME                         STATE    EN  CAMERAS           FPS  P50 ms  RESULTS  ERROR/REASON
+driverguard_yolopx           RUNNING  y   0,1,2,3,4,5      49.0    62.0    15800  
+driverguard_dtcp             RUNNING  y   0                10.1    44.2     3431  
+system1                      OFF      n   0,1,2,3,4,5       0.0       -        0  Not a TensorRT model: PyTorch only (system1_deploy.pth), about 200 ms per inference; known defects B1-B5 in the old runner. See docs/MODELS.md.
+sparsedrive_convnext_orin    OFF      n   0,1,2,3,4,5       0.0       -        0  Backbone engine only; output is wrong (cosine 0.39 against its ONNX); the head is PyTorch only (0.5-0.7 FPS); calibration is a placeholder. See docs/MODELS.md.

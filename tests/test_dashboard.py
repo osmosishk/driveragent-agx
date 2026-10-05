@@ -24,10 +24,16 @@ sys.path.insert(0, str(ROOT))
 from common.env import load_env  # noqa: E402
 from dashboard.auth import ip_allowed  # noqa: E402
 
-OUT = ROOT / "tests" / "out"
+# AGX_DASH_TEST_OUT / AGX_DASH_TEST_PORT_MIN / AGX_DASH_TEST_PORT_MAX override the defaults
+# (tests/out and 18700-18799), e.g. to run next to other test instances.
+OUT = Path(os.environ.get("AGX_DASH_TEST_OUT") or (ROOT / "tests" / "out"))
+PORT_MIN = int(os.environ.get("AGX_DASH_TEST_PORT_MIN") or 18700)
+PORT_MAX = int(os.environ.get("AGX_DASH_TEST_PORT_MAX") or 18799)
 
 
-def _free_port(start=18700, end=18799) -> int:
+def _free_port(start=None, end=None) -> int:
+    start = PORT_MIN if start is None else start
+    end = PORT_MAX if end is None else end
     for p in range(start, end + 1):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
@@ -35,7 +41,14 @@ def _free_port(start=18700, end=18799) -> int:
                 return p
             except OSError:
                 continue
-    raise RuntimeError("no free test port in 18700-18799")
+    raise RuntimeError(f"no free test port in {start}-{end}")
+
+
+class _Creds(tuple):
+    """(user, password) for httpx; repr() hides the password in test reports."""
+
+    def __repr__(self):
+        return f"('{self[0]}', '<hidden>')"
 
 
 @pytest.fixture(scope="module")
@@ -44,7 +57,7 @@ def creds():
     pw = env.get("AGX_DASH_PASSWORD", "")
     if not pw:
         pytest.skip("AGX_DASH_PASSWORD not set in .env")
-    return (env.get("AGX_DASH_USER") or "agx", pw)
+    return _Creds((env.get("AGX_DASH_USER") or "agx", pw))
 
 
 @pytest.fixture(scope="module")
@@ -55,7 +68,8 @@ def server(creds):
     proc = subprocess.Popen(
         [sys.executable, "-m", "dashboard.main", "--config", "config/dashboard.yaml",
          "--port", str(port), "--port-file", str(OUT / "dashboard_port"),
-         "--history-db", str(OUT / "history_test.sqlite")],
+         "--history-db", str(OUT / "history_test.sqlite"),
+         "--engines-cache", str(OUT / "engines_cache_test.json")],
         cwd=str(ROOT), stdout=log, stderr=subprocess.STDOUT,
         env=dict(os.environ, PYTHONPATH=str(ROOT), PYTHONUNBUFFERED="1"))
     base = None
@@ -197,7 +211,7 @@ def test_infer_client_contract():
     import zmq
     from dashboard.collectors.infer_status import InferStatusClient
 
-    port = _free_port(18750)
+    port = _free_port(PORT_MIN + (PORT_MAX - PORT_MIN) // 2)
     ep = f"tcp://127.0.0.1:{port}"
     ctx = zmq.Context.instance()
     pub = ctx.socket(zmq.PUB)

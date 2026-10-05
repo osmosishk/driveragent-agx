@@ -30,6 +30,15 @@ DEFAULTS: dict = {
     },
     "infer_status_endpoint": "tcp://127.0.0.1:5562",
     "infer_stale_s": 3,
+    "models_config": "config/models.yaml",
+    "sources_config": "config/sources.yaml",
+    "camera_status_jitter_s": 0.3,
+    "engines": {
+        "cache": "data/engines_cache.json",
+        "scan_dirs": None,          # None = tools.inspect_engines.DEFAULT_SCAN
+        "scan_interval_s": 1800,
+        "inspect_timeout_s": 120,
+    },
     "docker": True,
     "services": {
         "agx_units": ["agx-dashboard", "agx-infer", "agx-sim"],

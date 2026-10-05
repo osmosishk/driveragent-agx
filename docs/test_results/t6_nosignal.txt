@@ -1,0 +1,45 @@
+before stop: cam0:SIMULATED cam1:SIMULATED cam2:SIMULATED cam3:SIMULATED cam4:SIMULATED cam5:SIMULATED hold_s=1.3 hold_cap_s=1.5 stale_s=0.5 no_signal_s=1.0
+T0 = 1791238581.382 (before 'svc.sh stop sim'); stop command returned after 0.113 s, rc 0  
+state changes (time after T0):
++0.120 s cam0 None -> SIMULATED (last_frame_t 1791238580.8093624, frame_age_ms 4.3, server_t 1791238581.499, status_t 1791238580.8523)
++0.120 s cam1 None -> SIMULATED (last_frame_t 1791238580.845755, frame_age_ms 17.8, server_t 1791238581.499, status_t 1791238580.8523)
++0.120 s cam2 None -> SIMULATED (last_frame_t 1791238580.8091831, frame_age_ms 13.7, server_t 1791238581.499, status_t 1791238580.8523)
++0.120 s cam3 None -> SIMULATED (last_frame_t 1791238580.8096905, frame_age_ms 17.9, server_t 1791238581.499, status_t 1791238580.8523)
++0.120 s cam4 None -> SIMULATED (last_frame_t 1791238580.7922788, frame_age_ms 43.0, server_t 1791238581.499, status_t 1791238580.8523)
++0.120 s cam5 None -> SIMULATED (last_frame_t 1791238580.8006568, frame_age_ms 41.1, server_t 1791238581.499, status_t 1791238580.8523)
++1.322 s cam0 SIMULATED -> NO SIGNAL (last_frame_t 1791238581.3962097, frame_age_ms 402.5, server_t 1791238582.701, status_t 1791238581.822501)
++1.322 s cam1 SIMULATED -> NO SIGNAL (last_frame_t 1791238581.3979115, frame_age_ms 404.9, server_t 1791238582.701, status_t 1791238581.822501)
++1.322 s cam2 SIMULATED -> NO SIGNAL (last_frame_t 1791238581.4013839, frame_age_ms 405.6, server_t 1791238582.701, status_t 1791238581.822501)
++1.322 s cam3 SIMULATED -> NO SIGNAL (last_frame_t 1791238581.4040723, frame_age_ms 407.0, server_t 1791238582.701, status_t 1791238581.822501)
++1.322 s cam4 SIMULATED -> NO SIGNAL (last_frame_t 1791238581.3875108, frame_age_ms 427.4, server_t 1791238582.701, status_t 1791238581.822501)
++1.322 s cam5 SIMULATED -> NO SIGNAL (last_frame_t 1791238581.3898997, frame_age_ms 428.7, server_t 1791238582.701, status_t 1791238581.822501)
+a. NO SIGNAL table: cam | time after T0 (s) | last_frame_t after T0 (s) | NO SIGNAL after last_frame_t (s)
+   cam0 | 1.322 | +0.014 | 1.308
+   cam1 | 1.322 | +0.016 | 1.306
+   cam2 | 1.322 | +0.019 | 1.302
+   cam3 | 1.322 | +0.022 | 1.300
+   cam4 | 1.322 | +0.005 | 1.316
+   cam5 | 1.322 | +0.008 | 1.314
+max time after T0: 1.322 s, all six: True
+T1 = 1791238586.503 (before 'svc.sh start sim --sessions road'); start command returned after 0.033 s, rc 0  Running as unit: agx-sim.service
+state changes (time after T1):
++0.038 s cam0 None -> NO SIGNAL (last_frame_t 1791238581.3962097, frame_age_ms 4403.2, server_t 1791238586.539, status_t 1791238585.8228343)
++0.038 s cam1 None -> NO SIGNAL (last_frame_t 1791238581.3979115, frame_age_ms 4405.7, server_t 1791238586.539, status_t 1791238585.8228343)
++0.038 s cam2 None -> NO SIGNAL (last_frame_t 1791238581.4013839, frame_age_ms 4406.3, server_t 1791238586.539, status_t 1791238585.8228343)
++0.038 s cam3 None -> NO SIGNAL (last_frame_t 1791238581.4040723, frame_age_ms 4407.6, server_t 1791238586.539, status_t 1791238585.8228343)
++0.038 s cam4 None -> NO SIGNAL (last_frame_t 1791238581.3875108, frame_age_ms 4427.9, server_t 1791238586.539, status_t 1791238585.8228343)
++0.038 s cam5 None -> NO SIGNAL (last_frame_t 1791238581.3898997, frame_age_ms 4429.2, server_t 1791238586.539, status_t 1791238585.8228343)
++1.439 s cam0 NO SIGNAL -> SIMULATED (last_frame_t 1791238587.8128643, frame_age_ms 12.7, server_t 1791238587.941, status_t 1791238587.849104)
++1.439 s cam1 NO SIGNAL -> SIMULATED (last_frame_t 1791238587.7977555, frame_age_ms 31.3, server_t 1791238587.941, status_t 1791238587.849104)
++1.439 s cam2 NO SIGNAL -> SIMULATED (last_frame_t 1791238587.8068862, frame_age_ms 25.7, server_t 1791238587.941, status_t 1791238587.849104)
++1.439 s cam3 NO SIGNAL -> SIMULATED (last_frame_t 1791238587.820622, frame_age_ms 16.3, server_t 1791238587.941, status_t 1791238587.849104)
++1.439 s cam4 NO SIGNAL -> SIMULATED (last_frame_t 1791238587.824889, frame_age_ms 15.3, server_t 1791238587.941, status_t 1791238587.849104)
++1.439 s cam5 NO SIGNAL -> SIMULATED (last_frame_t 1791238587.8223732, frame_age_ms 23.3, server_t 1791238587.941, status_t 1791238587.849104)
+b. SIMULATED again table: cam | time after T1 (s) | last_frame_t after T1 (s)
+   cam0 | 1.439 | +1.310
+   cam1 | 1.439 | +1.295
+   cam2 | 1.439 | +1.304
+   cam3 | 1.439 | +1.318
+   cam4 | 1.439 | +1.322
+   cam5 | 1.439 | +1.319
+max time after T1: 1.439 s, all six: True

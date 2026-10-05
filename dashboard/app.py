@@ -15,12 +15,14 @@ from fastapi.staticfiles import StaticFiles
 
 from common.env import get, load_env
 from dashboard.auth import GuardMiddleware
+from dashboard.collectors.engines import EngineScanner
 from dashboard.collectors.health import HealthCollector, worst
 from dashboard.collectors.infer_status import InferStatusClient
 from dashboard.collectors.link import LinkMonitor
 from dashboard.collectors.services import ServicesCollector
 from dashboard.config import resolve_path
 from dashboard.history import History
+from dashboard.infer_views import InferViews
 from dashboard.mqtt_pub import start_mqtt
 
 log = logging.getLogger("dashboard.app")
@@ -30,6 +32,8 @@ HEALTH_SCHEMA = "agx-health/1"
 METRIC_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 INFER_TO_LEVEL = {"RUNNING": "ok", "STARTING": "warn", "DEGRADED": "warn", "ERROR": "crit"}
 HEALTH_STALE_S = 3.0  # a health sample older than this is not "current"
+STREAM_PERIOD_S = 1.0  # SSE: one event each second, and one event at once for each new agx-infer status
+STREAM_POLL_S = 0.05   # SSE: how often the stream looks for a new agx-infer status
 CSP = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
        "script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 
@@ -68,6 +72,18 @@ class Hub:
         h = cfg["history"]
         self.history = History(resolve_path(h["db"]), h["max_mb"], h["memory_s"], h["db_step_s"],
                                h["db_keep_s"], h["cleanup_interval_s"])
+        ec = cfg.get("engines") or {}
+        scan_dirs = ec.get("scan_dirs")
+        if scan_dirs is None:
+            from tools.inspect_engines import DEFAULT_SCAN
+            scan_dirs = list(DEFAULT_SCAN)
+        self.views = InferViews(self.infer, None, resolve_path(cfg.get("models_config")),
+                                resolve_path(cfg.get("sources_config")), cfg.get("infer_stale_s", 3),
+                                cfg.get("camera_status_jitter_s", 0.3))
+        self.engines = EngineScanner(resolve_path(ec.get("cache") or "data/engines_cache.json"),
+                                     [str(resolve_path(d)) for d in scan_dirs], self.views.config_engines,
+                                     ec.get("scan_interval_s", 1800), ec.get("inspect_timeout_s", 120))
+        self.views.scanner = self.engines
         self.health.add_listener(self._on_sample)
         self.mqtt = None
 
@@ -79,7 +95,10 @@ class Hub:
             "power_total_w": s["power"]["total_w"],
             "cpu_load_avg_pct": s["cpu"]["load_pct_avg"],
         }
-        m.update(self.infer.metrics())
+        try:
+            m.update(self.infer.metrics())
+        except Exception:  # a bad agx-infer status must not stop the health history
+            log.exception("infer metrics failed")
         self.history.add(s["t"], m)
 
     def start(self, env: dict):
@@ -88,10 +107,11 @@ class Hub:
         self.health.start()
         self.link.start()
         self.services.start()
+        self.engines.start()
         self.mqtt = start_mqtt(env, self.health_doc, self.cfg.get("mqtt_interval_s", 5))
 
     def stop(self):
-        for c in (self.mqtt, self.health, self.link, self.services, self.infer, self.history):
+        for c in (self.mqtt, self.health, self.link, self.services, self.engines, self.infer, self.history):
             if c is not None:
                 try:
                     c.stop()
@@ -100,8 +120,17 @@ class Hub:
 
     def link_doc(self) -> dict:
         d = self.link.summary()
-        d.update(self.infer.link_part())
+        d.update(self.infer.link_part(hold_s=self.views.hold_s()))
         return d
+
+    def infer_doc(self, inf: dict, now: float) -> dict | None:
+        if inf["infer"] is None:
+            return None
+        try:
+            return dict(inf["infer"], **self.views.health_infer_extra(now))
+        except Exception as e:  # keep /api/health and the SSE stream alive
+            log.exception("infer summary failed")
+            return dict(inf["infer"], extra_error=f"infer summary failed: {e}")
 
     def health_doc(self) -> dict:
         s = self.health.latest() or self.health.sample()
@@ -160,7 +189,7 @@ class Hub:
             "disk": s["disk"],
             "net": s["net"],
             "link": self.link_doc(),
-            "infer": inf["infer"],
+            "infer": self.infer_doc(inf, now),
             "infer_state": inf["infer_state"],
             "infer_reason": inf["infer_reason"],
             "simulated": bool(inf["infer"] and inf["infer"]["simulated"]),
@@ -227,11 +256,11 @@ def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True
 
     @app.get("/api/models")
     def api_models():
-        return nocache(hub.infer.part("models"))
+        return nocache(hub.views.models_doc())
 
     @app.get("/api/cameras")
     def api_cameras():
-        return nocache(hub.infer.part("cameras"))
+        return nocache(hub.views.cameras_doc())
 
     @app.get("/api/cameras/{cam}/snapshot.jpg")
     def api_snapshot(cam: int):
@@ -244,13 +273,14 @@ def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True
         if snap is None:
             return nocache({"error": f"no snapshot for camera {cam}",
                             "reason": "agx-infer sent no snapshot for this camera"}, 404)
-        data, t = snap
-        if time.time() - t > hub.infer.stale_s:
+        data, _t = snap
+        sage = hub.infer.snapshot_age_s(cam) or 0.0
+        if sage > hub.infer.stale_s:
             return nocache({"error": f"no snapshot for camera {cam}",
-                            "reason": f"last snapshot is {time.time() - t:.0f} s old "
+                            "reason": f"last snapshot is {sage:.0f} s old "
                                       f"(limit {hub.infer.stale_s:.0f} s)"}, 404)
         return Response(data, media_type="image/jpeg",
-                        headers={"cache-control": "no-store", "x-snapshot-age-s": f"{time.time() - t:.1f}"})
+                        headers={"cache-control": "no-store", "x-snapshot-age-s": f"{sage:.1f}"})
 
     @app.get("/api/history")
     def api_history(range: str = Query("1h"), metrics: str | None = Query(None)):
@@ -268,21 +298,28 @@ def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True
 
     @app.get("/api/stream")
     async def api_stream(request: Request):
+        # One event each second, and one event AT ONCE when a new agx-infer status arrives: the page
+        # then knows each new last_frame_t without delay, so its 250 ms tile check does not show a
+        # false STALE / NO SIGNAL for a status that the server has but the page does not have yet.
         async def gen():
             yield "retry: 3000\n\n"
             n = 0
             while True:
                 if await request.is_disconnected():
                     break
+                seq = hub.infer.seq
+                t_sent = time.monotonic()
                 try:
                     doc = await asyncio.to_thread(
-                        lambda: {"health": hub.health_doc(), "services": hub.services.summary()})
+                        lambda: {"health": hub.health_doc(), "services": hub.services.summary(),
+                                 "cameras": hub.views.cameras_doc(), "server_t": time.time()})
                     n += 1
                     yield f"id: {n}\ndata: {json.dumps(doc, separators=(',', ':'))}\n\n"
                 except Exception:  # keep the stream alive; details only in the server log
                     log.exception("stream build failed")
                     yield 'event: fail\ndata: {"error":"stream build failed"}\n\n'
-                await asyncio.sleep(1.0 - (time.time() % 1.0) + 0.05)
+                while time.monotonic() - t_sent < STREAM_PERIOD_S and hub.infer.seq == seq:
+                    await asyncio.sleep(STREAM_POLL_S)
 
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"cache-control": "no-store", "x-accel-buffering": "no"})

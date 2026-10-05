@@ -33,7 +33,27 @@ link:
   clock_interval_s: 30
 
 infer_status_endpoint: tcp://127.0.0.1:5562
-infer_stale_s: 3
+infer_stale_s: 3           # no agx-infer status for this time -> NO DATA (models and cameras)
+
+# Models part: rows come from models_config; camera STALE / NO SIGNAL limits (stale_s, no_signal_s)
+# and camera roles come from sources_config when the agx-infer status does not give them.
+models_config: config/models.yaml
+sources_config: config/sources.yaml
+# Camera tiles: frames that came after the last status message are not known. A camera with no
+# new frame shows NO SIGNAL when the status says so (age >= no_signal_s), or when the newest known
+# frame is older than max(no_signal_s, min(status interval + this jitter, no_signal_s + 0.5)).
+# 1 Hz status: 1.0 .. 1.3 s on the server, + up to 0.25 s on the page. Never more than 1.5 s (+ 0.25 s).
+camera_status_jitter_s: 0.3
+
+# Engine facts (size, date, sha256[:16], TensorRT load + warnings, I/O) from tools/inspect_engines.py.
+# A background thread scans at start and every scan_interval_s. Each engine is read in its own
+# subprocess; only new or changed files (realpath + size + mtime) are read again. A FAILED inspection
+# (for example a timeout) is done again at the next periodic scan.
+engines:
+  cache: data/engines_cache.json
+  scan_dirs: [/home/tonyho/model]   # also the engines of models_config are always read
+  scan_interval_s: 1800
+  inspect_timeout_s: 120
 
 docker: true
 

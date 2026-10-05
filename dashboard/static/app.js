@@ -142,9 +142,15 @@
       : NA + " [method: " + (l.clock_method || "none") + "]");
     setText("clock-note", l.clock_note || "");
     const inaReason = l.infer_na || NA;
+    $("link-sim").hidden = !l.simulated;
     setText("frame-age", num(l.time_since_last_frame_ms) ? l.time_since_last_frame_ms.toFixed(0) + " ms" : inaReason);
+    $("frame-age").title = l.time_since_last_frame_basis || "";
     setText("res-rate", num(l.results_rate_hz) ? l.results_rate_hz.toFixed(1) + " Hz" : inaReason);
     setText("subs", num(l.subscribers) ? String(l.subscribers) : inaReason);
+    setText("res-total", num(l.results_total) ? String(l.results_total) : inaReason);
+    setText("res-last", num(l.last_result_t)
+      ? new Date(l.last_result_t * 1000).toLocaleTimeString() + " (" + Math.max(0, h.time - l.last_result_t).toFixed(1) + " s ago)"
+      : (l.infer_na ? inaReason : "no result yet"));
 
     // infer
     const inf = h.infer;
@@ -194,6 +200,7 @@
       try {
         const d = JSON.parse(ev.data);
         if (d.health) renderHealth(d.health);
+        if (d.cameras) setCameras(d.cameras);
         markStale(!!(d.health && d.health.stale));
         setText("conn", "Connected", "conn on");
       } catch (e) {
@@ -223,6 +230,168 @@
     // connection stays open: open a new stream
     if (!reconnectTimer && now - Math.max(lastMsg, connT0) > 10000) reconnect(0);
   }, 1000);
+
+
+  /* ---------------- cameras (six tiles) ---------------- */
+  // serverOffset = server clock - page clock (s). Tiles are evaluated every 250 ms with the page
+  // clock + serverOffset, so a tile changes to NO SIGNAL also between two SSE events. The server
+  // sends an SSE event at once for each new agx-infer status. No status for 3 s -> NO DATA.
+  const T = window.AGXTiles;
+  let camDoc = null, serverOffset = 0;
+  const tiles = [];
+  function buildTiles() {
+    const box = $("cam-tiles");
+    for (let n = 0; n < 6; n++) {
+      const t = {
+        state: el("span", { class: "badge state", text: "NO DATA" }),
+        sim: el("span", { class: "badge sim", text: "SIMULATED", hidden: "" }),
+        role: el("span", { class: "muted" }),
+        img: el("img", { alt: "Camera " + n + " picture", width: "320", height: "180" }),
+        over: el("span", { class: "over", text: "NO DATA" }),
+        none: el("span", { class: "nopic", text: "No picture" }),
+        fps: el("b"), rate: el("b"), lost: el("b"), dec: el("b"), age: el("b"),
+        reason: el("div", { class: "note" }),
+        url: null, snapT: 0, busy: false,
+      };
+      const kv = (k, v) => el("div", { class: "row" }, el("span", { class: "k" }, k), v);
+      t.root = el("div", { class: "tile st-nodata", id: "cam-tile-" + n },
+        el("div", { class: "tile-h" }, el("b", null, "Camera " + n), " ", t.role, el("span", { class: "sp" }), t.sim, " ", t.state),
+        el("div", { class: "snap" }, t.none, t.img, t.over),
+        kv("Frames per second", t.fps), kv("Bit rate", t.rate), kv("Lost packets (frames)", t.lost),
+        kv("Decode time p50", t.dec), kv("Frame age", t.age), t.reason);
+      t.img.hidden = true;
+      tiles.push(t);
+      box.append(t.root);
+    }
+  }
+  function setCameras(doc) {
+    camDoc = doc;
+    if (num(doc.server_t)) serverOffset = doc.server_t - Date.now() / 1000;
+    const lim = $("cams-limits");
+    if (num(doc.stale_s) && num(doc.no_signal_s)) {
+      const hold = Math.min(num(doc.hold_s) ? doc.hold_s : 0, num(doc.hold_cap_s) ? doc.hold_cap_s : doc.no_signal_s + 0.5);
+      const late = Math.max(doc.no_signal_s, hold) + 0.25;
+      lim.textContent = `STALE: agx-infer gives a frame age of ${doc.stale_s} s or more. NO SIGNAL: no new frame for ${doc.no_signal_s} s. ` +
+        `NO DATA: no status from agx-infer for ${fmt(doc.no_data_s, 0)} s. Limits from ${doc.limits_source || NA}. ` +
+        `agx-infer sends its status each ${fmt(doc.status_period_s, 1, "s")}, thus this page shows NO SIGNAL ${fmt(doc.no_signal_s, 1, "s")} to ${fmt(late, 2, "s")} after the last frame.`;
+    }
+    setText("cams-note", doc.available ? "" : (doc.reason || ""));
+    $("cams-sim").hidden = !doc.simulated;
+    evalTiles();
+  }
+  function evalTiles() {
+    if (!tiles.length) return;
+    const nowS = Date.now() / 1000 + serverOffset;
+    const cams = (camDoc && camDoc.cameras) || [];
+    for (let n = 0; n < 6; n++) {
+      const t = tiles[n], c = cams[n] || { cam: n };
+      const r = T.tileState(c, nowS, camDoc);
+      t.root.className = "tile " + r.cls;
+      t.state.textContent = r.state;
+      t.over.textContent = r.state;
+      t.sim.hidden = r.label !== "SIMULATED";
+      t.role.textContent = c.role || "";
+      const nd = r.state === "NO DATA";
+      const nf = nd || r.state === "NO SIGNAL";  // no frame now: the rates of the last status are not current
+      t.fps.textContent = nf ? NA : fmt(c.fps, 1);
+      t.rate.textContent = nf ? NA : fmt(c.bitrate_kbps, 0, "kbit/s");
+      t.lost.textContent = nd ? NA : (num(c.lost_packets) ? c.lost_packets : NA) + " (" + (num(c.lost_frames) ? c.lost_frames : NA) + ")";
+      t.dec.textContent = nd ? NA : fmt(c.decode_p50_ms, 1, "ms");
+      // OK / SIMULATED: the age that agx-infer measured; else the time since the newest known frame
+      t.age.textContent = (r.state === "OK" || r.state === "SIMULATED") && num(c.frame_age_ms) ? c.frame_age_ms.toFixed(0) + " ms"
+        : num(r.age_s) ? (r.age_s * 1000).toFixed(0) + " ms" : NA;
+      t.reason.textContent = nd ? ((camDoc && camDoc.reason) || "No status from agx-infer") : (r.state === "NO SIGNAL" || r.state === "STALE" ? (num(r.age_s) ? "Last frame " + r.age_s.toFixed(1) + " s ago." : "No frame received.") : "");
+    }
+  }
+  async function loadSnap(n) {
+    const t = tiles[n];
+    const c = camDoc && camDoc.cameras && camDoc.cameras[n];
+    if (t.busy || !c || !num(c.snapshot_t) || c.snapshot_t <= t.snapT) return;
+    t.busy = true;
+    // a request that does not finish must not stop the pictures of this tile: stop it after 3 s
+    const ac = typeof AbortController === "function" ? new AbortController() : null;
+    const tm = ac ? setTimeout(() => ac.abort(), 3000) : null;
+    try {
+      const r = await fetch("/api/cameras/" + n + "/snapshot.jpg?t=" + Date.now(),
+        { cache: "no-store", credentials: "same-origin", signal: ac ? ac.signal : undefined });
+      if (!r.ok) return;  // keep the last picture (dimmed by the tile state)
+      const u = URL.createObjectURL(await r.blob());
+      if (t.url) URL.revokeObjectURL(t.url);
+      t.url = u; t.img.src = u; t.img.hidden = false; t.none.hidden = true;
+      t.snapT = c.snapshot_t;
+    } catch (e) { /* keep the last picture */ } finally { if (tm) clearTimeout(tm); t.busy = false; }
+  }
+
+  /* ---------------- models ---------------- */
+  function fmtSize(b) {
+    if (!num(b)) return NA;
+    if (b >= 1048576) return (b / 1048576).toFixed(1) + " MiB";
+    return (b / 1024).toFixed(0) + " KiB";
+  }
+  const shp = (t) => (t.name || "?") + " " + (Array.isArray(t.shape) ? "[" + t.shape.join("x") + "]" : "") + (t.dtype ? " " + t.dtype : "");
+  function ioCell(ins, outs) {
+    if (!(ins || []).length && !(outs || []).length) return el("td", { class: "muted" }, NA);
+    return el("td", { class: "io" },
+      el("div", null, el("span", { class: "k" }, "In: "), (ins || []).map(shp).join("; ") || NA),
+      el("div", null, el("span", { class: "k" }, "Out: "), (outs || []).map(shp).join("; ") || NA));
+  }
+  function trtCell(m) {
+    const w = m.load_warnings || [];
+    const txt = m.trt_match === true ? "yes" : m.trt_match === false ? "no" : NA;
+    const cls = m.trt_match === true ? "lv-ok" : m.trt_match === false ? "lv-crit" : "muted";
+    return el("td", { title: w.join("\n") || null },
+      el("span", { class: cls }, txt), m.trt_version ? el("span", { class: "muted" }, " TensorRT " + m.trt_version) : null,
+      m.engine_load === "FAILED" ? el("div", { class: "lv-crit small" }, "Load FAILED" + (m.engine_error ? ": " + m.engine_error : "")) : null,
+      w.length ? el("div", { class: "lv-warn small" }, w.length + " load message(s): " + w[0].slice(0, 120)) : null);
+  }
+  const STATE_LV = { RUNNING: "lv-ok", LOADED: "lv-warn", OFF: "lv-na", FAILED: "lv-crit" };
+  const p3 = (o) => o ? [o.p50, o.p95, o.p99].map((v) => fmt(v, 1)).join(" / ") : NA;
+  async function loadModels() {
+    try {
+      const d = await getJSON("/api/models");
+      setText("models-reason", d.available ? "" : "agx-infer gives no status: " + (d.reason || NA) + ". Live values show n/a.");
+      $("models-sim").hidden = !d.simulated;
+      setText("models-note", d.config_error ? d.config_error : "");
+      const rows = [];
+      for (const m of d.models || []) {
+        const lat = m.lat_ms || {};
+        const st = m.state || NA;
+        rows.push(el("tr", { class: "mrow" },
+          el("td", null, el("b", null, m.name || NA), m.in_config ? null : el("div", { class: "lv-warn small" }, "Not in config/models.yaml"),
+            m.group ? el("div", { class: "muted small" }, "group " + m.group) : null),
+          el("td", { title: m.engine_realpath || null }, m.engine_file || el("span", { class: "muted" }, "no engine file"),
+            m.engine && !m.engine_exists ? el("div", { class: "lv-crit small" }, "File not found") : null),
+          el("td", { class: "n" }, fmtSize(m.size_bytes)),
+          el("td", null, m.mtime || NA),
+          trtCell(m),
+          ioCell(m.inputs, m.outputs),
+          el("td", null, el("span", { class: "badge " + (STATE_LV[st] || "lv-na") }, st), " ", simBadge(m.simulated),
+            m.error ? el("div", { class: "lv-crit small" }, m.error) : null,
+            m.reason ? el("div", { class: "muted small" }, m.reason) : null),
+          el("td", null, (m.cameras || []).join(", ") || "-"),
+          el("td", { class: "n" }, fmt(m.fps, 1)),
+          el("td", { class: "n", title: "ms. pre " + p3(lat.pre) + "\ninfer " + p3(lat.infer) + "\npost " + p3(lat.post) }, p3(lat.total) + " ms"),
+          el("td", { class: "n", title: m.gpu_mem_note || "estimate" }, num(m.gpu_mem_mb) ? m.gpu_mem_mb.toFixed(0) + " MB (estimate)" : NA + " (estimate)")));
+        rows.push(el("tr", { class: "detail" }, el("td", { colspan: "11" },
+          "Latency per stage p50 / p95 / p99 (ms): pre " + p3(lat.pre) + ", infer " + p3(lat.infer) + ", post " + p3(lat.post) +
+          ". sha256 (16): " + (m.sha256_16 || NA) + ". Path: " + (m.engine_realpath || NA) +
+          (num(m.results_total) ? ". Results: " + m.results_total : "") + ".")));
+      }
+      fill($("models-tbl").tBodies[0], rows);
+      const ex = d.engines_not_in_config || [];
+      setText("extra-sum", "(" + ex.length + ")");
+      fill($("extra-tbl").tBodies[0], ex.length ? ex.map((e) => el("tr", null,
+        el("td", { title: e.engine_realpath || null }, e.engine_realpath || e.engine || NA),
+        el("td", { class: "n" }, fmtSize(e.size_bytes)), el("td", null, e.mtime || NA),
+        el("td", null, e.sha256_16 || NA), trtCell(e), ioCell(e.inputs, e.outputs)))
+        : [el("tr", null, el("td", { colspan: "6", class: "muted" }, "No other engine file found."))]);
+      const sc = d.engine_scan || {};
+      setText("scan-note", "Engine scan: " + (num(sc.t) ? new Date(sc.t * 1000).toLocaleString() : "not done yet") +
+        (sc.running ? " (scan runs now)" : "") + ", " + (sc.count || 0) + " engine files in " + (sc.dirs || []).join(", ") +
+        ". Scan interval " + fmt((sc.interval_s || 0) / 60, 0, "min") + "." + (sc.error ? " Error: " + sc.error : "") +
+        " " + (d.gpu_mem_note || ""));
+    } catch (e) { setText("models-reason", "Cannot read models: " + e.message); }
+  }
 
   /* ---------------- services ---------------- */
   function memTxt(m) { return num(m) ? m.toFixed(0) + " MB" : "-"; }
@@ -255,6 +424,13 @@
         el("td", { class: x.active_state === "active" ? "lv-ok" : x.active_state === "failed" ? "lv-crit" : "muted" }, x.state),
         el("td", null, x.unit_file_state || "-"), el("td", { class: "n" }, x.main_pid || "-"),
         el("td", { class: "n" }, memTxt(x.memory_mb)))));
+      const op = d.old_processes || {};
+      const ps = op.processes || [];
+      setText("oldp-sum", op.error ? "(" + op.error + ")" : ps.length ? "(" + ps.length + " running)" : "(none running)");
+      if (op.note) setText("oldp-note", op.note);
+      fill($("oldp-tbl").tBodies[0], ps.length ? ps.map((x) => el("tr", null,
+        el("td", { class: "n" }, x.pid), el("td", null, x.user || NA), el("td", null, x.match || ""),
+        el("td", { class: "cmd" }, x.cmdline || ""))) : [el("tr", null, el("td", { colspan: "4", class: "muted" }, "none running"))]);
       setText("svc-err", (u.errors || []).join("; "));
     } catch (e) { setText("svc-err", "Cannot read services: " + e.message); }
   }
@@ -355,7 +531,11 @@
   }
 
   /* ---------------- start ---------------- */
+  buildTiles(); evalTiles();
+  setInterval(evalTiles, 250);
+  setInterval(() => { for (let n = 0; n < tiles.length; n++) loadSnap(n); }, 1000);
   connect();
+  loadModels(); setInterval(loadModels, 2000);
   loadServices(); setInterval(loadServices, 5000);
   if (typeof uPlot === "function") scheduleHistory();
   else setText("hist-src", "Chart library not loaded.");

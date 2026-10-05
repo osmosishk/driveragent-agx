@@ -11,6 +11,8 @@ import subprocess
 import threading
 import time
 
+from dashboard.collectors.old_procs import NOTE as OLD_NOTE, find_old_processes
+
 log = logging.getLogger("dashboard.services")
 
 AGX_PROPS = "Id,LoadState,ActiveState,SubState,MainPID,ExecMainStartTimestamp,NRestarts,MemoryCurrent"
@@ -85,6 +87,7 @@ class ServicesCollector:
                               "error": None if self.docker_enabled else "docker disabled in config"}
         self._inspect: dict[str, dict] = {}
         self._inspect_t = 0.0
+        self._old_procs: dict = {"t": None, "processes": [], "error": "not measured yet", "note": OLD_NOTE}
         self._stop = threading.Event()
 
     def start(self):
@@ -101,6 +104,14 @@ class ServicesCollector:
                 self._refresh_units()
             except Exception:
                 log.exception("unit refresh failed")
+            try:
+                op = find_old_processes()
+            except Exception as e:  # noqa: BLE001
+                log.exception("old process scan failed")
+                op = {"t": time.time(), "processes": [], "error": f"old process scan failed: {e}",
+                      "note": OLD_NOTE}
+            with self._lock:
+                self._old_procs = op
             if self.docker_enabled and time.monotonic() - last_docker >= self.docker_refresh:
                 last_docker = time.monotonic()
                 try:
@@ -182,7 +193,7 @@ class ServicesCollector:
     # ---- read
     def snapshot(self) -> dict:
         with self._lock:
-            return {"units": self._units, "docker": self._docker}
+            return {"units": self._units, "docker": self._docker, "old_processes": self._old_procs}
 
     def summary(self) -> dict:
         s = self.snapshot()
@@ -201,6 +212,7 @@ class ServicesCollector:
             "docker": {"available": d.get("available"), "total": len(d.get("containers", [])),
                        "running": sum(1 for c in d.get("containers", []) if c.get("state") == "running"),
                        "error": d.get("error")},
+            "old_processes": len(s["old_processes"].get("processes") or []),
         }
 
     def logs(self, unit: str, lines: int = 100) -> dict:
