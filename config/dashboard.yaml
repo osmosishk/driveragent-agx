@@ -18,7 +18,9 @@ allow_cidrs:
   - 10.42.0.0/30           # future Link C (direct cable to the RK3588)
   - 100.64.0.0/10          # tailscale tailnet: the RK3588 and the operator devices
 
-rk_ip: 100.64.0.180
+# DA01 LAN source address toward 10.0.0.130 (FrameLink and results use the LAN).
+# tailscale 100.64.0.180 was the night-run path.
+rk_ip: "10.0.0.208"
 
 link:
   ping_interval_s: 2
