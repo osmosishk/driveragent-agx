@@ -8,8 +8,8 @@ Agent: Claude (coordinator) with sub-agents. Language: ASD-STE100 Simplified Tec
   replays old recordings on this AGX. Every result carries the SIMULATED label (envelope flag bit 0,
   field `simulated`, dashboard label).
 - The node runs now: `agx-infer`, `agx-dashboard` and the simulator `agx-sim` are transient systemd
-  USER units. The night loggers `agx-log-night-sysmon` and `agx-log-night-status` are also transient
-  user units; they write until about 05:20. These units do not start at boot. They stop if the last
+  USER units. The night loggers `agx-log-night-sysmon` and `agx-log-night-status` ran until 05:20 and
+  have stopped. These units do not start at boot. They stop if the last
   session of `tonyho` ends (Linger=no).
 - The night agent itself deleted, moved or overwrote no file that existed before the run. Tools replaced
   their own cache files outside the project automatically (6.2), for example GStreamer replaced
@@ -30,7 +30,7 @@ Agent: Claude (coordinator) with sub-agents. Language: ASD-STE100 Simplified Tec
 | T5 Results for the RK3588 | DONE | `docs/test_results/T5_RESULT.md`: `python -m tools.rk_result_client --seconds 120` -> 6298 results, six cameras, 0 rejects, 0 duplicates, exit 0. |
 | T6 Dashboard v2 (B, C, rest of D) | DONE | `docs/test_results/T6_RESULT.md`: sim stopped -> six tiles NO SIGNAL 1.30-1.32 s after the last frame; restart -> SIMULATED after 1.44 s; one model stopped -> the other continued. |
 | T7 Real RK3588 | PARTIAL | No test with real cameras: the RK3588 does not send FrameLink yet (B3). `docs/RK_TASKS.md` (K1-K9) and `tools/framelink_ref/` (C++ sender reference, golden vectors 3/3 ok) are ready. Unit files are in `systemd/` but NOT installed (no sudo, B2). Services run as transient user units, not enabled at boot. `docs/test_results/T7_RESULT.md`. |
-| T8 Soak and report | DONE (30-min soak) | Section 4.4, `docs/test_results/t8/T8_SOAK_30MIN.md`. Extra: night run 00:08-05:20, section 4.5. |
+| T8 Soak and report | DONE | 30-min soak: section 4.4, `docs/test_results/t8/T8_SOAK_30MIN.md`. Night run 00:08-05:20 (311 min): section 4.5, `docs/test_results/t8/T8_NIGHT_RUN.md`. No leak, no error, no restart. |
 
 Full test suite after the review fixes: `130 passed in 112.98s` (`docs/test_results/full_suite_after_fixes.txt`).
 One test is flaky under heavy load (section 7).
@@ -147,12 +147,36 @@ DTCP cam0 52.2 / 120.8.
 Errors: node errors none; journal warnings and errors of agx-infer, agx-sim, agx-dashboard in the window: 0;
 service restarts: 0. System RAM slope over the 30 min: -46 MB/h (no leak visible at system level).
 
-### 4.5 Night run (T8, from 00:08 to 05:20)
+### 4.5 Night run (T8, 2026-10-06 00:08:47 to 05:20:03, 311 min)
 
-The night loggers (`agx-log-night-sysmon`, 10 s samples; `agx-log-night-status`, every 10th status)
-write `docs/test_results/t8/night_sysmon.jsonl` and `night_status.jsonl` until 05:20. The agent fills
-this section at the end of the night. If it still has no numbers, run:
-`PYTHONPATH=. .venv/bin/python -m tools.soak_report --sysmon docs/test_results/t8/night_sysmon.jsonl --status docs/test_results/t8/night_status.jsonl`
+Same full chain as 4.4, SIMULATED input (road recordings). Loggers: `agx-log-night-sysmon` (10 s samples,
+1867) and `agx-log-night-status` (every 10th status, 1868). Report: `docs/test_results/t8/T8_NIGHT_RUN.md`.
+Final state at 05:20: `docs/test_results/t8/FINAL_STATE.md`. Journal copy (volatile journal):
+`docs/test_results/t8/night_journal.log`.
+
+| Item | Result |
+|---|---|
+| Cameras cam0-cam5 | 29.9-30.1 fps mean; 0 lost frames, 0 lost packets, 0 ring overruns; SIMULATED in 1868 of 1868 samples |
+| driverguard_yolopx | 43.2 results/s mean (36.0 min, 51.0 max); total latency p50 / p95 / p99 62.6 / 96.6 / 118.8 ms; 808993 results; RUNNING 1868/1868 |
+| driverguard_dtcp | 10.0 results/s; total latency p50 / p95 / p99 39.2 / 75.4 / 102.7 ms; 186700 results; RUNNING 1868/1868 |
+| Node | RUNNING in all samples; node errors: none |
+| Services | agx-infer, agx-dashboard (started 23:58:36) and agx-sim (00:08:01): active, NRestarts 0 |
+| Journal | 0 warnings or errors of agx-infer, agx-sim, agx-dashboard since 23:58:30 |
+| CPU / GPU | CPU total 30.4 % mean (36.5 % max); GPU load 63.0 % mean |
+| Temperature | cpu 64.7 C mean, 67.6 C max; gpu 60.1 C mean, 62.2 C max |
+| Power (sum of rails) | 26.85 W mean, 36.43 W max |
+| RAM used (MB, 10^6 B) | start 9963, end 9834, slope -21.1 MB/h |
+
+Memory of the processes (a leak shows as a steady positive slope):
+
+| Process | RSS start MB | RSS end MB | slope (least squares) |
+|---|---|---|---|
+| agx-infer (infer.main) | 1634.9 | 1636.8 | +0.4 MB/h |
+| agx-sim (tools.rk_sim) | 77.0 | 84.9 | +0.7 MB/h |
+| agx-dashboard (dashboard.main) | 57.7 | 69.2 | +1.3 MB/h |
+
+Result: no memory leak is visible in 5.2 hours. The dashboard grew mostly in the first hour (in-memory
+1 h history); the hourly checks in `docs/NIGHT_LOG.md` show 64-66 MiB from 00:46 to 04:45.
 
 ## 5. Old services or containers stopped
 
@@ -189,8 +213,9 @@ Nothing needs to be started again.
   pip packages, uPlot (cdn.jsdelivr.net).
 - R1 (automatic tool side effects outside the project): pip download cache `~/.cache/pip`; GStreamer
   rewrote its own plugin cache `~/.cache/gstreamer-1.0/registry.aarch64.bin`; pytest wrote bytecode
-  into `~/.local/lib/python3.10/site-packages/anyio/__pycache__` and `/tmp/pytest-of-tonyho` (both are
-  removed at the end of the run: see the end of this report); systemd wrote transient unit files under
+  into five existing `anyio` cache folders in `~/.local/lib/python3.10/site-packages/anyio/` (35 new
+  `*-pytest-9.1.1.pyc` files) and made `/tmp/pytest-of-tonyho`; at 05:21 the night agent deleted exactly
+  these 35 files and that folder (the older files stay; NIGHT_LOG); systemd wrote transient unit files under
   `/run/user/1000/systemd/transient/` (tmpfs, removed at stop); git read commands touched the directory
   time of `~/driveragent/.git` (no file changed).
 
