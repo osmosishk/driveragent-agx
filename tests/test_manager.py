@@ -21,8 +21,6 @@ import pytest
 from infer.ingest.frame_store import Frame, FrameStore
 from infer.models.manager import ModelManager
 
-SCRATCH = "/tmp/claude-1000/-home-tonyho/b9a1f96f-4259-44f3-959f-d0095d7e5c07/scratchpad"
-BAD_ENGINE = os.path.join(SCRATCH, "bad.engine")
 DTCP_ENGINE = "/home/tonyho/model/jetson_bundle/engines/dtcp_v1_fp16.engine"
 DTCP_ONNX = "/home/tonyho/model/jetson_bundle/onnx/dtcp_v1.onnx"
 FORBIDDEN = {"throttle", "steer", "brake", "mu", "sigma", "pred_speed", "pred_speed_mps"}
@@ -105,15 +103,21 @@ def no_dupes(results):
         last[k] = r["frame_seq"]
 
 
+@pytest.fixture(scope="module")
+def scratch(tmp_path_factory):
+    """Folder for test files: under the pytest base temp (--basetemp), not a fixed path in /tmp."""
+    return str(tmp_path_factory.mktemp("manager"))
+
+
 @pytest.fixture(scope="module", autouse=True)
-def bad_engine():
-    os.makedirs(SCRATCH, exist_ok=True)
-    with open(BAD_ENGINE, "wb") as f:
+def bad_engine(scratch):
+    path = os.path.join(scratch, "bad.engine")
+    with open(path, "wb") as f:
         f.write(np.random.default_rng(1).integers(0, 256, size=1 << 20, dtype=np.uint8).tobytes())
-    yield BAD_ENGINE
+    yield path
 
 
-def test_failed_model_is_isolated_and_stop_start(bad_engine):
+def test_failed_model_is_isolated_and_stop_start(bad_engine, scratch):
     store = FrameStore(range(6))
     col = Collector()
     cfg = [
@@ -124,7 +128,7 @@ def test_failed_model_is_isolated_and_stop_start(bad_engine):
         {"name": "system1", "enabled": False, "engine": None, "adapter": "none", "cameras": [0, 1],
          "reason": "Not a TensorRT model"},
     ]
-    mgr = ModelManager(cfg, store, col, engines_dir=os.path.join(SCRATCH, "engines_test"))
+    mgr = ModelManager(cfg, store, col, engines_dir=os.path.join(scratch, "engines_test"))
     try:
         with Feeder(store, [0, 3], fps=30, bad_cams=[3]):
             mgr.start()
@@ -184,11 +188,11 @@ def test_failed_model_is_isolated_and_stop_start(bad_engine):
     assert all(not t.name.startswith("infer-") for t in threading.enumerate())
 
 
-def test_two_workers_three_cameras_no_duplicates():
+def test_two_workers_three_cameras_no_duplicates(scratch):
     store = FrameStore(range(6))
     col = Collector()
     mgr = ModelManager([dtcp_cfg(name="dtcp_multi", cams=(0, 1, 2), workers=2, max_fps=30)], store, col,
-                       engines_dir=os.path.join(SCRATCH, "engines_test"))
+                       engines_dir=os.path.join(scratch, "engines_test"))
     try:
         with Feeder(store, [0, 1, 2], fps=30):
             mgr.start()
@@ -206,15 +210,15 @@ def test_two_workers_three_cameras_no_duplicates():
     assert {(r["frame_w"], r["frame_h"]) for r in res if r["cam"] == 1} == {(704, 396)}
 
 
-def test_rebuild_fallback_with_fake_trtexec(bad_engine):
+def test_rebuild_fallback_with_fake_trtexec(bad_engine, scratch):
     """The trtexec fallback flow, without a real 5-10 min build: a fake trtexec copies the DTCP engine
     to --saveEngine. Checks the command line, the output folder and that the old engine is unchanged."""
-    eng_dir = os.path.join(SCRATCH, "engines_fallback_test")
+    eng_dir = os.path.join(scratch, "engines_fallback_test")
     os.makedirs(eng_dir, exist_ok=True)
     for f in os.listdir(eng_dir):
         os.remove(os.path.join(eng_dir, f))
-    args_file = os.path.join(SCRATCH, "fake_trtexec.args")
-    fake = os.path.join(SCRATCH, "fake_trtexec.sh")
+    args_file = os.path.join(scratch, "fake_trtexec.args")
+    fake = os.path.join(scratch, "fake_trtexec.sh")
     with open(fake, "w") as f:
         f.write("#!/bin/sh\n"
                 f'echo "$@" > {args_file}\n'

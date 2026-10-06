@@ -20,7 +20,7 @@ from infer.ingest.frame_store import Frame, FrameStore
 from infer.ingest.framelink_rx import FrameLinkReceiver
 from infer.ingest.metrics import CameraMetrics
 
-SCRATCH = "/tmp/claude-1000/-home-tonyho/b9a1f96f-4259-44f3-959f-d0095d7e5c07/scratchpad"
+SCRATCH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "scratch")   # in the repo (git-ignored)
 FORBIDDEN = {"throttle", "steer", "brake", "mu", "sigma", "pred_speed", "pred_speed_mps"}
 
 
