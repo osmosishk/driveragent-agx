@@ -207,10 +207,27 @@ def test_ingest_allowed_sources_config(caplog):
         parse_allowed_sources(["10.42.0.300"])
     with pytest.raises(ValueError):
         parse_allowed_sources(["::1"])
-    # the project config has the key, empty by default
+    # the project config has the key, and every entry is a valid IPv4 address
     import yaml
     cfg = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), "..", "config", "sources.yaml")))
-    assert cfg["rk_allowed_sources"] == []
+    assert "rk_allowed_sources" in cfg
+    assert len(parse_allowed_sources(cfg["rk_allowed_sources"])) == len(cfg["rk_allowed_sources"] or [])
+
+
+def test_ingest_role_rk_only_in_rk_mode():
+    """J1: in rk mode the camera label is role_rk (DA01 rk-camd camera); in sim mode it stays role."""
+    from infer.ingest.ingest import ROLES, Ingest
+
+    cams = [{"cam": 0, "role": "front", "role_rk": "front", "port": 16530, "enabled": False},
+            {"cam": 1, "role": "right", "role_rk": "fisheye-190 CAM2 (role unconfirmed)", "port": 16531,
+             "enabled": False},
+            {"cam": 2, "role": "left", "port": 16532, "enabled": False}]          # no role_rk
+    base = {"cameras": cams, "rx_process": False, "decoder_prestart": False}
+    rk = {s["cam"]: s["role"] for s in Ingest(dict(base), mode="rk").metrics_snapshot()}
+    sim = {s["cam"]: s["role"] for s in Ingest(dict(base), mode="sim").metrics_snapshot()}
+    assert rk[1] == "fisheye-190 CAM2 (role unconfirmed)" and rk[0] == "front"
+    assert rk[2] == "left" and rk[3] == ROLES[3]        # fallback: role, then ROLES
+    assert sim[1] == "right" and sim[2] == "left" and sim[3] == ROLES[3]
 
 
 # ---- M8: automatic restart of a FAILED model -------------------------------------------------------

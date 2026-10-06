@@ -76,7 +76,8 @@ class Ingest:
         self.sources = []
         for cam in self.cams:
             c = cams_cfg.get(cam, {})
-            role = c.get("role", ROLES[cam])
+            # rk mode: the DA01 rk-camd camera name (role_rk) when present; else the old-stack role
+            role = (c.get("role_rk") if self.mode == "rk" else None) or c.get("role", ROLES[cam])
             port = int(c.get("port", fl.BASE_PORT + cam))
             m = CameraMetrics(cam, role, port if self.mode != "file" else None, self.mode,
                               self.store, expect_simulated=expect_sim)

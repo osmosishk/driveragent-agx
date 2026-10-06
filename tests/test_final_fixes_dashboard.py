@@ -486,3 +486,25 @@ def test_l9_legacy_driverguard_scripts_are_found():
     assert match(["python3", "-m", "infer.runner"], "/") is None
     assert match(["python3", "-m", "dashboard.main"], "/") is None
     assert match(["python3", "/tmp/camera_reader.py"], "/") is None
+
+
+def test_roles_fallback_uses_role_rk_in_rk_mode(tmp_path):
+    """J1: dashboard roles() follows the same rule as infer/ingest (role_rk only when mode is rk)."""
+    import os as _os
+
+    from dashboard.infer_views import InferViews
+
+    cams = ("cameras:\n"
+            "  - {cam: 0, role: front, role_rk: front, port: 6000}\n"
+            "  - {cam: 1, role: right, role_rk: \"fisheye-190 CAM2 (role unconfirmed)\", port: 6001}\n"
+            "  - {cam: 2, role: left, port: 6002}\n")
+    y = tmp_path / "sources.yaml"
+    y.write_text("mode: rk\n" + cams)
+    v = InferViews(_client_with(_status({"simulated": False}, [], [])), _StubScanner(), None, str(y))
+    r = v.roles()
+    assert r[1]["role"] == "fisheye-190 CAM2 (role unconfirmed)" and r[0]["role"] == "front"
+    assert r[2]["role"] == "left" and r[1]["port"] == 6001
+    st = _os.stat(y)
+    y.write_text("mode: sim\n" + cams)
+    _os.utime(y, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))   # new mtime: the file is read again
+    assert v.roles()[1]["role"] == "right"

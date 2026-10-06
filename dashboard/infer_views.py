@@ -116,10 +116,12 @@ class InferViews:
 
     def roles(self) -> dict[int, dict]:
         d = self.sources_yaml.get() or {}
+        rk = d.get("mode") == "rk"   # same rule as infer/ingest: role_rk in rk mode
         out = {}
         for c in _l(d.get("cameras")):
             if isinstance(c, dict) and isinstance(c.get("cam"), int):
-                out[c["cam"]] = {"role": c.get("role"), "port": c.get("port")}
+                role = (c.get("role_rk") if rk else None) or c.get("role")
+                out[c["cam"]] = {"role": role, "port": c.get("port")}
         return out
 
     # ---- cameras
