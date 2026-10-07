@@ -1,0 +1,10 @@
+# Packages installed IN the venv (.venv, with --system-site-packages) of the Orin NX unit. Pinned. Source: PyPI.
+# From outside the venv on this unit (JetPack 6.0, L4T R36.3.0): tensorrt 8.6.2, torch 2.4.0a0 nv24.07 (user site),
+# cv2, numpy, pycapnp, pyzmq, PyYAML, PyGObject.
+crc32c==2.9.post0
+# For the tests (config/orin-nx/setup.sh test):
+iniconfig==2.3.0
+packaging==26.3
+pluggy==1.6.0
+pytest==9.1.1
+tomli==2.5.0

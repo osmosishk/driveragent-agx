@@ -1,11 +1,11 @@
 # agx-infer on the Jetson Orin NX single-camera unit (host orin-nx): the same service as on the AGX, with the
-# local frame source (infer/ingest/local_source.py) in place of FrameLink. Start by hand:
+# local frame source (infer/ingest/local_source.py) in place of FrameLink. Unit: systemd/orin-nx/agx-infer.service. By hand:
 #   AGX_LOCAL_FRAME_SOCKET=<frames.sock> AGX_LOCAL_NOTIFY_SOCKET=<agx-link.sock> \
 #   python3 -m infer.main --config config/orin-nx/infer.yaml
 # Differences from config/infer.yaml: local sources, the model list of this unit, every socket on 127.0.0.1.
 sources_config: config/orin-nx/sources.yaml
 models_config: config/orin-nx/models.yaml
-model_store: ~/da-bench/agx-models      # not used for the start set below; kept out of ~/agx-models
+model_store: ~/.local/state/driveragent-agx/models   # not used for the start set below; kept out of ~/agx-models
 start_set: models_yaml                  # this unit has no model controller: the list in models_config runs
 engines_dir: engines
 proto: proto/agx_infer.capnp

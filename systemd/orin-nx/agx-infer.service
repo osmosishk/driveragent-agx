@@ -1,0 +1,26 @@
+# agx-infer as a USER unit on the Jetson Orin NX single-camera unit (DriverGuard live; branch nx/local-source).
+# rk/ops/jetson/user-services.sh of driveragent-hmi renders @AGX@ and installs it. No root.
+# It reads the camera frames from the frame socket of rk-camd on this board (mode local) and publishes
+# AgxPerceptionResult on 127.0.0.1:5560; rk-agxlink gives fresh results to the HMI. Nothing leaves the board.
+# The node has no CAN access by design. A stop of this unit does not stop the HMI.
+[Unit]
+Description=DriverAgent agx-infer (DriverGuard, local frame source, user unit)
+After=rk-camd.service rk-agxlink.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=@AGX@
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=AGX_LOCAL_FRAME_SOCKET=%t/driveragent/frames.sock
+Environment=AGX_LOCAL_NOTIFY_SOCKET=%t/driveragent/agx-link.sock
+ExecStart=@AGX@/.venv/bin/python -m infer.main --config @AGX@/config/orin-nx/infer.yaml
+# The source connects again by itself when rk-camd starts again; the unit starts again after any exit.
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+Nice=5
+
+[Install]
+WantedBy=default.target
