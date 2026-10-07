@@ -264,7 +264,7 @@ the old DriverAgent stack can also start parts at boot (its Docker container `dr
 
 ```bash
 cd ~/driveragent-agx
-git pull                                       # the version with ops/
+git pull                                       # the version with ops/ (on AGX02 it is already there)
 ops/preflight.sh --instance agx                # the ports of the transient agx-* units count as free
 ops/install.sh --takeover --yes                # keeps config/*.yaml, .env, data/, ~/agx-models and .venv (KEPT);
                                                # runs pip into the kept .venv (with PYTHONNOUSERSITE=1);
@@ -311,7 +311,7 @@ A new unit has an empty model store. Read `docs/DEPLOY_MODEL.md` (the package an
 2. Put a test frame into the store. The inference check of a model needs a real camera frame
    `<store>/_testframes/front_1280x720.jpg`. Copy it from a unit that has one:
    `mkdir -p ~/agx-models/_testframes && scp 'agx02:agx-models/_testframes/front_1280x720.*' ~/agx-models/_testframes/`.
-   (The check tool reads `~/agx-models/_testframes/front_1280x720.jpg`.)
+   (The check reads `<store>/_testframes/front_1280x720.jpg` of the store in use.)
 3. Check and deploy the package:
 
    ```bash
@@ -323,8 +323,9 @@ A new unit has an empty model store. Read `docs/DEPLOY_MODEL.md` (the package an
    The catalog shows the version as NEEDS BUILD (ONNX only).
 4. Build the engine: AGX dashboard, page **Models**, the build button of the version (or
    `POST /api/models/<name>/<version>/build`). A new unit always builds its engines from the ONNX file: an engine
-   works only on the same device type with the same TensorRT version. The build uses the GPU. Example: the build of
-   `driverguard_yolopx@2` took 1186 s on AGX02 while the live system ran.
+   works only on the same device type with the same TensorRT version. The build uses the GPU. Examples on AGX02
+   while the live system ran: `driverguard_yolopx@2` took 1186 s (2026-10-07); `driverguard_dtcp@1` took 77 s
+   (test installation, 2026-10-08).
 5. After the build, the checks run. When the state is READY, activate it: page **Models**, the activate button (or
    `POST /api/models/<name>/<version>/activate`). The state is ACTIVE.
 6. Check: `ops/doctor.sh` shows the model in the item `agx-infer status`.
