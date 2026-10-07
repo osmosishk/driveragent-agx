@@ -12,4 +12,6 @@ ref/
 docs/audit/
 # test artefacts that are large
 tests/out/
+# test logs larger than 1 MB (commit only the summary: docs/test_results/RAW_LOGS.md)
+test_logs/
 .pytest_cache/

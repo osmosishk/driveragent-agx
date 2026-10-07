@@ -101,6 +101,10 @@ Run every command from the repository root with `PYTHONPATH=.` and `.venv/bin/py
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider tests/
 ```
 
+Test logs: a test log larger than 1 MB (1,000,000 bytes) goes to `test_logs/`, which git ignores. Commit only the
+summary: the result document of the test and one line in `docs/test_results/RAW_LOGS.md` (path, size, sha256, time
+span). `tests/test_repo_rules.py` fails when a tracked test log is larger than 1 MB.
+
 ## Notes and limits
 
 - UDP ports 6000-6005: only ONE sender per camera port. Do not run `tools.rk_sim` and the RK3588
