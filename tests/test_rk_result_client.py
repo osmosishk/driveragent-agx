@@ -174,7 +174,7 @@ def check_streams(s: dict, feeder: Feeder) -> None:
     assert [c["cam"] for c in last["cameras"]] == CAMS
     assert last["models"][0]["name"] == MODEL and last["models"][0]["p95_ms"] == 3.0
     assert s["host_is_local"] is True
-    assert s["schema_hash"] == {"AgxPerceptionResult": "0xafcaff02", "AgxInferStatus": "0x9086fa18"}
+    assert s["schema_hash"] == {"AgxPerceptionResult": "0xafcaff02", "AgxInferStatus": "0xef12fe49"}   # schema v2
 
 
 def test_clean_run_exit_0(node):

@@ -4,7 +4,8 @@
 
 Parts: Ingest (six cameras -> FrameStore), ModelManager (TensorRT models; on_result ->
 ResultPublisher 5560 + result cache), StatusPublisher (5561 AgxInferStatus + 127.0.0.1:5562 JSON),
-SnapshotTask (127.0.0.1:5562 JPEG), AdminServer (127.0.0.1:5563).
+SnapshotTask (127.0.0.1:5562 JPEG), AdminServer (127.0.0.1:5563), RkInfoReceiver (SUB bound on 5564: DA01
+RkCameraInfo, the camera names and roles; schema v2; a bind error leaves it out with a node error).
 Start set (config/infer.yaml start_set): "last_good" (default) runs the controller's last good set
 (<model_store>/_state/last_good.json, built with controller.runtime.configs_for_set) when that file has a
 non-empty set; else (and with "models_yaml") config/models.yaml as before. Instances can then be added and
@@ -173,10 +174,14 @@ class Node:
                 log.error("start set: %s", p)
                 self.state.add_error(f"start set: {p}")
             self.manager = self._make_manager()
+            self.rkinfo = self._make_rkinfo(bind.get("rkinfo", "0.0.0.0"), int(ports.get("rkinfo", 5564)), proto)
+            from controller.store import Store
             self.status = StatusPublisher(
                 self.state, self.ingest, self.manager, self.results, self.internal,
                 bind.get("status", "0.0.0.0"), int(ports.get("status", 5561)),
-                float(cfg.get("status_period_s", 1.0)), proto, ctx=self.ctx)
+                float(cfg.get("status_period_s", 1.0)), proto, ctx=self.ctx,
+                model_store=str(Store(cfg.get("model_store") or None).root),
+                control_file=_path(cfg.get("control_config", "config/control.yaml")), rkinfo=self.rkinfo)
             self._parts.append(("status publisher", self.status.stop))
             sc = cfg.get("snapshot") or {}
             self.snapshots = SnapshotTask(self.ingest.store, self.cache, self.internal,
@@ -190,6 +195,21 @@ class Node:
         except Exception:
             self._stop_parts()
             raise
+
+    def _make_rkinfo(self, host: str, port: int, proto: str | None):
+        """RkCameraInfo receiver (infer/rkinfo.py), peers = config/sources.yaml rk_allowed_sources. None when it
+        cannot be made: the node runs on (camera names from the config), with a node error."""
+        try:
+            from infer.ingest.ingest import parse_allowed_sources
+            from infer.rkinfo import RkInfoReceiver
+            rk = RkInfoReceiver(host, port, parse_allowed_sources(self.ingest.cfg.get("rk_allowed_sources")), proto)
+        except Exception as e:  # noqa: BLE001
+            msg = f"RkCameraInfo receiver on {host}:{port} not available: {type(e).__name__}: {e}"
+            log.exception(msg)
+            self.state.add_error(msg)
+            return None
+        self._parts.append(("rkinfo receiver", rk.stop))
+        return rk
 
     def _make_manager(self):
         engines_dir = _path(self.cfg.get("engines_dir", "engines"))
@@ -220,6 +240,8 @@ class Node:
         stop_now = should_stop or (lambda: False)
         self.status.start()          # status shows STARTING from now
         self.admin.start()
+        if self.rkinfo is not None:
+            self.rkinfo.start()
         self.ingest.start()
         self._parts.insert(0, ("ingest", self.ingest.stop))
         self._parts.insert(0, ("model manager", self.manager.stop))

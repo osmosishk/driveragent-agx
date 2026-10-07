@@ -165,7 +165,8 @@
     else {
       const cs = inf.cameras_summary || {}, ms = inf.models_summary || {};
       const camRows = (cs.per_cam || []).map((c) => el("tr", null,
-        el("td", null, "cam " + c.cam + (c.role ? " " + c.role : "")),
+        el("td", null, "cam " + c.cam + (camText(c) ? " " + camText(c) : ""),
+          c.cam_note ? el("span", { class: "muted small" }, " (" + c.cam_note + ")") : null),
         el("td", null, c.state || NA, " ", simBadge(c.simulated)),
         el("td", { class: "n" }, fmt(c.fps, 1, "fps"))));
       const modRows = (ms.per_model || []).map((m) => el("tr", null,
@@ -232,6 +233,10 @@
   }, 1000);
 
 
+  /* camera name / role text from the server (dashboard/infer_views.py camera_text): DA01 name and role; "role
+     unconfirmed" only when DA01 has no role; cam_note "no camera info from DA01" when the text is the config one */
+  function camText(c) { return (c && (c.cam_text != null ? c.cam_text : c.role)) || ""; }
+
   /* ---------------- cameras (six tiles) ---------------- */
   // serverOffset = server clock - page clock (s). Tiles are evaluated every 250 ms with the page
   // clock + serverOffset, so a tile changes to NO SIGNAL also between two SSE events. The server
@@ -291,7 +296,7 @@
       t.state.textContent = r.state;
       t.over.textContent = r.state;
       t.sim.hidden = r.label !== "SIMULATED";
-      t.role.textContent = c.role || "";
+      t.role.textContent = camText(c) + (c.cam_note ? " (" + c.cam_note + ")" : "");
       const nd = r.state === "NO DATA";
       const nf = nd || r.state === "NO SIGNAL";  // no frame now: the rates of the last status are not current
       t.fps.textContent = nf ? NA : fmt(c.fps, 1);

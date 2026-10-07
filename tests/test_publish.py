@@ -24,7 +24,10 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "tests", "out")
 P_RES, P_STAT, P_INT, P_ADM = 15560, 15561, 15562, 15563
 
-STATUS_KEYS = {"schema", "t", "node", "cameras", "models", "publish", "link"}
+STATUS_KEYS = {"schema", "t", "node", "cameras", "models", "publish", "link",
+               # schema v2 data (the JSON contract stays agx-infer-status/1: new keys only)
+               "catalog", "catalog_age_s", "active_set", "control_mode", "last_good_set", "change_in_progress",
+               "rk_info"}
 NODE_KEYS = {"state", "uptime_s", "pid", "version", "simulated", "errors"}
 MODEL_KEYS = {"name", "engine", "engine_version", "state", "error", "reason", "enabled", "cameras",
               "fps", "lat_ms", "gpu_mem_mb", "gpu_mem_note", "trt_match", "trt_build_device",
@@ -97,10 +100,16 @@ def sub_socket(ctx, port, topics=(b"",)):
 def test_runtime_schema_hashes():
     s = sch.load()
     assert s.hash["AgxPerceptionResult"] == 0xAFCAFF02
-    assert s.hash["AgxInferStatus"] == 0x9086FA18
+    assert s.hash["AgxInferStatus"] == 0xEF12FE49          # schema v2 (v1 was 0x9086fa18)
+    assert s.hash["RkCameraInfo"] == 0x743CFFAD
+    assert s.version == 2 and sch.STATUS_V1_HASH == 0x9086FA18
+    assert sch.EXPECTED_HASH == {"AgxPerceptionResult": 0xAFCAFF02, "AgxInferStatus": 0xEF12FE49,
+                                 "RkCameraInfo": 0x743CFFAD}
     with open(sch.DEFAULT_PROTO) as f:
         txt = f.read()
     assert ref.schema_hash(txt, "AgxPerceptionResult") == 0xAFCAFF02
+    assert ref.schema_hash(txt, "AgxInferStatus") == 0xEF12FE49
+    assert ref.schema_hash(txt, "RkCameraInfo") == 0x743CFFAD
 
 
 def test_result_publisher(ctx):
@@ -129,7 +138,7 @@ def test_result_publisher(ctx):
         got_seq = e["seq"]
         with sch.load().mod.AgxPerceptionResult.from_bytes(e["payload"]) as m:
             want = make_result(seq=m.frameSeq, masks=True)
-            assert m.schemaVersion == 1
+            assert m.schemaVersion == 2        # the schema file version (v2); the result struct is unchanged
             assert m.model == want["model"] and m.modelVersion == want["model_version"]
             assert m.camId == 0 and m.frameSeq > 100
             assert (m.tCaptureNs, m.tAgxRecvNs, m.tAgxReadyNs, m.tAgxResultNs) == (
@@ -253,10 +262,10 @@ def test_status_publisher(ctx):
         assert got_s is not None and got_j is not None
         e = ref.unpack(got_s)
         assert e["src_board"] == 1 and e["type_id"] == 5561
-        assert e["schema_hash"] == sp.hash == 0x9086FA18
+        assert e["schema_hash"] == sp.hash == 0xEF12FE49
         assert e["flags"] & 0b011 == 0b011          # simulated (sim mode) + time uncertain
         with sch.load().mod.AgxInferStatus.from_bytes(e["payload"]) as m:
-            assert m.schemaVersion == 1 and m.version == "test" and m.sourceMode == "sim"
+            assert m.schemaVersion == 2 and m.version == "test" and m.sourceMode == "sim"
             assert m.simulated is True and m.resultsPort == P_RES
             assert len(m.cameras) == 6 and m.cameras[0].state == "SIMULATED"
             assert m.cameras[0].lastFrameSeq == 1
@@ -266,6 +275,15 @@ def test_status_publisher(ctx):
             assert list(m.models[0].cameras) == [0, 1, 2, 3, 4, 5]
             assert m.nodeState == "RUNNING"
             assert len(m.temps) >= 1
+            # v2 without a model store: empty catalog / last good set; control mode of config/control.yaml
+            assert len(m.catalog) == 0 and len(m.lastGoodSet) == 0 and m.changeInProgress == ""
+            assert m.controlMode in ("bench", "vehicle")
+            assert [(a.name, a.version, list(a.cameras)) for a in m.activeSet] == [
+                ("driverguard_yolopx", "", [0, 1, 2, 3, 4, 5])]
+            assert m.models[0].version == ""
+            # sim mode: no DA01 info -> the config role, no name
+            c0 = m.cameras[0]
+            assert (c0.role, c0.name, c0.roleConfirmed, c0.infoSource) == ("role0", "", False, "config")
         topic, payload = got_j
         assert topic == b"status"
         js = json.loads(payload.decode("utf-8"))
@@ -287,6 +305,10 @@ def test_status_publisher(ctx):
         assert s1["trt_build_device"] is None and s1["trt_device_warning"] is None
         assert set(js["publish"]) == PUBLISH_KEYS and js["publish"]["status_port"] == P_STAT
         assert set(js["link"]) == LINK_KEYS and js["link"]["time_since_last_frame_ms"] is not None
+        assert js["catalog"] == [] and js["last_good_set"] == [] and js["change_in_progress"] == ""
+        assert js["active_set"] == [{"name": "driverguard_yolopx", "version": "", "cameras": [0, 1, 2, 3, 4, 5]}]
+        assert js["rk_info"] is None
+        assert {(c["name"], c["role_confirmed"], c["info_source"]) for c in js["cameras"]} == {("", False, "config")}
     finally:
         s_stat.close(0)
         s_int.close(0)

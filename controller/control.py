@@ -139,10 +139,15 @@ class Controller:
     def building(self) -> bool:
         return any(j.state in ("queued", "running") for j in self.jobs.values())
 
+    def _build_change(self) -> bool:
+        """A build change runs now (also before its job exists): no check may start on the GPU."""
+        c = self.change
+        return c is not None and c.get("action") == "build"
+
     def scan(self) -> list[dict]:
         """Queue the checks that are needed (not during a build), and write the catalog snapshot for agx-infer."""
         rows = self.rows()
-        if self.checks is not None and not self.building():
+        if self.checks is not None and not self.building() and not self._build_change():
             for r in rows:
                 if r["state"] in ("REGISTERED", "ACTIVE") and r.get("check") is None and r.get("engine"):
                     m = self.store.get(r["name"], r["version"])
@@ -151,7 +156,7 @@ class Controller:
         mode, _ = read_control_mode(self.control_file)
         if self.store.exists():
             try:
-                write_json(self.store.state / "catalog.json", catalog.snapshot(rows, mode))
+                write_json(self.store.state / "catalog.json", catalog.snapshot(rows, mode, self.change))
             except OSError as e:
                 log.warning("cannot write the catalog snapshot: %s", e)
         return rows
@@ -216,6 +221,10 @@ class Controller:
             self.change = change
         audit.append(self.store.state, source, user, action, name, version, "started", None, change_id=change["id"],
                      **extra)
+        try:   # agx-infer shows the change in its status to DA01 at once (not only at the next scan)
+            self.scan()
+        except Exception:
+            log.exception("scan at change start failed")
         threading.Thread(target=self._run, args=(change, plan), name=f"change-{action}", daemon=True).start()
         doc = {"ok": True, "accepted": True, "change": change}
         if action == "build":

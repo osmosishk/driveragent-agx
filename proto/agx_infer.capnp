@@ -1,5 +1,7 @@
 @0xd30f559909e364de;
-# driveragent-agx: AGX inference node -> RK3588. Schema version 1 (2026-10-05, night run).
+# driveragent-agx: AGX inference node <-> RK3588. Schema version 2 (2026-10-07, model controller).
+# Version 2 (additive): AgxInferStatus catalog, activeSet, controlMode, lastGoodSet, changeInProgress;
+# Camera name / roleConfirmed / infoSource; Model version; new struct RkCameraInfo (RK -> AGX).
 #
 # Transport (RK repo design, rk-v0.4.0 kick-off section 4 + driveragent-proto):
 #   ZMQ PUB on the AGX (the AGX binds, the RK connects). One ZMQ frame = 32-byte dabus envelope
@@ -11,14 +13,15 @@
 # Channels (night-task Section 6 defaults; the RK registry defines no generic result/status channel):
 #   5560 AgxPerceptionResult  one message per (model, camera, frame) result
 #   5561 AgxInferStatus       1 Hz
+#   5564 RkCameraInfo         1 Hz, RK3588 -> AGX: the AGX binds a SUB, the RK connects a PUB (src_board 2 = RK)
 # Rules: additive only (new fields take the next ordinal). Any change of a struct changes its
 # schema hash: bump schemaVersion and tell the RK side.
 # Times: *Ns fields are CLOCK_REALTIME nanoseconds unless the comment says otherwise.
 
-const schemaVersion :UInt16 = 1;
+const schemaVersion :UInt16 = 2;
 
 struct AgxPerceptionResult {
-  schemaVersion @0 :UInt16;       # = 1
+  schemaVersion @0 :UInt16;       # = const schemaVersion (2 since 2026-10-07)
   model @1 :Text;                 # model name from config/models.yaml, e.g. "driverguard_yolopx"
   modelVersion @2 :Text;          # engine file name + ":" + sha256[:16] of the engine file
   camId @3 :UInt8;                # 0..5 (FrameLink cam = UDP port 6000 + camId)
@@ -77,7 +80,7 @@ struct AgxPerceptionResult {
 }
 
 struct AgxInferStatus {
-  schemaVersion @0 :UInt16;       # = 1
+  schemaVersion @0 :UInt16;       # = const schemaVersion (2 since 2026-10-07)
   hostname @1 :Text;
   version @2 :Text;               # git describe of driveragent-agx
   nodeState @3 :Text;             # "STARTING" | "RUNNING" | "DEGRADED" | "ERROR"
@@ -92,6 +95,12 @@ struct AgxInferStatus {
   resultsPort @12 :UInt16;        # 5560
   resultSubscribers @13 :UInt16;  # TCP peers connected to the results socket
   resultsRateHz @14 :Float32;     # results published per second (all models, all cameras)
+  catalog @15 :List(CatalogEntry);   # v2: every model version in the model store (docs/MODEL_CONTROL_API.md)
+  activeSet @16 :List(ActiveModel);  # v2: the model instances that run now
+  controlMode @17 :Text;             # v2: "bench" | "vehicle" (config/control.yaml on the AGX)
+  lastGoodSet @18 :List(ActiveModel); # v2: the rollback target (loaded after an agx-infer restart)
+  changeInProgress @19 :Text;        # v2: "" = none, else "<action> <name>@<version>", or "rollback"; "" when
+                                     # the controller snapshot is older than 30 s
 
   struct Camera {
     camId @0 :UInt8;
@@ -103,6 +112,9 @@ struct AgxInferStatus {
     lostFrames @6 :UInt64;
     lostPackets @7 :UInt64;
     lastFrameSeq @8 :UInt32;
+    name @9 :Text;                # v2: the camera name from the RK (RkCameraInfo), "" = not known
+    roleConfirmed @10 :Bool;      # v2: true when the RK has a confirmed role for this camera
+    infoSource @11 :Text;         # v2: "rk" (RkCameraInfo of the last 3 s) | "config" (config/sources.yaml)
   }
 
   struct Model {
@@ -114,10 +126,44 @@ struct AgxInferStatus {
     latencyP50Ms @5 :Float32;     # totalMs percentiles over the last 60 s
     latencyP95Ms @6 :Float32;
     latencyP99Ms @7 :Float32;
+    version @8 :Text;             # v2: the model version in the store, "" = a config/models.yaml entry
+  }
+
+  struct CatalogEntry {
+    name @0 :Text;
+    version @1 :Text;
+    type @2 :Text;
+    state @3 :Text;               # REGISTERED | NEEDS BUILD | BUILDING | READY | ACTIVE | FAILED | NO ADAPTER
+    reason @4 :Text;              # "" = none (always set for FAILED)
+  }
+
+  struct ActiveModel {
+    name @0 :Text;
+    version @1 :Text;
+    cameras @2 :List(UInt8);
   }
 
   struct Temp {
     zone @0 :Text;
     celsius @1 :Float32;
+  }
+}
+
+# v2: RK3588 -> AGX, 1 Hz on port 5564 (src_board 2 = RK, type_id 5564). The RK is the only source of the camera
+# names and roles: the AGX shows them for each camera, and "role unconfirmed" only when the RK has no role.
+struct RkCameraInfo {
+  schemaVersion @0 :UInt16;       # = 2
+  hostname @1 :Text;              # the RK board host name
+  tNs @2 :UInt64;                 # RK CLOCK_REALTIME when sent
+  cameras @3 :List(Cam);
+
+  struct Cam {
+    camId @0 :UInt8;              # FrameLink camera id (UDP port 6000 + camId)
+    section @1 :Text;             # rk-camd stream section, for example gmsl_des29_linkA
+    name @2 :Text;                # camera name on the RK, for example "front", "fisheye-190", "video11"
+    port @3 :Text;                # connector, for example "CAM1"
+    role @4 :Text;                # role on the RK, for example "front"; "" = the RK has no role for this camera
+    roleConfirmed @5 :Bool;
+    sent @6 :Bool;                # the RK sends this camera now
   }
 }

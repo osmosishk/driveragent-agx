@@ -17,6 +17,11 @@ With a status slower than about 1/1.2 Hz the cap applies: a stop shows in 1.5 s 
 a camera with frames can show NO SIGNAL for a short time between two status messages.
 The same rule is in static/tiles.js (tileState). The page gets an SSE event at once for each new
 status (app.py), so it knows a new frame time as soon as the server knows it.
+
+Camera name and role text (schema v2, camera_text()): DA01 is the only source. agx-infer status camera
+info_source "rk": cam_text = the DA01 name, then " · <role>" when the role differs from the name, or
+" · role unconfirmed" when DA01 has no role ("front"; "fisheye-190 · role unconfirmed"). Else (info_source
+"config", or an older agx-infer): cam_text = the config role text, cam_note = "no camera info from DA01".
 """
 from __future__ import annotations
 
@@ -40,8 +45,24 @@ _ERR_KEYS = ("last_error", "last_error_t", "errors_total", "queue_ms", "auto_res
 HOLD_CAP_EXTRA_S = 0.5  # hold_s <= no_signal_s + this (1.5 s): page NO SIGNAL < 2 s with the 250 ms check
 
 
+NO_RK_INFO = "no camera info from DA01"
+ROLE_UNCONFIRMED = "role unconfirmed"
+
+
 def _num(v):
     return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def camera_text(c: dict, config_role=None) -> tuple[str, str | None]:
+    """(cam_text, cam_note) of one camera. "role unconfirmed" only when DA01 sent info without a role."""
+    if c.get("info_source") == "rk":
+        name = str(c.get("name") or "")
+        role = str(c.get("role") or "") if c.get("role_confirmed") else ""
+        if role:
+            return (name if name == role else (f"{name} · {role}" if name else role)), None
+        return (f"{name} · {ROLE_UNCONFIRMED}" if name else ROLE_UNCONFIRMED), None
+    role = c.get("role") if c.get("role") else config_role
+    return (str(role) if role else ""), NO_RK_INFO
 
 
 def camera_state(last_frame_t, now: float, status_t, stale_s: float, no_signal_s: float, hold_s: float,
@@ -162,12 +183,14 @@ class InferViews:
                 why = (reason or NOT_RUNNING) if st is None else "agx-infer status has no entry for this camera"
                 base.update({"state": "NO DATA", "reason": why, "simulated": False, "label": None,
                              "age_ms": None, "last_frame_t": None, "snapshot_t": snap_t})
+                base["cam_text"], base["cam_note"] = camera_text(base)
                 cams.append(base)
                 continue
             out = dict(base)
             out.update({k: v for k, v in c.items() if k not in ("state",)})
             if out.get("role") is None:
                 out["role"] = base["role"]
+            out["cam_text"], out["cam_note"] = camera_text(out, base["role"])
             sim = cam_simulated(c, node_sim)
             lft = _num(c.get("last_frame_t"))
             if lft is None and _num(c.get("frame_age_ms")) is not None and _num(st.get("t")) is not None:
@@ -383,7 +406,8 @@ class InferViews:
         st, _, _, _ = self.infer.current()
         pub = _d(_d(st).get("publish"))
         reported = {c.get("cam"): c.get("state") for c in _l(_d(st).get("cameras")) if isinstance(c, dict)}
-        cam_items = [{"cam": c["cam"], "role": c.get("role"), "state": c["state"],
+        cam_items = [{"cam": c["cam"], "role": c.get("role"), "cam_text": c.get("cam_text"),
+                      "cam_note": c.get("cam_note"), "state": c["state"],
                       "reported_state": reported.get(c["cam"]), "fps": _num(c.get("fps")),
                       "frame_age_ms": _num(c.get("frame_age_ms")), "age_ms": c.get("age_ms"),
                       "simulated": bool(c.get("simulated")),

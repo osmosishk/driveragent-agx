@@ -143,7 +143,8 @@ def build(store, checks, live_models, jobs: dict | None = None, failures: dict |
     return rows
 
 
-def snapshot(rows: list[dict], control_mode: str) -> dict:
-    """The short catalog for agx-infer (status to DA01): name, version, type, state, reason."""
+def snapshot(rows: list[dict], control_mode: str, change: dict | None = None) -> dict:
+    """The short catalog for agx-infer (status to DA01): name, version, type, state, reason, and the change now."""
     return {"t": time.time(), "control_mode": control_mode,
+            "change_in_progress": f"{change['action']} {change.get('model') or ''}".strip() if change else "",
             "entries": [{k: r.get(k) for k in ("name", "version", "type", "state", "reason")} for r in rows]}

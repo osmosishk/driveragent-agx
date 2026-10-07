@@ -509,3 +509,45 @@ def test_roles_fallback_uses_role_rk_in_rk_mode(tmp_path):
     y.write_text("mode: sim\n" + cams)
     _os.utime(y, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))   # new mtime: the file is read again
     assert v.roles()[1]["role"] == "right"
+
+
+def test_camera_text_from_da01_info(tmp_path):
+    """Schema v2: the DA01 name and role for each camera; "role unconfirmed" ONLY when DA01 has no role for that
+    camera; without DA01 info (info_source config, or an older agx-infer) the config text + "no camera info from
+    DA01"."""
+    from dashboard.infer_views import NO_RK_INFO, InferViews, camera_text
+
+    assert camera_text({"info_source": "rk", "name": "front", "role": "front", "role_confirmed": True}) == \
+        ("front", None)
+    assert camera_text({"info_source": "rk", "name": "fisheye-190", "role": "", "role_confirmed": False}) == \
+        ("fisheye-190 · role unconfirmed", None)
+    assert camera_text({"info_source": "rk", "name": "video11", "role": "front", "role_confirmed": True}) == \
+        ("video11 · front", None)
+    assert camera_text({"info_source": "rk", "name": "", "role": "", "role_confirmed": False}) == \
+        ("role unconfirmed", None)
+    assert camera_text({"info_source": "config", "role": "front", "name": ""}) == ("front", NO_RK_INFO)
+    assert camera_text({"role": "right"}) == ("right", NO_RK_INFO)                       # older agx-infer
+    assert camera_text({"info_source": "config", "role": ""}, "left") == ("left", NO_RK_INFO)
+
+    now = time.time()
+    cams = [{"cam": 0, "simulated": False, "last_frame_t": now - 0.03, "role": "front", "name": "front",
+             "role_confirmed": True, "info_source": "rk"},
+            {"cam": 1, "simulated": False, "last_frame_t": now - 0.03, "role": "", "name": "fisheye-190",
+             "role_confirmed": False, "info_source": "rk"},
+            {"cam": 2, "simulated": False, "last_frame_t": now - 0.03, "role": "CAM3", "name": "",
+             "role_confirmed": False, "info_source": "config"}]
+    y = tmp_path / "sources.yaml"
+    y.write_text("mode: rk\ncameras:\n  - {cam: 0, role: front, role_rk: front}\n"
+                 "  - {cam: 1, role: right, role_rk: fisheye-190 CAM2}\n  - {cam: 2, role: left, role_rk: CAM3}\n")
+    v = InferViews(_client_with(_status({"simulated": False}, cams, [])), _StubScanner(), None, str(y))
+    cd = {c["cam"]: c for c in v.cameras_doc()["cameras"]}
+    assert (cd[0]["cam_text"], cd[0]["cam_note"]) == ("front", None)
+    assert (cd[1]["cam_text"], cd[1]["cam_note"]) == ("fisheye-190 · role unconfirmed", None)
+    assert (cd[2]["cam_text"], cd[2]["cam_note"]) == ("CAM3", NO_RK_INFO)
+    assert cd[3]["state"] == "NO DATA" and cd[3]["cam_note"] == NO_RK_INFO      # no status entry
+    # "role unconfirmed" only for the camera without a DA01 role
+    assert [n for n, c in cd.items() if "role unconfirmed" in (c["cam_text"] or "")] == [1]
+    per = {c["cam"]: c for c in v.health_infer_extra()["cameras_summary"]["per_cam"]}
+    assert per[1]["cam_text"] == "fisheye-190 · role unconfirmed" and per[2]["cam_note"] == NO_RK_INFO
+    js = (ROOT / "dashboard" / "static" / "app.js").read_text()
+    assert "c.cam_text" in js and "c.cam_note" in js and "camText(c)" in js

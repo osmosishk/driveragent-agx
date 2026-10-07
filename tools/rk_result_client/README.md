@@ -8,7 +8,10 @@ Interface: `docs/RK_AGX_INTERFACE.md`, sections 4 and 5.
 | Channel | Socket | Struct | Schema hash | Rate |
 |---|---|---|---|---|
 | Results | ZMQ PUB `tcp://<agx>:5560` (the AGX binds, the RK connects) | `AgxPerceptionResult` | `0xafcaff02` | One message for each (model, camera, frame) |
-| Status | ZMQ PUB `tcp://<agx>:5561` | `AgxInferStatus` | `0x9086fa18` | 1 Hz |
+| Status | ZMQ PUB `tcp://<agx>:5561` | `AgxInferStatus` | `0xef12fe49` (schema v2; v1 was `0x9086fa18`) | 1 Hz |
+
+The client takes the expected hashes from the schema file that it loads (`--schema`): use the same
+`proto/agx_infer.capnp` as the AGX node (schema version 2 since 2026-10-07).
 
 One ZMQ frame = 32-byte dabus envelope + Cap'n Proto payload (unpacked, single segment).
 
