@@ -27,7 +27,9 @@ P_RES, P_STAT, P_INT, P_ADM = 15560, 15561, 15562, 15563
 STATUS_KEYS = {"schema", "t", "node", "cameras", "models", "publish", "link",
                # schema v2 data (the JSON contract stays agx-infer-status/1: new keys only)
                "catalog", "catalog_age_s", "active_set", "control_mode", "last_good_set", "change_in_progress",
-               "rk_info"}
+               "rk_info",
+               # paired boards (link settings task; docs/RK_AGX_INTERFACE.md Section 5.5)
+               "allowed_sources", "result_subscribers", "board_sources"}
 NODE_KEYS = {"state", "uptime_s", "pid", "version", "simulated", "errors"}
 MODEL_KEYS = {"name", "engine", "engine_version", "state", "error", "reason", "enabled", "cameras",
               "fps", "lat_ms", "gpu_mem_mb", "gpu_mem_note", "trt_match", "trt_build_device",

@@ -1,10 +1,11 @@
-/* agx02 dashboard page. No external URLs. All reads are GET requests. The ONLY write request is in
-   postModelControl() (the model controller on the Models page, docs/MODEL_CONTROL_API.md). No service control.
+/* agx02 dashboard page. No external URLs. All reads are GET requests. The ONLY write function is postWrite(): the
+   model controller on the Models page (/api/models/..., docs/MODEL_CONTROL_API.md) and the pairing of RK boards on the
+   Settings page (/api/pair/..., docs/PAIRING_API.md). No service control.
    Pages: router.js (hash routing, pure functions). Camera tile state: tiles.js (pure functions). */
 (function () {
   "use strict";
 
-  const PAGE_VERSION = "2.0 (2026-10-07: sidebar pages, model control)";
+  const PAGE_VERSION = "2.1 (2026-10-07: sidebar pages, model control, RK link pairing)";
   const R = window.AGXRouter;
   const T = window.AGXTiles;
   const $ = (id) => document.getElementById(id);
@@ -961,11 +962,14 @@
       td("Reason", { class: "small reason-cell" }, x.reason || "-"))] })) : [{ key: "", nodes: [emptyRow(7, "No event yet.")] }]));
   }
 
-  /* ---------------- model control: confirmation dialog + the ONE write function ---------------- */
-  // The ONLY write request of this page. POST to the model controller: /api/models/{name}/{version}/{action} or
-  // /api/models/rollback (docs/MODEL_CONTROL_API.md). The browser sends its Basic auth; X-AGX-CSRF: 1 is required.
-  async function postModelControl(path, body) {
-    const r = await fetch("/api/models/" + path, {
+  /* ---------------- the ONE write function + model control confirmation dialog ---------------- */
+  // The ONLY write request of this page: a POST to the model controller (/api/models/{name}/{version}/{action},
+  // /api/models/rollback; docs/MODEL_CONTROL_API.md) or to the pairing API (/api/pair/code, /api/pair/settings,
+  // /api/pair/boards/{id}/remove; docs/PAIRING_API.md). The browser sends its Basic auth; X-AGX-CSRF: 1 is required.
+  const WRITE_PREFIXES = ["/api/models/", "/api/pair/"];
+  async function postWrite(path, body) {
+    if (!WRITE_PREFIXES.some((p) => path.startsWith(p))) throw new Error("not a write path of this page: " + path);
+    const r = await fetch(path, {
       method: "POST", cache: "no-store", credentials: "same-origin",
       headers: { "X-AGX-CSRF": "1", "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
@@ -974,6 +978,10 @@
     let doc = null;
     try { doc = JSON.parse(text); } catch (e) { doc = null; }
     return { status: r.status, accepted: r.status === 202 || (r.ok && !!(doc && doc.ok)), doc, text };
+  }
+  function refusalText(res) {
+    // the refusal reason of AGX02 as it is
+    return res.doc && res.doc.reason ? res.doc.reason : "HTTP " + res.status + (res.text ? ": " + res.text.slice(0, 300) : "");
   }
   let dlg = null, dlgBusy = false;
   const DLG_TITLE = { build: "Build", activate: "Activate", deactivate: "Deactivate", rollback: "Rollback" };
@@ -1048,7 +1056,7 @@
     const body = kind === "activate" ? { cameras: dlgCams() } : null;
     dlgBusy = true; dlgError(""); $("mc-dlg-ok").textContent = "Working"; dlgValidate();
     try {
-      const res = await postModelControl(path, body);
+      const res = await postWrite("/api/models/" + path, body);
       dlgBusy = false;
       if (res.accepted) {
         const ch = (res.doc && res.doc.change) || {};
@@ -1059,8 +1067,7 @@
         renderModelHead();
         loadCatalog(); loadEvents(); loadControl();
       } else {
-        // the refusal reason of AGX02 as it is
-        dlgError(res.doc && res.doc.reason ? res.doc.reason : "HTTP " + res.status + (res.text ? ": " + res.text.slice(0, 300) : ""));
+        dlgError(refusalText(res));
         $("mc-dlg-ok").textContent = DLG_TITLE[kind];
         dlgValidate();
         loadEvents();
@@ -1225,6 +1232,206 @@
     document.querySelectorAll(".chart").forEach((c) => ro.observe(c));
   }
 
+  /* ---------------- Settings, RK link: pairing of RK boards (docs/PAIRING_API.md) ---------------- */
+  // GET /api/pair/state while the Settings page shows. The pairing code is ONLY in the answer of this page's own POST
+  // /api/pair/code (pairCode); no GET answer has it, so only the page of the user who made the code shows it.
+  const PAIR_POLL_MS = 2000;
+  const LINK_TL = { "UP": "green", "frames only": "amber", "results only": "amber", "DOWN": "red", "NO DATA": "unknown" };
+  let pairDoc = null, pairTimer = null, pairCode = null, pairTick = null, pairBusy = false, accDirty = false;
+  let prDlg = null, prBusy = false;
+  function pairMsg(id, text) { const e = $(id); if (!e) return; e.textContent = text || ""; e.hidden = !text; }
+  function fmtLeft(s) { s = Math.max(0, Math.ceil(num(s) ? s : 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+  async function loadPairState() {
+    try { pairDoc = await getJSON("/api/pair/state"); }
+    catch (e) { pairMsg("pr-problem", "Cannot read the pairing state: " + e.message); return; }
+    renderPair();
+  }
+  function setPairPoll(on) {
+    if (pairTimer) { clearInterval(pairTimer); pairTimer = null; }
+    if (!on) return;
+    loadPairState();
+    pairTimer = setInterval(loadPairState, PAIR_POLL_MS);
+  }
+  function renderUnit(u) {
+    const p = u.ports || {};
+    setText("pr-name", u.name || NA);
+    const nets = (u.addresses || []).filter((n) => n && (n.addrs || []).length);
+    $("pr-addrs").replaceChildren(...(nets.length ? nets.map((n) => el("div", { class: "mono" }, n.if + ": " + n.addrs.join(", "))) : [NA]));
+    const vp = Array.isArray(p.video) && p.video.length ? p.video : null;
+    setText("pr-p-video", vp ? vp[0] + " to " + vp[vp.length - 1] + " (" + vp[0] + " + camera number)" : NA);
+    setText("pr-p-results", p.results != null ? String(p.results) : NA);
+    setText("pr-p-status", p.status != null ? String(p.status) : NA);
+    setText("pr-p-rkinfo", p.rkinfo != null ? String(p.rkinfo) : NA);
+    setText("pr-p-api", p.api != null ? String(p.api) : NA);
+  }
+  function renderCode() {
+    const c = (pairDoc && pairDoc.code) || {};
+    let note = "";
+    if (pairCode) {
+      const same = c.expires_t == null || c.expires_t === pairCode.expires_t;
+      const left = (pairCode.until - Date.now()) / 1000;
+      if (!same) { pairCode = null; note = "A newer code cancelled your code."; }
+      else if (c.state === "used") { pairCode = null; note = "The code was used. The new board is in the table."; }
+      else if (c.state === "cancelled") { pairCode = null; note = "The code was cancelled after " + (c.wrong_max || 5) + " wrong codes. Make a new code."; }
+      else if (c.state === "expired" || left <= 0) { pairCode = null; note = "The code expired. Make a new code."; }
+    }
+    const code = $("pr-code");
+    if (pairCode) {
+      code.textContent = pairCode.code;
+      code.hidden = false;
+      setText("pr-code-left", "Time left " + fmtLeft((pairCode.until - Date.now()) / 1000));
+      note = "Type this code on the AGX link page of the rk console of the board. The code works one time." +
+        (c.wrong ? " Wrong codes: " + c.wrong + " of " + (c.wrong_max || 5) + "." : "");
+    } else {
+      code.textContent = ""; code.hidden = true;
+      setText("pr-code-left", "");
+      if (!note && c.open) note = "A code is open (made by " + (c.made_by || NA) + ", time left " + fmtLeft(c.left_s) + "). Only the page that made the code shows it.";
+    }
+    setText("pr-code-state", note);
+    if (!pairCode && pairTick) { clearInterval(pairTick); pairTick = null; }
+  }
+  function boardRow(b) {
+    const st = b.link_state || "NO DATA";
+    const rm = el("button", { type: "button", class: "da-btn da-btn--sm da-btn--danger" }, "Remove");
+    rm.addEventListener("click", () => openPairDialog(b));
+    const seen = num(b.last_seen_t) ? fmtDateTime(b.last_seen_t) + (b.last_seen_addr ? " from " + b.last_seen_addr : "") : "not yet";
+    return el("tr", null,
+      td("Board", null, el("strong", null, b.name || b.id), el("div", { class: "muted small mono" }, b.id),
+        b.source === "migration" ? el("span", { class: "tag", title: "From the old control token (data/control.token)" }, "migrated") : null),
+      td("Addresses", { class: "mono" }, (b.addresses || []).join(", ") || NA),
+      td("Paired since", { class: "nowrap" }, fmtDateTime(b.paired_t)),
+      td("Last seen", null, seen),
+      td("Link", null, trafficLight(LINK_TL[st] || "unknown", "sm", true, st), b.link_detail ? el("div", { class: "muted small" }, b.link_detail) : null),
+      td("Actions", { class: "actions" }, rm));
+  }
+  function renderPair() {
+    const d = pairDoc; if (!d) return;
+    renderUnit(d.unit || {});
+    const probs = [];
+    if (d.control_mode === "vehicle") probs.push("AGX02 is in vehicle mode: it refuses pairing, removal and changes of these settings.");
+    for (const p of [d.control_problem, d.store_problem, d.settings_problem]) if (p) probs.push(p);
+    pairMsg("pr-problem", probs.join(" "));
+    renderCode();
+    const rows = d.boards || [];
+    setText("pr-count", rows.length + (rows.length === 1 ? " board" : " boards"));
+    fill($("pr-boards").tBodies[0], rows.length ? rows.map(boardRow)
+      : [emptyRow(6, "No paired board. Make a pairing code, then pair the board on its rk console.")]);
+    const o = d.other_subscribers || {};
+    setText("pr-others", "Other result subscribers: " + (o.count == null ? NA : o.count + " (not paired)" +
+      ((o.addresses || []).length ? ": " + o.addresses.join(", ") : "")));
+    pairMsg("pr-linknote", o.available === false && o.reason ? "Link state: " + o.reason + "." : "");
+    setText("pr-filter", "Video source filter of agx-infer: " + filterText(d.source_filter || {}));
+    const acc = (d.settings && d.settings.accepted_board_address) || "";
+    if (d.accepted_line) setText("pr-acc-line", d.accepted_line);
+    setText("pr-acc-now", "Now: " + (acc ? "only " + acc + " can control this AGX." : "empty (each paired board can control this AGX)."));
+    if (!accDirty && document.activeElement !== $("pr-acc")) $("pr-acc").value = acc;
+  }
+  $("pr-code-btn").addEventListener("click", async () => {
+    if (pairBusy) return;
+    pairBusy = true; $("pr-code-btn").disabled = true; pairMsg("pr-error", ""); pairMsg("pr-notice", "");
+    try {
+      const res = await postWrite("/api/pair/code");
+      if (res.accepted && res.doc && res.doc.code) {
+        pairCode = { code: res.doc.code, expires_t: res.doc.expires_t, until: Date.now() + (num(res.doc.ttl_s) ? res.doc.ttl_s : 600) * 1000 };
+        if (pairDoc) pairDoc.code = { open: true, state: "open", expires_t: res.doc.expires_t, wrong: 0, wrong_max: res.doc.wrong_max };
+        if (!pairTick) pairTick = setInterval(renderCode, 1000);
+        renderCode();
+      } else pairMsg("pr-error", refusalText(res));
+    } catch (e) { pairMsg("pr-error", "The request did not complete: " + e.message); }
+    pairBusy = false; $("pr-code-btn").disabled = false;
+    loadPairState();
+  });
+  $("pr-acc").addEventListener("input", () => { accDirty = true; $("pr-acc").removeAttribute("aria-invalid"); });
+  $("pr-acc-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (pairBusy) return;
+    const v = $("pr-acc").value.trim();
+    if (v !== "" && !/^\d{1,3}(\.\d{1,3}){3}$/.test(v)) {
+      $("pr-acc").setAttribute("aria-invalid", "true");
+      pairMsg("pr-error", "Type an IPv4 address (for example 10.0.0.208), or make the field empty.");
+      return;
+    }
+    pairBusy = true; $("pr-acc-save").disabled = true; pairMsg("pr-error", ""); pairMsg("pr-notice", "");
+    try {
+      const res = await postWrite("/api/pair/settings", { accepted_board_address: v });
+      if (res.accepted) {
+        accDirty = false;
+        pairMsg("pr-notice", "AGX02 saved the accepted board address." + (res.doc.warning ? " Warning: " + res.doc.warning + "." : ""));
+      } else pairMsg("pr-error", refusalText(res));
+    } catch (e) { pairMsg("pr-error", "The request did not complete: " + e.message); }
+    pairBusy = false; $("pr-acc-save").disabled = false;
+    loadPairState();
+  });
+  // The FrameLink / RkCameraInfo source filter that agx-infer uses now (GET /api/pair/state source_filter).
+  function filterText(f) {
+    if (f.mode === "only") return "only from " + f.addresses.join(", ") + "." + (f.error ? " Problem: " + f.error + "." : "");
+    if (f.mode === "any") return "off. No paired board has an address: agx-infer accepts video frames and camera names from each address.";
+    if (f.mode === "none") return "no paired board has an address: agx-infer accepts video frames and camera names from no address.";
+    return NA + (f.reason ? " (" + f.reason + ")" : "");
+  }
+  // Addresses that stay in the paired boards file after the removal of board b.
+  function addressesLeft(b) {
+    const left = new Set();
+    for (const x of (pairDoc && pairDoc.boards) || []) if (x.id !== b.id) for (const a of x.addresses || []) left.add(a);
+    return left.size;
+  }
+  function openPairDialog(b) {
+    prDlg = b;
+    setText("pr-dlg-title", "Remove the pairing of " + (b.name || b.id));
+    const f = (pairDoc && pairDoc.source_filter) || {};
+    const lastText = "No other paired board has an address. " + (f.when_empty === "none"
+      ? "Then agx-infer accepts video frames and camera names from no address, until you pair a board again."
+      : f.when_empty === "any"
+        ? "Then the video source filter of agx-infer is off: it accepts video frames and camera names from each address, until you pair a board again."
+        : "Then agx-infer has no board address for its video source filter.");
+    const body = [
+      el("p", null, "AGX02 refuses the control token of ", el("code", null, b.name || b.id), " at once."),
+      el("p", null, "To control this AGX again, the board must pair again with a new code.")];
+    if (!addressesLeft(b)) body.push(el("p", { class: "callout callout--amber", id: "pr-dlg-last" }, el("strong", null, "Last board address. "), lastText));
+    $("pr-dlg-body").replaceChildren(...body);
+    const ok = $("pr-dlg-ok");
+    ok.textContent = "Remove";
+    prDlgError("");
+    ok.disabled = false; $("pr-dlg-cancel").disabled = false;
+    const d = $("pr-dlg");
+    if (!d.open) { if (typeof d.showModal === "function") d.showModal(); else d.setAttribute("open", ""); }
+  }
+  function prDlgError(t) { const e = $("pr-dlg-error"); e.textContent = t; e.hidden = !t; }
+  function closePairDialog() {
+    if (prBusy) return;
+    prDlg = null;
+    const d = $("pr-dlg");
+    if (d.open) { if (typeof d.close === "function") d.close(); else d.removeAttribute("open"); }
+  }
+  $("pr-dlg-cancel").addEventListener("click", closePairDialog);
+  $("pr-dlg").addEventListener("cancel", (ev) => { ev.preventDefault(); closePairDialog(); });
+  $("pr-dlg-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!prDlg || prBusy) return;
+    const b = prDlg;
+    prBusy = true; prDlgError(""); $("pr-dlg-ok").disabled = true; $("pr-dlg-cancel").disabled = true;
+    $("pr-dlg-ok").textContent = "Working";
+    try {
+      const res = await postWrite("/api/pair/boards/" + encodeURIComponent(b.id) + "/remove");
+      prBusy = false;
+      if (res.accepted) {
+        closePairDialog();
+        pairMsg("pr-error", "");
+        pairMsg("pr-notice", "AGX02 removed the pairing of " + (b.name || b.id) + "." +
+          (res.doc && res.doc.warning ? " Warning: " + res.doc.warning + "." : ""));
+      } else {
+        prDlgError(refusalText(res));
+        $("pr-dlg-ok").textContent = "Remove";
+      }
+    } catch (e) {
+      prBusy = false;
+      prDlgError("The request did not complete: " + e.message);
+      $("pr-dlg-ok").textContent = "Remove";
+    }
+    $("pr-dlg-ok").disabled = false; $("pr-dlg-cancel").disabled = false;
+    loadPairState();
+  });
+
   /* ---------------- pages (hash routing, router.js) ---------------- */
   const POLLERS = { catalog: loadCatalog, models: loadModels, events: loadEvents, control: loadControl, services: loadServices };
   let currentPage = null, pollTimers = [];
@@ -1261,7 +1468,9 @@
     if (prev !== r.page) {
       // a confirmation is for the page where it opened: close it (it stays only while its request runs, to show the result)
       closeDialog();
+      closePairDialog();
       setPolls(r.page);
+      setPairPoll(r.page === "settings");
       if (r.page === "models") renderModels();
       if (r.page === "overview") renderOverview();
       if (r.page === "history") requestAnimationFrame(resizeCharts);
@@ -1287,6 +1496,7 @@
       ["Camera tile state", "this page (tiles.js)", "250 ms", "always"],
       ["Camera snapshots", "/api/cameras/N/snapshot.jpg", "1 s (only a new snapshot)", "always"],
       ...pollRows.map(([k, ms, label]) => [NAME[k] || k, SRC[k] || k, per(ms), "while the " + label + " page shows"]),
+      ["Paired boards, pairing code state, this unit", "/api/pair/state", per(PAIR_POLL_MS), "while the Settings page shows"],
       ["Logs", "/api/services/logs", per(R.LOGS_MS), "while the Services page shows and the logs are open"],
       ["History", "/api/history", "10 s (1 h) or 60 s (24 h)", "always"],
     ];

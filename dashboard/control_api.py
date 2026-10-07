@@ -11,7 +11,8 @@ Write routes (202 = the change started; 4xx = refused, {"ok": false, "reason": .
   POST /api/models/rollback
 Authentication: dashboard/auth.py GuardMiddleware. HTTP Basic (a person on the AGX page: source agx-dashboard; a write
 request must also send "X-AGX-CSRF: 1" and, when it sends Origin, the same origin) or, on /api/models/ only, the
-Bearer token of the DA01 rk console server (source rk-console; the user name comes in the header X-Actor).
+Bearer token of a paired board (docs/PAIRING_API.md; source rk-console; audit user "<X-Actor>@<board name>", or the
+board name when there is no X-Actor header).
 """
 from __future__ import annotations
 
@@ -37,7 +38,10 @@ def actor(request: Request) -> tuple[str, str]:
     """(source, user) of a request for the audit log."""
     kind = getattr(request.state, "auth_kind", None)
     if kind == "token":
-        return "rk-console", clean(request.headers.get("x-actor") or "rk-console")
+        board = getattr(request.state, "board", None) or {}
+        name = clean(board.get("name") or "rk-console", 40)
+        who = clean(request.headers.get("x-actor") or "", 40)
+        return "rk-console", clean(f"{who}@{name}" if who else name, 82)
     if kind == "basic":
         try:
             raw = base64.b64decode(request.headers.get("authorization", "").split(" ", 1)[1]).decode("utf-8")

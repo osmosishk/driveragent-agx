@@ -227,6 +227,10 @@ def server(creds, fake, engines_dir):
     })
     cfg["history"]["db"] = str(OUT / "v2_history.sqlite")
     cfg["model_store"] = str(OUT / "v2_model_store")   # never the real ~/agx-models
+    # never the real pairing files (the start-up migration of data/control.token, docs/PAIRING_API.md)
+    cfg.update({"control_token_file": str(OUT / "v2_control.token"),
+                "paired_boards_file": str(OUT / "v2_paired_boards.json"),
+                "link_settings_file": str(OUT / "v2_link_settings.json")})
     cfg_path = OUT / "v2_dashboard_test.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg))
     port = _free_port(avoid=(int(fake.endpoint.rsplit(":", 1)[1]),))
@@ -497,13 +501,13 @@ def test_07_page_labels(server, creds):
     assert "No systemd unit exists for the old DriverAgent stack; it starts by hand (~/s.sh)" in page
     assert "SIMULATED" in page and "SIMULATED" in tiles and '"SIMULATED"' in js
     assert "(estimate)" in js
-    # the only write request of the page is the model control POST in postModelControl() (to /api/models/ only);
+    # the only write request of the page is the POST in postWrite() (to /api/models/ and /api/pair/ only);
     # no service control and no delete (tests/test_dashboard_pages.py checks the details)
     import re
     assert [m.group(1) for m in re.finditer(r"method\s*:\s*[\"'](POST|PUT|DELETE|PATCH)", js)] == ["POST"]
     for bad in ('"DELETE"', '"PUT"', '"PATCH"'):
         assert bad not in js
-    assert js.count('"POST"') == 1 and 'fetch("/api/models/" + path' in js
+    assert js.count('"POST"') == 1 and "fetch(path, {" in js and 'const WRITE_PREFIXES = ["/api/models/", "/api/pair/"];' in js
     assert "delete" not in js.lower()
     low = page.lower()
     for bad in (">stop<", ">start<", ">delete<", ">restart<", ">kill<"):

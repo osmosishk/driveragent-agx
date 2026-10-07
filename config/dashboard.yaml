@@ -18,9 +18,8 @@ allow_cidrs:
   - 10.42.0.0/30           # future Link C (direct cable to the RK3588)
   - 100.64.0.0/10          # tailscale tailnet: the RK3588 and the operator devices
 
-# DA01 LAN source address toward 10.0.0.130 (FrameLink and results use the LAN).
-# tailscale 100.64.0.180 was the night-run path.
-rk_ip: "10.0.0.208"
+# The "RK link" card pings the paired board with the newest last_seen (its last_seen_addr) from
+# data/paired_boards.json, the one source of the board addresses on AGX02. The old key rk_ip is not used.
 
 link:
   ping_interval_s: 2

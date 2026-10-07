@@ -17,7 +17,7 @@ DEFAULTS: dict = {
     "tls_keyfile": None,
     # IPv4 only (the socket is IPv4). Same list as dashboard/auth.py DEFAULT_ALLOW.
     "allow_cidrs": ["127.0.0.0/8", "10.0.0.0/24", "10.42.0.0/30", "100.64.0.0/10"],
-    "rk_ip": "100.64.0.180",
+    # rk_ip is not used any more: the link monitor pings the paired boards (data/paired_boards.json)
     "link": {
         "ping_interval_s": 2,
         "loss_window_s": 60,
@@ -31,7 +31,11 @@ DEFAULTS: dict = {
     "model_control": True,
     "model_store": "~/agx-models",
     "control_config": "config/control.yaml",
-    "control_token_file": "data/control.token",
+    "control_token_file": "data/control.token",   # read only by the start-up migration (docs/PAIRING_API.md)
+    # pairing (docs/PAIRING_API.md, common/pairing_store.py). Both files mode 600, in data/ (not in git).
+    "paired_boards_file": "data/paired_boards.json",
+    "link_settings_file": "data/link_settings.json",
+    "infer_config": "config/infer.yaml",          # the ports that GET /api/pair/info shows (read only)
     "model_check_timeout_s": 180,
     "infer_stale_s": 3,
     "models_config": "config/models.yaml",
@@ -94,6 +98,8 @@ def load_config(path: str | None) -> dict:
         with open(p, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
     cfg = _merge(DEFAULTS, data)
+    # the file that gave the values: the pairing migration reads the old rk_ip from it (not from the code default)
+    cfg["config_file"] = str(resolve_path(path)) if path else None
     # flat aliases accepted for convenience
     if "history_db" in data:
         cfg["history"]["db"] = data["history_db"]

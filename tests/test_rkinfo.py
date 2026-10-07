@@ -188,10 +188,10 @@ def test_receiver_own_context_does_not_filter_other_sockets(ctx):
 
 
 def test_receiver_empty_allowlist_accepts_any(ctx, caplog):
-    with caplog.at_level("WARNING", logger="infer.rkinfo"):
+    with caplog.at_level("INFO", logger="infer.rkinfo"):
         rx = rki.RkInfoReceiver("127.0.0.1", 0, allowed=[])
     try:
-        assert any("rk_allowed_sources is empty" in r.getMessage() for r in caplog.records)
+        assert any("no paired board address" in r.getMessage() for r in caplog.records)
         rx.start()
         pub = _pub(ctx, f"tcp://127.0.0.1:{rx.port}")
         assert _send_until(pub, DA01_GOLDEN, lambda: rx.received > 0)

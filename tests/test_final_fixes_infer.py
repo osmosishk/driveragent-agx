@@ -183,35 +183,40 @@ def test_source_filter_loopback(use_process):
 
 
 def test_ingest_allowed_sources_config(caplog):
+    """The board addresses come from data/paired_boards.json (Ingest(allowed_sources=...)); the old config key
+    rk_allowed_sources is not used and not in config/sources.yaml any more."""
     from infer.ingest.ingest import Ingest, parse_allowed_sources
 
     base = {"cameras": [{"cam": c, "port": 16512 + c, "enabled": c == 0} for c in range(6)],
             "rx_process": False, "decoder_prestart": False}
-    # rk mode, empty list: accept all + WARNING at start
-    ing = Ingest(dict(base, rk_allowed_sources=[], bind_host={"rk": "127.0.0.1"}), mode="rk")
+    # rk mode, no address: accept all (INFO at start; the paired boards reader writes the WARNING)
+    ing = Ingest(dict(base, bind_host={"rk": "127.0.0.1"}), mode="rk")
     assert ing.allowed_sources == () and ing.sources[0].allowed_sources == ()
-    with caplog.at_level(logging.WARNING, logger="infer.ingest"):
+    with caplog.at_level(logging.INFO, logger="infer.ingest"):
         ing.start()
         ing.stop()
-    assert any("rk_allowed_sources is empty" in r.getMessage() for r in caplog.records)
+    assert any("no paired board address" in r.getMessage() for r in caplog.records)
     snap = ing.metrics_snapshot()
     assert all(s["foreign_source_drops"] == 0 for s in snap)
-    # rk mode with a list
-    ing = Ingest(dict(base, rk_allowed_sources=["10.42.0.2"]), mode="rk")
+    # rk mode with addresses; the old key is ignored (INFO line)
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="infer.ingest"):
+        ing = Ingest(dict(base, rk_allowed_sources=["10.9.9.9"]), mode="rk", allowed_sources=["10.42.0.2"])
     assert ing.sources[0].allowed_sources == ("10.42.0.2",)
+    assert any("rk_allowed_sources is not used" in r.getMessage() for r in caplog.records)
     # sim mode: no filter (loopback bind)
-    ing = Ingest(dict(base, rk_allowed_sources=["10.42.0.2"]), mode="sim")
+    ing = Ingest(dict(base), mode="sim", allowed_sources=["10.42.0.2"])
     assert ing.allowed_sources == () and ing.bind_host == "127.0.0.1"
+    assert ing.set_allowed_sources(["10.42.0.3"]) is False and ing.sources[0].allowed_sources == ()
     # a bad entry is an error (fail closed)
     with pytest.raises(ValueError):
         parse_allowed_sources(["10.42.0.300"])
     with pytest.raises(ValueError):
         parse_allowed_sources(["::1"])
-    # the project config has the key, and every entry is a valid IPv4 address
+    # the project config does not have the old key any more
     import yaml
     cfg = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), "..", "config", "sources.yaml")))
-    assert "rk_allowed_sources" in cfg
-    assert len(parse_allowed_sources(cfg["rk_allowed_sources"])) == len(cfg["rk_allowed_sources"] or [])
+    assert "rk_allowed_sources" not in cfg
 
 
 def test_ingest_role_rk_only_in_rk_mode():

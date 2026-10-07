@@ -5,11 +5,15 @@ sends one frame per second: 32-byte dabus envelope (src_board 2 = RK, type_id 55
 hash of RkCameraInfo 0x743cffad) + one unpacked single-segment Cap'n Proto RkCameraInfo.
 
 This module BINDS a SUB (subscribe all) on tcp://<bind>:5564 (config/infer.yaml ports.rkinfo, bind.rkinfo).
-- Peer filter: a ZAP IP allowlist (pyzmq ThreadAuthenticator, NULL mechanism, zap_domain set) with the addresses
-  of config/sources.yaml rk_allowed_sources (the same list as the FrameLink receivers). An empty list accepts any
-  address (WARNING at start), as the FrameLink receivers do. The receiver has ITS OWN zmq.Context: the ZAP handler
-  of a context sees every socket of that context, and the node's other sockets (results, status, internal, admin)
-  must not be filtered by this list.
+- Peer filter: a ZAP IP allowlist (own small ZAP handler thread, NULL mechanism, zap_domain set) with the board
+  addresses of data/paired_boards.json (the same list as the FrameLink receivers). set_allowed() changes the list at
+  run time (no restart): the ZAP handler reads the current set for each new connection, and a message from a
+  connected peer whose address left the list is refused ("peer_not_allowed"; the "Peer-Address" property of the
+  frame). An empty list accepts any address, as the FrameLink receivers do. The receiver has ITS OWN zmq.Context:
+  the ZAP handler of a context sees every socket of that context, and the node's other sockets (results, status,
+  internal, admin) must not be filtered by this list.
+- Source of the info: the peer address of each accepted message (stats "peers": {address: last wall time}) and the
+  addresses that ZAP refused ("zap_refused").
 - Envelope check (common/envelope.py: magic, version, length, CRC-32C), then src_board RK, type_id 5564, schema hash
   of RkCameraInfo; then the capnp decode. A refused message is counted by reason and dropped.
 - Keeps the newest info per camId with the receive time. fresh = received in the last FRESH_S (3 s).
@@ -39,6 +43,8 @@ log = logging.getLogger("infer.rkinfo")
 FRESH_S = 3.0
 ZAP_DOMAIN = b"agx-rkinfo"
 MAX_MSG_BYTES = 65536          # an RkCameraInfo is a few hundred bytes; a larger inbound message closes that peer
+ZAP_ENDPOINT = "inproc://zeromq.zap.01"
+PEERS_MAX = 64                 # peer addresses kept in the stats
 REJECT_WHY = {"short message": "envelope_short", "bad magic/version": "envelope_magic",
               "length mismatch": "envelope_length", "crc mismatch": "envelope_crc"}
 
@@ -70,19 +76,82 @@ def check_message(raw: bytes, rk_type, schema_hash: int, type_id: int = sch.TYPE
     return info, ""
 
 
+def _note(d: dict, key: str, value) -> None:
+    """d[key] = value, at most PEERS_MAX keys (the oldest value leaves)."""
+    if key not in d and len(d) >= PEERS_MAX:
+        d.pop(min(d, key=d.get), None)
+    d[key] = value
+
+
+class _ZapHandler:
+    """ZAP handler (RFC 27) for the receiver's own context: 200 when the set is empty or the peer address is in it,
+    else 400. allowed_fn() gives the CURRENT set (a frozenset; read for each new connection)."""
+
+    def __init__(self, ctx: zmq.Context, allowed_fn, on_result):
+        self._allowed_fn = allowed_fn
+        self._on_result = on_result
+        self._sock = ctx.socket(zmq.REP)
+        self._sock.setsockopt(zmq.LINGER, 0)
+        self._sock.bind(ZAP_ENDPOINT)
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="rkinfo-zap", daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        sock = self._sock
+        try:
+            while not self._stop.is_set():
+                try:
+                    if not sock.poll(200):
+                        continue
+                    req = sock.recv_multipart()
+                except zmq.ZMQError:
+                    if self._stop.is_set():
+                        break
+                    self._stop.wait(0.2)
+                    continue
+                version, rid = (req + [b"", b""])[:2]
+                addr = req[3].decode("utf-8", "replace") if len(req) > 3 else ""
+                allowed = self._allowed_fn()
+                ok = version == b"1.0" and (not allowed or addr in allowed)
+                try:
+                    sock.send_multipart([b"1.0", rid, b"200" if ok else b"400",
+                                         b"OK" if ok else b"address not paired", b"", b""])
+                except zmq.ZMQError:
+                    pass
+                try:
+                    self._on_result(addr, ok)
+                except Exception:  # noqa: BLE001 - counters only
+                    pass
+        finally:
+            sock.close(0)
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=2.0)
+
+
 class RkInfoReceiver:
     def __init__(self, host: str = "0.0.0.0", port: int = sch.TYPE_RKINFO, allowed=(), proto_path: str | None = None,
                  fresh_s: float = FRESH_S, extra_allowed=()):
-        """allowed: config/sources.yaml rk_allowed_sources (IPv4 strings); extra_allowed: more addresses (tests:
-        127.0.0.1). Binds at once (a bind error raises: the caller runs without the receiver)."""
+        """allowed: the paired board addresses (IPv4 strings; data/paired_boards.json); extra_allowed: more addresses
+        that are always allowed while the list is not empty (tests: 127.0.0.1). Binds at once (a bind error
+        raises: the caller runs without the receiver)."""
         self.schema = sch.load(proto_path)
         self.rk_type = self.schema.mod.RkCameraInfo
         self.hash = self.schema.hash["RkCameraInfo"]
         self.fresh_s = float(fresh_s)
-        self.allowed = tuple(dict.fromkeys([str(a) for a in allowed] + [str(a) for a in extra_allowed]))
+        self._extra = tuple(str(a) for a in extra_allowed)
+        self.allowed: tuple[str, ...] = ()
+        self._allowed_set: frozenset = frozenset()
+        self._set_allowed(allowed)
+        self.allowed_updates = 0
         self._ctx = zmq.Context()
         self._auth = None
         self._lock = threading.Lock()
+        self.peers: dict[str, float] = {}          # peer address -> wall time of the last accepted message
+        self.zap_refused: dict[str, float] = {}    # address -> wall time of the last connection that ZAP refused
+        self.zap_counts: Counter = Counter()
         self._cams: dict[int, dict] = {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -92,17 +161,13 @@ class RkInfoReceiver:
         self.last_rx_t: float | None = None     # wall clock of the last accepted message
         self.hostname = ""
         try:
-            if self.allowed:
-                from zmq.auth.thread import ThreadAuthenticator
-                self._auth = ThreadAuthenticator(self._ctx, log=logging.getLogger("infer.rkinfo.zap"))
-                self._auth.start()
-                self._auth.allow(*self.allowed)
+            # always a ZAP handler: the list can change from empty to not empty at run time
+            self._auth = _ZapHandler(self._ctx, lambda: self._allowed_set, self._on_zap)
             self._sock = self._ctx.socket(zmq.SUB)
             self._sock.setsockopt(zmq.LINGER, 0)
             self._sock.setsockopt(zmq.RCVHWM, 16)
             self._sock.setsockopt(zmq.MAXMSGSIZE, MAX_MSG_BYTES)
-            if self.allowed:
-                self._sock.setsockopt(zmq.ZAP_DOMAIN, ZAP_DOMAIN)   # NULL mechanism: ZAP runs only with a domain
+            self._sock.setsockopt(zmq.ZAP_DOMAIN, ZAP_DOMAIN)   # NULL mechanism: ZAP runs only with a domain
             self._sock.setsockopt(zmq.SUBSCRIBE, b"")
             self.endpoint = f"tcp://{host}:{int(port)}"
             self._sock.bind(self.endpoint)
@@ -114,16 +179,55 @@ class RkInfoReceiver:
             log.info("RkCameraInfo SUB bound %s (schema hash 0x%08x), peers allowed: %s", self.endpoint, self.hash,
                      ", ".join(self.allowed))
         else:
-            log.warning("RkCameraInfo SUB bound %s: rk_allowed_sources is empty: peers from ANY address are "
-                        "accepted (set it in config/sources.yaml)", self.endpoint)
+            # INFO: the paired boards reader writes the one WARNING for "no paired board"
+            log.info("RkCameraInfo SUB bound %s: no paired board address: peers from ANY address are accepted",
+                     self.endpoint)
+
+    def _set_allowed(self, addrs) -> tuple[str, ...]:
+        addrs = tuple(dict.fromkeys(str(a) for a in (addrs or ())))
+        full = tuple(dict.fromkeys(addrs + self._extra)) if addrs else ()
+        self.allowed = full
+        self._allowed_set = frozenset(full)     # one reference swap: the ZAP thread reads it without a lock
+        return full
+
+    def set_allowed(self, addrs) -> bool:
+        """New peer allowlist at run time (empty = any address). New connections: the ZAP handler. Connected peers:
+        their messages are refused when their address is not in the new list. Returns True when it changed."""
+        old = self.allowed
+        new = self._set_allowed(addrs)
+        if new == old:
+            return False
+        self.allowed_updates += 1
+        if new == ("0.0.0.0",):     # infer.ingest.ingest.REFUSE_ALL: matches no peer
+            log.info("RkCameraInfo peers: ALL refused (paired boards problem)")
+        elif new:
+            log.info("RkCameraInfo peers allowed: %s", ", ".join(new))
+        else:
+            log.info("RkCameraInfo peers: no paired board address: peers from ANY address are accepted")
+        return True
+
+    def _on_zap(self, addr: str, ok: bool) -> None:
+        with self._lock:
+            self.zap_counts["allowed" if ok else "refused"] += 1
+            if not ok:
+                _note(self.zap_refused, addr, time.time())
+        if not ok:
+            self._rlog.warning("zap:" + addr, "RkCameraInfo peer %s refused (not a paired board address)", addr)
 
     @property
     def port(self) -> int:
         return int(self.endpoint.rsplit(":", 1)[1])
 
     # ---- receive ---------------------------------------------------------------------------------
-    def handle(self, raw: bytes, now_mono: float | None = None) -> str:
-        """Check and keep one message. Returns "" (accepted) or the reject reason."""
+    def handle(self, raw: bytes, now_mono: float | None = None, peer: str | None = None) -> str:
+        """Check and keep one message. peer: the TCP peer address (None = not known). Returns "" (accepted) or the
+        reject reason."""
+        allowed = self._allowed_set
+        if peer and allowed and peer not in allowed:
+            why = "peer_not_allowed"         # connected before its address left the list
+            self.rejects[why] += 1
+            self._rlog.warning("reject:" + why, "RkCameraInfo from %s refused: not a paired board address", peer)
+            return why
         info, why = check_message(raw, self.rk_type, self.hash)
         if info is None:
             self.rejects[why] += 1
@@ -137,6 +241,8 @@ class RkInfoReceiver:
             self.received += 1
             self.last_rx_t = wall
             self.hostname = info["hostname"]
+            if peer:
+                _note(self.peers, peer, wall)
         return ""
 
     def _run(self) -> None:
@@ -148,10 +254,14 @@ class RkInfoReceiver:
                     continue
                 for _ in range(64):
                     try:
-                        raw = self._sock.recv(zmq.NOBLOCK)
+                        frame = self._sock.recv(zmq.NOBLOCK, copy=False)
                     except zmq.Again:
                         break
-                    self.handle(raw)
+                    try:
+                        peer = frame.get("Peer-Address")
+                    except (zmq.ZMQError, AttributeError, TypeError):
+                        peer = None
+                    self.handle(frame.bytes, peer=peer if isinstance(peer, str) else None)
             except zmq.ZMQError as e:
                 if self._stop.is_set():
                     break
@@ -174,7 +284,9 @@ class RkInfoReceiver:
         with self._lock:
             return {"endpoint": self.endpoint, "allowed": list(self.allowed), "received": self.received,
                     "rejects": dict(self.rejects), "last_rx_t": self.last_rx_t, "hostname": self.hostname,
-                    "fresh_s": self.fresh_s, "fresh_cams": sorted(fr)}
+                    "fresh_s": self.fresh_s, "fresh_cams": sorted(fr), "peers": dict(self.peers),
+                    "zap_refused": dict(self.zap_refused), "zap": dict(self.zap_counts),
+                    "allowed_updates": self.allowed_updates}
 
     # ---- life ------------------------------------------------------------------------------------
     def start(self) -> None:
@@ -185,6 +297,7 @@ class RkInfoReceiver:
         s = getattr(self, "_sock", None)
         if s is not None:
             s.close(0)
+            self._sock = None
         if self._auth is not None:
             try:
                 self._auth.stop()

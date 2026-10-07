@@ -16,10 +16,18 @@ Schema v2 data (owner Section 4.7), the same in the capnp status and (new keys) 
   last_good_set        <model_store>/_state/last_good.json (controller.runtime.read_set)
   cameras[].name / role_confirmed / info_source   infer/rkinfo.py apply_names (DA01 RkCameraInfo, rk mode only)
   models[].version     the store version ("" = a config/models.yaml entry)
+Paired boards data (internal JSON only; docs/PAIRING_API.md "Paired boards" table; a reader must accept a missing key):
+  allowed_sources      {addresses, from, seq, loaded_t, error, state, changes, when_empty, refusing_all}: the board addresses that agx-infer uses
+                       now (data/paired_boards.json; infer.ingest.ingest.PairedBoards)
+  result_subscribers   {count, addresses}: TCP peers of the results PUB 5560
+  board_sources        {ip: {framelink_frames_3s, framelink_last_t, rkinfo_last_t, result_subscriber, ...}}: one entry
+                       per source address seen in the last 60 s (FrameLink frames or drops, RkCameraInfo, results)
+on_tick: a function called at the start of each tick (infer.main: read data/paired_boards.json again when it changed).
 """
 from __future__ import annotations
 
 import glob
+import ipaddress
 import json
 import logging
 import math
@@ -49,6 +57,7 @@ CATALOG_MAX = 200            # catalog entries in one status (the store has abou
 REASON_MAX = 300             # characters of a catalog reason in the status (the full text is on the dashboard API)
 TEXT_MAX = 1000
 CATALOG_FRESH_S = 30.0       # agx-dashboard writes catalog.json every 10 s: an older one gives no change in progress
+SOURCE_KEEP_S = 60.0         # board_sources: addresses seen in the last 60 s
 
 
 def _text(v, limit: int = TEXT_MAX) -> str:
@@ -161,6 +170,50 @@ def _finite(o):
     return o
 
 
+def _is_ip(a) -> bool:
+    try:
+        ipaddress.ip_address(str(a))
+        return True
+    except ValueError:
+        return False
+
+
+def board_sources(framelink: dict | None, rk_stats: dict | None, subscriber_addresses, allowed=(),
+                  now: float | None = None, refuse_all: bool = False) -> dict:
+    """The "board_sources" key: {ip: {...}} from Ingest.source_stats(), RkInfoReceiver.stats() and the results PUB
+    peers. Only IP addresses (the "other" / "?" counters are left out). allowed: the addresses in use (empty = any,
+    or none when refuse_all)."""
+    now = time.time() if now is None else now
+    out: dict[str, dict] = {}
+
+    def entry(a: str) -> dict:
+        e = out.get(a)
+        if e is None:
+            e = out[a] = {"framelink_frames_3s": 0, "framelink_last_t": None, "rkinfo_last_t": None,
+                          "result_subscriber": False, "framelink_dropped": 0, "framelink_dropped_last_t": None,
+                          "rkinfo_refused_last_t": None,
+                          "allowed": (a in allowed) if allowed else not refuse_all}
+        return e
+
+    for a, f in (framelink or {}).items():
+        if not _is_ip(a):
+            continue
+        e = entry(a)
+        e["framelink_frames_3s"] = int(f.get("frames_3s") or 0)
+        e["framelink_last_t"] = f.get("last_t")
+        e["framelink_dropped"] = int(f.get("dropped") or 0)
+        e["framelink_dropped_last_t"] = f.get("dropped_last_t")
+    rk = rk_stats or {}
+    for key, field in (("peers", "rkinfo_last_t"), ("zap_refused", "rkinfo_refused_last_t")):
+        for a, t in (rk.get(key) or {}).items():
+            if _is_ip(a) and isinstance(t, (int, float)) and now - t <= SOURCE_KEEP_S:
+                entry(a)[field] = t
+    for a in subscriber_addresses or ():
+        if _is_ip(a):
+            entry(a)["result_subscriber"] = True
+    return out
+
+
 def normalize_model_status(m: dict) -> dict:
     """One ModelManager.status() entry -> the dashboard contract keys (missing keys get null / [])."""
     lat_in = m.get("lat_ms") or {}
@@ -198,9 +251,10 @@ class StatusPublisher:
     def __init__(self, node, ingest, manager, results_pub, internal_pub, host: str = "0.0.0.0",
                  port: int = 5561, period_s: float = 1.0, proto_path: str | None = None,
                  ctx: zmq.Context | None = None, model_store: str | None = None,
-                 control_file: str | None = DEFAULT_CONTROL, rkinfo=None):
+                 control_file: str | None = DEFAULT_CONTROL, rkinfo=None, paired=None, on_tick=None):
         """model_store: the controller store root (None = no store: empty catalog and last good set);
-        control_file: config/control.yaml; rkinfo: infer.rkinfo.RkInfoReceiver or None."""
+        control_file: config/control.yaml; rkinfo: infer.rkinfo.RkInfoReceiver or None; paired: an object with
+        snapshot() (infer.ingest.ingest.PairedBoards) or None; on_tick: called at the start of each tick."""
         self.node = node
         self.ingest = ingest
         self.manager = manager
@@ -230,6 +284,8 @@ class StatusPublisher:
         self.sent = 0
         self.last_json: dict | None = None
         self.rkinfo = rkinfo
+        self.paired = paired
+        self.on_tick = on_tick
         self.control_file = control_file
         self.store = None
         if model_store:
@@ -329,6 +385,26 @@ class StatusPublisher:
         return mode != "rk" or any(c.get("simulated") and c.get("frame_age_ms") is not None
                                    for c in cams)
 
+    # ---- paired boards ---------------------------------------------------------------------------
+    def boards(self, pub: dict, rk_stats: dict | None) -> dict:
+        """{"allowed_sources", "result_subscribers", "board_sources"} (JSON keys). A failure gives None values and a
+        rate-limited log line: it must never stop the status."""
+        try:
+            allowed = self.paired.snapshot() if self.paired is not None else None
+            subs = list(pub.get("subscriber_addresses") or [])
+            fls = self.ingest.source_stats() if self.ingest is not None and hasattr(self.ingest, "source_stats") \
+                else {}
+            addrs = (allowed or {}).get("addresses") or []
+            return {"allowed_sources": allowed,
+                    "result_subscribers": {"count": int(pub.get("subscribers") or 0),
+                                           "addresses": sorted(set(a for a in subs if _is_ip(a)))},
+                    "board_sources": board_sources(fls, rk_stats, subs, addrs,
+                                                   refuse_all=bool((allowed or {}).get("refusing_all")))}
+        except Exception as e:  # noqa: BLE001
+            self._rlog.warning("boards", "paired boards part of the status not complete: %s: %s",
+                               type(e).__name__, e)
+            return {"allowed_sources": None, "result_subscribers": None, "board_sources": None}
+
     # ---- build -----------------------------------------------------------------------------------
     def build_json(self, models: list[dict], cams: list[dict], now: float | None = None,
                    control: dict | None = None) -> dict:
@@ -337,6 +413,7 @@ class StatusPublisher:
         pub = self.results_pub.stats() if self.results_pub is not None else {}
         last_ts = [c["last_frame_t"] for c in cams if c.get("last_frame_t")]
         last = max(last_ts) if last_ts else None
+        rk_stats = self.rkinfo.stats() if self.rkinfo is not None else None
         return {
             "schema": SCHEMA_JSON,
             "t": now,
@@ -354,7 +431,8 @@ class StatusPublisher:
             "link": {"last_frame_t": last,
                      "time_since_last_frame_ms": round((now - last) * 1000.0, 1) if last else None},
             **control,
-            "rk_info": self.rkinfo.stats() if self.rkinfo is not None else None,
+            "rk_info": rk_stats,
+            **self.boards(pub, rk_stats),
         }
 
     def build_capnp(self, models: list[dict], cams: list[dict], t_ns: int, control: dict | None = None) -> bytes:
@@ -434,6 +512,11 @@ class StatusPublisher:
 
     # ---- run -------------------------------------------------------------------------------------
     def tick(self) -> dict:
+        if self.on_tick is not None:
+            try:
+                self.on_tick()
+            except Exception as e:  # noqa: BLE001 - the status must go on
+                self._rlog.warning("on_tick", "status tick hook failed: %s: %s", type(e).__name__, e)
         models = self._models()
         cams = self._cameras()
         self.node.evaluate(models, {int(c["cam"]): c["state"] for c in cams})

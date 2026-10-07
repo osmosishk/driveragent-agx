@@ -24,6 +24,12 @@ Robustness:
 Source filter (M4, rk mode): allowed_sources = list of source IP addresses. When it is not empty,
 a datagram from another address is dropped before the reassembly and counted in
 foreign_source_drops. Empty list = accept all (fast path: recv_into, no address check).
+set_allowed_sources() changes the list at run time (data/paired_boards.json changed): the receive
+process gets the new list on its control pipe (no new process, no frame loss); the thread path reads
+it at the next datagram.
+Per-source counters (Paired boards table, docs/PAIRING_API.md): frames per source address (the
+source of the datagram that completed the frame) and dropped datagrams per source address:
+source_stats().
 
 Source label (R13): Frame.source is "live" only when the FrameLink source byte is SOURCE_LIVE AND
 the configured mode is "rk" (expect_simulated False). In sim mode every frame is simulated: a frame
@@ -34,6 +40,7 @@ from __future__ import annotations
 import socket
 import threading
 import time
+from collections import deque
 
 import numpy as np
 
@@ -133,6 +140,87 @@ class _RemoteCounters:
         self.base = {k: getattr(self, k) for k in self.FIELDS}
 
 
+SRC_KEEP_S = 60.0       # a source address without frames or drops for this time leaves source_stats()
+SRC_MAX = 64            # source addresses kept per camera (a flood of forged addresses cannot grow it)
+
+
+class SourceCounter:
+    """Frames and dropped datagrams per source address of ONE camera. note_frame() runs once per frame (not per
+    datagram); it is called from the receive thread, source_stats() from the status thread (the GIL keeps each
+    dict / deque operation whole; the read copies)."""
+
+    def __init__(self):
+        self.frames: dict[str, list] = {}     # addr -> [deque of monotonic times (last 3 s+), total, last wall t]
+        self.drops: dict[str, list] = {}      # addr -> [total, last wall t]
+        self._drop_prev: dict[str, int] = {}  # the cumulative per-address counts of the current receive process
+
+    def note_frame(self, src: str, now_mono: float) -> None:
+        e = self.frames.get(src)
+        if e is None:
+            if len(self.frames) >= SRC_MAX:
+                self._prune(now_mono)
+                if len(self.frames) >= SRC_MAX:
+                    return
+            e = self.frames[src] = [deque(maxlen=1024), 0, None]
+        e[0].append(now_mono)
+        e[1] += 1
+        e[2] = time.time()
+
+    def note_drops(self, cumulative: dict) -> None:
+        """cumulative: {addr: dropped datagrams} of the current receive process (stats message)."""
+        if not cumulative:
+            return
+        now = time.time()
+        for a, n in cumulative.items():
+            d = n - self._drop_prev.get(a, 0)
+            if d > 0:
+                e = self.drops.get(a)
+                if e is None:
+                    if len(self.drops) >= SRC_MAX:
+                        continue
+                    e = self.drops[a] = [0, None]
+                e[0] += d
+                e[1] = now
+        self._drop_prev = dict(cumulative)
+
+    def note_drop(self, src: str) -> None:
+        """One dropped datagram (thread mode)."""
+        e = self.drops.get(src)
+        if e is None:
+            if len(self.drops) >= SRC_MAX:
+                return
+            e = self.drops[src] = [0, None]
+        e[0] += 1
+        e[1] = time.time()
+
+    def new_process(self) -> None:
+        self._drop_prev = {}
+
+    def _prune(self, now_mono: float) -> None:
+        wall = time.time()
+        for a in [a for a, e in list(self.frames.items()) if e[2] is None or wall - e[2] > SRC_KEEP_S]:
+            self.frames.pop(a, None)
+
+    def stats(self, now_mono: float | None = None, window_s: float = 3.0) -> dict:
+        """{addr: {"frames_window", "frames_total", "last_t", "dropped", "dropped_last_t"}} of the addresses with
+        frames or drops in the last SRC_KEEP_S."""
+        now_mono = time.monotonic() if now_mono is None else now_mono
+        wall = time.time()
+        out: dict[str, dict] = {}
+        for a, (dq, total, last) in list(self.frames.items()):
+            if last is None or wall - last > SRC_KEEP_S:
+                continue
+            times = list(dq)
+            out[a] = {"frames_window": sum(1 for t in times if now_mono - t <= window_s), "frames_total": total,
+                      "last_t": last, "dropped": 0, "dropped_last_t": None}
+        for a, (n, last) in list(self.drops.items()):
+            if last is None or wall - last > SRC_KEEP_S:
+                continue
+            e = out.setdefault(a, {"frames_window": 0, "frames_total": 0, "last_t": None})
+            e["dropped"], e["dropped_last_t"] = n, last
+        return out
+
+
 class LateFilterReassembler(fl.Reassembler):
     """common.framelink.Reassembler with the late-fragment rule of rx_proc.ShmReassembler.
 
@@ -200,6 +288,12 @@ class FrameLinkReceiver:
         self.cam = cam
         # source IP addresses accepted (empty = all); see the module doc
         self.allowed_sources = tuple(str(a) for a in (allowed_sources or ()))
+        self._allowed = frozenset(self.allowed_sources) or None   # thread mode: read per datagram
+        self._ctl = None                # process mode: write end of the control pipe (main -> receive process)
+        self._ctl_lock = threading.Lock()
+        self.allowed_updates = 0        # set_allowed_sources() calls that changed the list
+        self.sources = SourceCounter()
+        self._src = ""                  # thread mode: source of the newest datagram
         self.foreign_source_drops = 0   # thread mode only (process mode: in self.reasm)
         self.port = port
         self.bind_host = bind_host
@@ -239,6 +333,27 @@ class FrameLinkReceiver:
         self._pend_dg = 0
         self._t_flush = 0.0
         self.rcvbuf = None
+
+    # ---- source filter at run time -------------------------------------------------------------------
+    def set_allowed_sources(self, addrs) -> bool:
+        """New source filter (empty = accept all). Process mode: sent to the running receive process on its
+        control pipe (a restarted process gets it as its start argument). Returns True when the list changed."""
+        new = tuple(dict.fromkeys(str(a) for a in (addrs or ())))
+        with self._ctl_lock:
+            if new == self.allowed_sources:
+                return False
+            self.allowed_sources = new
+            self._allowed = frozenset(new) or None
+            self.allowed_updates += 1
+            if self._ctl is not None:
+                try:
+                    self._ctl.send(("allow", list(new)))
+                except (OSError, ValueError):
+                    pass   # the process ended: the supervisor starts a new one with the new list
+        return True
+
+    def source_stats(self, now_mono: float | None = None) -> dict:
+        return self.sources.stats(now_mono)
 
     # ---- lifecycle ---------------------------------------------------------------------------------
     def _make_decoder(self) -> None:
@@ -298,15 +413,26 @@ class FrameLinkReceiver:
         size = self.ring_slots * (rx_proc.SLOT_HDR_LEN + self.max_frame)
         self._shm = shared_memory.SharedMemory(create=True, size=size)
         rd, wr = ctx.Pipe(duplex=False)
+        ctl_rd, ctl_wr = ctx.Pipe(duplex=False)     # main -> receive process: ("allow", [addresses])
         self._stop_evt = ctx.Event()
+        with self._ctl_lock:
+            allowed = self.allowed_sources
         self._proc = ctx.Process(
             target=rx_proc.run, name=f"flrx-cam{self.cam}", daemon=True,
             args=(self.cam, self.bind_host, self.port, self.rcvbuf_req, self._shm.name,
                   self.ring_slots, self.max_frame, wr, self._stop_evt, self.reassembly_timeout_s,
-                  0.05, self.allowed_sources))
+                  0.05, allowed, ctl_rd))
         self._proc.start()
         wr.close()
+        ctl_rd.close()
         self._conn = rd
+        with self._ctl_lock:
+            self._ctl = ctl_wr
+            if self.allowed_sources != allowed:   # changed while the process started
+                try:
+                    ctl_wr.send(("allow", list(self.allowed_sources)))
+                except (OSError, ValueError):
+                    pass
         try:
             msg = rd.recv() if rd.poll(10.0) else ("err", "receive process did not start in 10 s")
         except (EOFError, OSError) as e:
@@ -325,6 +451,10 @@ class FrameLinkReceiver:
     def _stop_child(self) -> None:
         if self._stop_evt is not None:
             self._stop_evt.set()
+        with self._ctl_lock:
+            if self._ctl is not None:
+                self._ctl.close()
+                self._ctl = None
         if self._conn is not None:
             self._conn.close()  # a child blocked in send() gets BrokenPipeError and ends
             self._conn = None
@@ -376,6 +506,7 @@ class FrameLinkReceiver:
                     self.metrics.set_error(f"receive process restart failed: {e}")
                     continue
                 self.reasm.new_process()
+                self.sources.new_process()
                 self.rx_restarts += 1
                 self.metrics.set_error("")
                 self.flush()
@@ -387,6 +518,7 @@ class FrameLinkReceiver:
         conn = self._conn
         smv = self._shm.buf
         r = self.reasm
+        src_count = self.sources
         t_house = time.monotonic()
         reason = "stop"
         try:
@@ -405,7 +537,9 @@ class FrameLinkReceiver:
                 try:
                     kind = msg[0]
                     if kind == "f":
-                        _, slot, gen, ln, t_recv_ns, nfrags = msg
+                        _, slot, gen, ln, t_recv_ns, nfrags = msg[:6]
+                        if len(msg) > 6 and msg[6]:
+                            src_count.note_frame(msg[6], time.monotonic())
                         off = rx_proc.slot_offset(slot, self.max_frame) + rx_proc.SLOT_HDR_LEN
                         raw = bytes(smv[off:off + ln])
                         if rx_proc.SLOT_HDR.unpack_from(smv, off - rx_proc.SLOT_HDR_LEN)[0] != gen:
@@ -417,6 +551,8 @@ class FrameLinkReceiver:
                     elif kind == "s":
                         _, dg, nb, lf, ab, bad, err, late, ns, sp = msg[:10]
                         fsd = msg[10] if len(msg) > 10 else 0
+                        if len(msg) > 11:
+                            src_count.note_drops(msg[11])
                         ddg, dnb = dg - (r.datagrams - r.base["datagrams"]), \
                             nb - (r.bytes - r.base["bytes"])
                         r.update(dict(datagrams=dg, bytes=nb, lost_fragments=lf, abandoned=ab,
@@ -445,17 +581,27 @@ class FrameLinkReceiver:
         buf = bytearray(DGRAM_MAX)
         mv = memoryview(buf)
         sock = self._sock
-        allowed = frozenset(self.allowed_sources) if self.allowed_sources else None
+        fast = False      # no filter and the source of this 50 ms is known: recv_into
+        t_src = 0.0
         while not self._stop.is_set():
             try:
-                if allowed is None:
+                if fast:
                     n = sock.recv_into(buf)
                 else:
                     n, addr = sock.recvfrom_into(buf)
-                    if addr[0] not in allowed:
+                    src = self._src = addr[0]
+                    allowed = self._allowed            # set_allowed_sources() may change it at any time
+                    if allowed is None:
+                        fast = True
+                        t_src = time.monotonic()
+                    elif src not in allowed:
                         self.foreign_source_drops += 1
+                        self.sources.note_drop(src)
                         continue
+                if fast and self._t_flush - t_src >= 0.05:
+                    fast = False       # read the source (and the filter) again
             except socket.timeout:
+                fast = False
                 self.housekeeping()
                 continue
             except OSError as e:
@@ -478,6 +624,8 @@ class FrameLinkReceiver:
         out = self.reasm.push(dgram, now)
         frame = None
         if out is not None:
+            if self._src:
+                self.sources.note_frame(self._src, now)
             t_recv_ns = time.time_ns()
             frame = self._on_complete(out, t_recv_ns, fl.FRAG.unpack_from(dgram)[5])
         if out is not None or now - self._t_flush >= 0.02:

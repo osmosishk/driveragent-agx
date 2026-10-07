@@ -1,4 +1,5 @@
-"""FastAPI app factory for the agx02 dashboard. READ-ONLY: GET routes only."""
+"""FastAPI app factory for the agx02 dashboard. Read routes, the model controller (dashboard/control_api.py) and the
+pairing of RK boards (dashboard/pairing_api.py, docs/PAIRING_API.md) are the only write routes."""
 from __future__ import annotations
 
 import asyncio
@@ -14,8 +15,9 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 
 from common.env import PROJECT_ROOT, get, load_env
-from dashboard import control_api
-from dashboard.auth import GuardMiddleware
+from common.pairing_store import PairingStore
+from dashboard import control_api, pairing_api
+from dashboard.auth import GuardMiddleware, LoginFails
 from dashboard.collectors.engines import EngineScanner
 from dashboard.collectors.health import HealthCollector, worst
 from dashboard.collectors.infer_status import InferStatusClient
@@ -235,7 +237,10 @@ class Hub:
         return label_simulated(doc)  # R13 safety net: no simulated object without its label
 
 
-def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True) -> FastAPI:
+def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True,
+               migrate: bool | None = None) -> FastAPI:
+    """migrate (default: start_collectors, i.e. a real start): the one-time pairing migration of the old control
+    token file (docs/PAIRING_API.md). Tests that do not test it give start_collectors=False and touch no file."""
     if env is None:
         env = load_env(resolve_path(cfg.get("env_file", ".env")))
     user = get(env, "AGX_DASH_USER", "agx")
@@ -358,10 +363,20 @@ def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True
 
     control_api.register(app, hub)
 
+    # pairing: the paired boards store (the board tokens of /api/models/*), the one-time migration, the routes
+    pairing = PairingStore(resolve_path(cfg.get("paired_boards_file") or "data/paired_boards.json"),
+                           resolve_path(cfg.get("link_settings_file") or "data/link_settings.json"))
+    fails = LoginFails()   # shared: a wrong pairing code counts as a failed login of the address
+    app.state.pairing = pairing
+    pairing_api.register(app, hub, pairing, fails, cfg)
+    if start_collectors if migrate is None else migrate:
+        pairing_api.migrate_at_start(pairing, cfg, app.state.pair_audit)
+
     allow = cfg.get("allow_cidrs")
     # add_middleware puts the newest one outside: SecurityHeaders is outermost, so the
     # 401/403 replies of GuardMiddleware also get the security headers.
     app.add_middleware(GuardMiddleware, user=user, password=password, allow_cidrs=allow,
-                       token_file=resolve_path(cfg.get("control_token_file")))
+                       pairing=pairing, fails=fails, audit=app.state.pair_audit,
+                       vehicle=app.state.pair_vehicle_refusal)
     app.add_middleware(SecurityHeaders)
     return app

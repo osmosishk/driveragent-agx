@@ -333,8 +333,61 @@
 
       <!-- ======================================== Settings ======================================== -->
       <section class="page" data-page="settings" id="page-settings" hidden aria-labelledby="h-settings">
-        <div class="page-head"><div><h1 id="h-settings">Settings</h1><p>The settings of this page. They change nothing on AGX02.</p></div></div>
+        <div class="page-head"><div><h1 id="h-settings">Settings</h1><p>The settings of this page, and the link to the RK boards (part RK link).</p></div></div>
         <div class="grid">
+          <section class="card wide" id="c-pair" aria-labelledby="h-pair">
+            <h2 id="h-pair">RK link <span class="card__sub">the RK boards that can use this AGX</span>
+              <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-pair" title="Information">i</button></h2>
+            <div class="info-text" id="info-pair" hidden>
+              <p>An RK board (for example DA01) pairs with this AGX one time. Make a pairing code here. Then type the code on the AGX link page of the rk console of the board.</p>
+              <p>A pairing gives the board a control token. AGX02 keeps only a hash of the token. Only paired boards can control the models of this AGX. agx-infer accepts video and camera names only from the addresses of the paired boards.</p>
+              <p>A code works one time and stops after 10 minutes. A new code cancels the old code. After 5 wrong codes, the code is cancelled.</p>
+              <p>In vehicle mode (config/control.yaml), AGX02 refuses pairing, removal and changes of these settings. The page then shows the reason.</p>
+            </div>
+            <div id="pr-problem" class="callout callout--amber" hidden></div>
+            <div id="pr-error" class="callout callout--red" role="alert" hidden></div>
+            <div id="pr-notice" class="callout callout--info" role="status" hidden></div>
+
+            <h3>This unit</h3>
+            <dl class="da-kv da-kv--2" id="pr-unit">
+              <div class="da-kv__row"><dt>Name</dt><dd id="pr-name">-</dd></div>
+              <div class="da-kv__row"><dt>Network addresses</dt><dd id="pr-addrs">-</dd></div>
+              <div class="da-kv__row"><dt>Video (FrameLink, UDP)</dt><dd id="pr-p-video" class="mono">-</dd></div>
+              <div class="da-kv__row"><dt>Results (TCP)</dt><dd id="pr-p-results" class="mono">-</dd></div>
+              <div class="da-kv__row"><dt>Status (TCP)</dt><dd id="pr-p-status" class="mono">-</dd></div>
+              <div class="da-kv__row"><dt>Camera names (RkCameraInfo, TCP)</dt><dd id="pr-p-rkinfo" class="mono">-</dd></div>
+              <div class="da-kv__row"><dt>Control (this dashboard, TCP)</dt><dd id="pr-p-api" class="mono">-</dd></div>
+            </dl>
+            <p class="note">These values are read-only. The owner changes the network configuration of AGX02.</p>
+
+            <h3>Pairing code</h3>
+            <div class="row row--wrap pair-code">
+              <button type="button" class="da-btn da-btn--primary" id="pr-code-btn">Make pairing code</button>
+              <output id="pr-code" class="pair-code__value mono" hidden></output>
+              <span id="pr-code-left" class="pair-code__left" aria-live="polite"></span>
+            </div>
+            <p class="note" id="pr-code-state"></p>
+
+            <h3>Paired boards <span id="pr-count" class="card__sub"></span></h3>
+            <div class="da-table-wrap">
+              <table class="da-table da-table--stack" id="pr-boards">
+                <thead><tr><th>Board</th><th>Addresses</th><th>Paired since</th><th>Last seen</th><th>Link</th><th>Actions</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="note" id="pr-others">-</p>
+            <p class="note" id="pr-linknote" hidden></p>
+            <p class="note" id="pr-filter">-</p>
+
+            <h3>Accepted board address</h3>
+            <form class="row row--wrap pair-acc" id="pr-acc-form" autocomplete="off">
+              <label class="da-visually-hidden" for="pr-acc">Accepted board address (optional)</label>
+              <input type="text" id="pr-acc" class="da-input mono" inputmode="decimal" placeholder="optional, for example 10.0.0.208" maxlength="15" spellcheck="false">
+              <button type="submit" class="da-btn" id="pr-acc-save">Save</button>
+            </form>
+            <p class="note" id="pr-acc-line">Empty: each paired board can control this AGX. With an address: only that address can control this AGX.</p>
+            <p class="note" id="pr-acc-now"></p>
+          </section>
           <section class="card" id="c-theme">
             <h2>Theme</h2>
             <span class="seg" role="group" aria-label="Theme" id="theme-seg">
@@ -373,7 +426,7 @@
         </div>
       </section>
 
-      <footer class="foot">Data comes from this machine (/proc, /sys, systemd, docker, agx-infer status). "n/a": the value is not available. SIMULATED: the value comes from a simulated source. Only the Models page can change something: the model controller.</footer>
+      <footer class="foot">Data comes from this machine (/proc, /sys, systemd, docker, agx-infer status). "n/a": the value is not available. SIMULATED: the value comes from a simulated source. Only two parts can change something: the model controller (Models page) and the RK link part of the Settings page.</footer>
     </main>
   </div>
 </div>
@@ -390,6 +443,18 @@
       <div class="da-dialog__actions">
         <button type="button" class="da-btn" id="mc-dlg-cancel">Cancel</button>
         <button type="submit" class="da-btn da-btn--primary" id="mc-dlg-ok">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+<!-- the confirmation of a pairing removal (Settings page, RK link). Outside the page sections, as mc-dlg. -->
+  <dialog id="pr-dlg" class="da-dialog" aria-labelledby="pr-dlg-title">
+    <form id="pr-dlg-form">
+      <h2 class="da-dialog__title" id="pr-dlg-title">Confirm</h2>
+      <div class="da-dialog__body" id="pr-dlg-body"></div>
+      <p class="da-dialog__error" id="pr-dlg-error" role="alert" hidden></p>
+      <div class="da-dialog__actions">
+        <button type="button" class="da-btn" id="pr-dlg-cancel">Cancel</button>
+        <button type="submit" class="da-btn da-btn--danger" id="pr-dlg-ok">Confirm</button>
       </div>
     </form>
   </dialog>

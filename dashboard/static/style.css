@@ -502,6 +502,49 @@ select {
   font: inherit;
 }
 
+/* ---- Settings, RK link: text field, pairing code, accepted board address ---------------------------------------- */
+.da-input {
+  min-height: var(--da-btn-height-sm);
+  padding: 0 10px;
+  border: 1px solid var(--da-border-strong);
+  border-radius: var(--da-radius-sm);
+  background: var(--da-surface);
+  color: var(--da-text);
+  font: inherit;
+  min-width: 0;
+}
+.da-input:focus-visible {
+  outline: 2px solid var(--da-focus);
+  outline-offset: 1px;
+}
+.da-input[aria-invalid='true'] {
+  border-color: var(--da-red);
+}
+.pair-code {
+  min-height: var(--da-btn-height);
+}
+.pair-code__value {
+  padding: 2px 12px;
+  border: 1px dashed var(--da-border-strong);
+  border-radius: var(--da-radius-sm);
+  background: var(--da-surface-2);
+  font-size: var(--da-fs-banner);
+  font-weight: var(--da-fw-strong);
+  letter-spacing: var(--da-ls-brand);
+  user-select: all;
+}
+.pair-code__left {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--da-fw-strong);
+}
+.pair-acc .da-input {
+  width: 18ch;
+  max-width: 100%;
+}
+#c-pair h3 {
+  margin-top: 18px;
+}
+
 /* ---- traffic light (shape + text, never colour alone) ---------------------------------------------------------- */
 .da-tl {
   display: inline-flex;

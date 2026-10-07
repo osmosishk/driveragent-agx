@@ -6,6 +6,11 @@ Parts: Ingest (six cameras -> FrameStore), ModelManager (TensorRT models; on_res
 ResultPublisher 5560 + result cache), StatusPublisher (5561 AgxInferStatus + 127.0.0.1:5562 JSON),
 SnapshotTask (127.0.0.1:5562 JPEG), AdminServer (127.0.0.1:5563), RkInfoReceiver (SUB bound on 5564: DA01
 RkCameraInfo, the camera names and roles; schema v2; a bind error leaves it out with a node error).
+Board addresses: data/paired_boards.json (config/infer.yaml paired_boards_file; written by the pairing code of
+agx-dashboard) is the one source of the FrameLink source filter and the RkCameraInfo peer allowlist. It is read at
+start and again when it changes (checked once per status tick, 1 s), with no restart: the receive processes and the
+ZAP handler get the new set (Node.check_paired_boards). A problem never opens the filter (a bad file at start
+or boards with no usable address: refuse all; infer.ingest.ingest.PairedBoards).
 Start set (config/infer.yaml start_set): "last_good" (default) runs the controller's last good set
 (<model_store>/_state/last_good.json, built with controller.runtime.configs_for_set) when that file has a
 non-empty set; else (and with "models_yaml") config/models.yaml as before. Instances can then be added and
@@ -166,7 +171,13 @@ class Node:
                                         int(ports.get("internal", 5562)), ctx=self.ctx)
             self._parts.append(("internal publisher", self.internal.close))
             self.cache = ResultCache()
-            self.ingest = Ingest(_path(cfg.get("sources_config", "config/sources.yaml")), mode=mode)
+            from infer.ingest.ingest import DEFAULT_PAIRED_FILE, PairedBoards
+            self.paired = PairedBoards(_path(cfg.get("paired_boards_file") or DEFAULT_PAIRED_FILE))
+            self.paired.poll()
+            if self.paired.error:
+                self.state.add_error(f"paired boards: {self.paired.error}")
+            self.ingest = Ingest(_path(cfg.get("sources_config", "config/sources.yaml")), mode=mode,
+                                 allowed_sources=self.paired.filter_addresses)
             log.info("ingest mode %s", self.ingest.mode)
             self.models_cfg, source, problems = select_models(cfg)
             log.info("model list from %s", source)
@@ -181,7 +192,8 @@ class Node:
                 bind.get("status", "0.0.0.0"), int(ports.get("status", 5561)),
                 float(cfg.get("status_period_s", 1.0)), proto, ctx=self.ctx,
                 model_store=str(Store(cfg.get("model_store") or None).root),
-                control_file=_path(cfg.get("control_config", "config/control.yaml")), rkinfo=self.rkinfo)
+                control_file=_path(cfg.get("control_config", "config/control.yaml")), rkinfo=self.rkinfo,
+                paired=self.paired, on_tick=self.check_paired_boards)
             self._parts.append(("status publisher", self.status.stop))
             sc = cfg.get("snapshot") or {}
             self.snapshots = SnapshotTask(self.ingest.store, self.cache, self.internal,
@@ -196,13 +208,38 @@ class Node:
             self._stop_parts()
             raise
 
-    def _make_rkinfo(self, host: str, port: int, proto: str | None):
-        """RkCameraInfo receiver (infer/rkinfo.py), peers = config/sources.yaml rk_allowed_sources. None when it
-        cannot be made: the node runs on (camera names from the config), with a node error."""
+    def check_paired_boards(self) -> bool:
+        """Read data/paired_boards.json again when it changed; give a new address set to the FrameLink receivers and
+        the RkCameraInfo ZAP allowlist (no restart). Called once per status tick. Returns True when the set changed."""
+        err0 = self.paired.error
+        changed = self.paired.poll()
+        if self.paired.error and self.paired.error != err0:
+            self.state.add_error(f"paired boards: {self.paired.error}")
+        if not changed:
+            return False
+        addrs = self.paired.filter_addresses    # () = any source, (REFUSE_ALL,) = no source
         try:
-            from infer.ingest.ingest import parse_allowed_sources
+            self.ingest.set_allowed_sources(addrs)
+        except Exception as e:  # noqa: BLE001
+            log.exception("FrameLink source filter update failed")
+            self.state.add_error(f"FrameLink source filter update failed: {e}")
+        if self.rkinfo is not None:
+            try:
+                self.rkinfo.set_allowed(addrs)
+            except Exception as e:  # noqa: BLE001
+                log.exception("RkCameraInfo allowlist update failed")
+                self.state.add_error(f"RkCameraInfo allowlist update failed: {e}")
+        from infer.ingest.ingest import describe_filter
+        log.info("paired boards changed (seq %s, %s): FrameLink and RkCameraInfo from %s", self.paired.seq,
+                 self.paired.state, describe_filter(addrs))
+        return True
+
+    def _make_rkinfo(self, host: str, port: int, proto: str | None):
+        """RkCameraInfo receiver (infer/rkinfo.py), peers = the paired board addresses (data/paired_boards.json).
+        None when it cannot be made: the node runs on (camera names from the config), with a node error."""
+        try:
             from infer.rkinfo import RkInfoReceiver
-            rk = RkInfoReceiver(host, port, parse_allowed_sources(self.ingest.cfg.get("rk_allowed_sources")), proto)
+            rk = RkInfoReceiver(host, port, self.paired.filter_addresses, proto)
         except Exception as e:  # noqa: BLE001
             msg = f"RkCameraInfo receiver on {host}:{port} not available: {type(e).__name__}: {e}"
             log.exception(msg)

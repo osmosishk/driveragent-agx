@@ -88,7 +88,7 @@ Note (AGX proposal): FrameLink at full rate does not fit the tailscale path (DER
 | 6000-6005 | UDP | RK -> AGX | `0.0.0.0` (mode rk), `127.0.0.1` (mode sim) | FrameLink, camera N on 6000+N | RK repo (`RK3588_AGENT_KICKOFF.md:86`, `:135`) |
 | 5560 | TCP | AGX -> RK | `0.0.0.0` | ZMQ PUB `AgxPerceptionResult` | Night-task Section 6 default |
 | 5561 | TCP | AGX -> RK | `0.0.0.0` | ZMQ PUB `AgxInferStatus`, 1 Hz | Night-task Section 6 default |
-| 5564 | TCP | RK -> AGX | `0.0.0.0` | ZMQ SUB `RkCameraInfo`, 1 Hz (schema v2): the AGX BINDS the SUB, DA01 connects a PUB. Peers: only `config/sources.yaml` `rk_allowed_sources` (ZAP allowlist). The RK binds nothing. | Owner Section 4.7; check `config/infer.yaml` keys `ports.rkinfo`, `bind.rkinfo`; Section 5.4 |
+| 5564 | TCP | RK -> AGX | `0.0.0.0` | ZMQ SUB `RkCameraInfo`, 1 Hz (schema v2): the AGX BINDS the SUB, DA01 connects a PUB. Peers: only the paired board addresses of `data/paired_boards.json` (ZAP allowlist; Section 5.5). The RK binds nothing. | Owner Section 4.7; check `config/infer.yaml` keys `ports.rkinfo`, `bind.rkinfo`; Section 5.4 |
 | 5562 | TCP | local | `127.0.0.1` | Internal JSON status + JPEG snapshots for the dashboard | AGX proposal; check `config/infer.yaml` key `ports.internal`, `config/dashboard.yaml` key `infer_status_endpoint` |
 | 5563 | TCP | local | `127.0.0.1` | Local admin socket: model stop/start for tests. Not reachable from the network. The dashboard stays read-only. | AGX proposal |
 | 8700 | TCP | any -> AGX | `0.0.0.0` | Dashboard, HTTP GET `/api/health`. If 8700 is in use, the next free port (8701, ...). | Night-task Section 6/7 default; check `config/dashboard.yaml` keys `port`, `port_file`, `bind` |
@@ -501,7 +501,7 @@ struct RkCameraInfo {
 |---|---|---|
 | URL | HTTP GET `http://<agx>:8700/api/health` | Night-task Section 6/7 default; check `dashboard/app.py` route `/api/health` |
 | Auth | HTTP Basic auth, realm `agx02-dashboard` | AGX proposal; check `dashboard/auth.py` `REALM` |
-| Allowed sources | Private addresses only: 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 (tailscale), 169.254.0.0/16, ::1, fc00::/7, fe80::/10 | AGX proposal; check `config/dashboard.yaml` key `allow_cidrs` |
+| Allowed sources | IPv4 networks only: 127.0.0.0/8, 10.0.0.0/24, 10.42.0.0/30 (Link C), 100.64.0.0/10 (tailscale). This list is for networks, not for one board: the board addresses are in `data/paired_boards.json` (Section 5.5). | Check `config/dashboard.yaml` key `allow_cidrs` (same list in `dashboard/config.py` and `dashboard/auth.py`) |
 | Methods | GET only (POST gives 405) | Check `tests/test_dashboard.py` `test_read_only_and_logs_whitelist()` |
 | RK client | None. The RK repo has no HTTP client for this. The RK reads nothing from the AGX over HTTP. | RK repo (`T1_rk-repo.md` section 4; the only HTTP use is the rk-updater download, `rk/updater/rk_updater.py:53-54`, `:126`) |
 
@@ -526,7 +526,7 @@ The internal JSON status for the dashboard (127.0.0.1:5562) stays `agx-infer-sta
 | Item | Value | Source |
 |---|---|---|
 | Socket | The AGX BINDS a ZMQ SUB `tcp://0.0.0.0:5564` (subscribe all). DA01 rk-agxlink CONNECTS a PUB to `tcp://<agx>:5564` (LINGER 0, SNDHWM 2, IMMEDIATE 1, send NOBLOCK). The RK binds nothing. | Owner Section 4.7; AGX `infer/rkinfo.py`; DA01 `rk/agxlink/rk_agxlink.py` |
-| Peers | ZAP IP allowlist (pyzmq `ThreadAuthenticator`, NULL mechanism, `zap_domain` set) = `config/sources.yaml` `rk_allowed_sources` (now `10.0.0.208`, `10.0.0.209`). Another address: the connection is refused. An empty list accepts any address (WARNING at start). The receiver has its own ZMQ context, so the allowlist does not apply to the other AGX sockets. | AGX `infer/rkinfo.py` |
+| Peers | ZAP IP allowlist (own ZAP handler thread, NULL mechanism, `zap_domain` set) = the paired board addresses (`data/paired_boards.json`, Section 5.5). It changes at run time, with no restart: a new connection from another address is refused; a message from a connected peer whose address left the list is refused (`rk_info.rejects.peer_not_allowed`; the frame property `Peer-Address`). No paired board: any address is accepted. The receiver has its own ZMQ context, so the allowlist does not apply to the other AGX sockets. | AGX `infer/rkinfo.py` |
 | Rate | 1 Hz | DA01 rk-agxlink |
 | ZMQ frame | One frame = 32-byte dabus envelope + unpacked single-segment Cap'n Proto `RkCameraInfo` | RK repo envelope rule |
 | Envelope | `src_board` 2 (RK), `type_id` 5564, flags bit1 `time_uncertain`, `schema_hash` `0x743cffad`, `t_ptp_ns` = `tNs` | DA01 `agxlink_core.rkcam_message()` |
@@ -534,6 +534,31 @@ The internal JSON status for the dashboard (127.0.0.1:5562) stays `agx-infer-sta
 | Content | Per FrameLink camera: `camId`, `section` (rk-camd stream section), `name` (camera_map label), `port` (connector CAM1..CAM6), `role` (`""` = DA01 has no role), `roleConfirmed`, `sent` | Schema Section 4.3 |
 | Fresh | The newest info per `camId` with its receive time; fresh = received in the last 3 s. Older: the camera falls back to the config (Section 8). | AGX `infer/rkinfo.py` `FRESH_S` |
 | Blocking | A thread with a 200 ms poll; it never blocks frames or results. A bind error of 5564 leaves the receiver out (node error); inference runs on. | AGX `infer/main.py` |
+
+### 5.5 Board addresses on the AGX (paired boards)
+
+| Item | Value | Source |
+|---|---|---|
+| One source | `data/paired_boards.json` (mode 600, not in git). The pairing code of agx-dashboard writes it (atomic). agx-infer uses the union of the `addresses` of all boards. | Link settings contract D; `docs/PAIRING_API.md` |
+| Path | `config/infer.yaml` key `paired_boards_file` (default `data/paired_boards.json`) | AGX `infer/main.py` |
+| FrameLink source filter (UDP 6000-6005, rk mode only) | A datagram from an address that is not in the set is dropped and counted (`foreign_source_drops`, and per source address). | AGX `infer/ingest/rx_proc.py`, `framelink_rx.py` |
+| RkCameraInfo peers (TCP 5564, all modes) | The same set (Section 5.4) | AGX `infer/rkinfo.py` |
+| Reload | agx-infer reads the file again when it changes (mtime, size, inode; check once per status tick, 1 s). No restart: the receive processes get the new set on a control pipe; the ZAP handler reads the current set. | AGX `infer/main.py` `Node.check_paired_boards()` |
+| No file, or no board | Any source address is accepted (one WARNING line). | AGX `infer/ingest/ingest.py` `PairedBoards` |
+| Reader rules | The same rules as the dashboard (`common.pairing_store.read_boards_file`): both see the same boards and addresses. A bad board entry or a bad address is left out (the rest is used); the note is in `allowed_sources.error`. | AGX `infer/ingest/ingest.py` `read_paired_boards()` |
+| Bad file (not JSON, wrong schema, not mode 600) | A problem never opens the filter. The last good set stays when it has an address; else (at start, or after "no file" / "no board") agx-infer refuses ALL sources until a good file (`allowed_sources.state` "error (refusing all)", `when_empty` "none"). The error is in the status (`allowed_sources.error`) and in the node errors. | AGX `infer/ingest/ingest.py` `PairedBoards` |
+| Board(s) but no usable address | agx-infer refuses ALL sources (`state` "no address (refusing all)", `when_empty` "none"). | AGX `infer/ingest/ingest.py` `PairedBoards` |
+| Old keys | `config/sources.yaml` `rk_allowed_sources` and `config/dashboard.yaml` `rk_ip` are not used any more. | |
+| Link monitor (dashboard "RK link" card) | Pings the board with the newest `last_seen_t` (its `last_seen_addr`, else its first address). | AGX `dashboard/collectors/link.py` |
+
+Internal JSON status (127.0.0.1:5562, still `agx-infer-status/1`), new keys for the "Paired boards" table (a reader must
+accept a missing key):
+
+| Key | Value |
+|---|---|
+| `allowed_sources` | `{addresses, from: "paired_boards.json", seq, loaded_t, error, state: "ok" \| "no board" \| "missing" \| "error" \| "error (refusing all)" \| "no address (refusing all)", changes, when_empty: "any" \| "none", refusing_all}`. Empty `addresses`: `when_empty` "any" = each source is accepted, "none" = no source is accepted. |
+| `result_subscribers` | `{count, addresses}`: TCP peers of the results PUB 5560 (socket monitor + `getpeername`) |
+| `board_sources` | `{"<ip>": {framelink_frames_3s, framelink_last_t, rkinfo_last_t, result_subscriber, framelink_dropped, framelink_dropped_last_t, rkinfo_refused_last_t, allowed}}`: one entry per source address seen in the last 60 s |
 
 ## 6. Time
 

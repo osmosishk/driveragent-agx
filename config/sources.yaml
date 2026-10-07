@@ -17,18 +17,13 @@ bind_host:
   sim: "127.0.0.1"
   rk: "0.0.0.0"
 
-# rk mode only: accept FrameLink datagrams only from these source IP addresses. Datagrams from
-# other addresses are dropped and counted (camera counter foreign_source_drops).
-# The same list is the peer allowlist of the RkCameraInfo SUB on port 5564 (infer/rkinfo.py, ZAP; all modes).
-#   []  = accept all source addresses. infer.main writes a WARNING line at start.
-# The owner sets the RK3588 address:
-#   Link C:     rk_allowed_sources: ["10.42.0.2"]
-#   tailscale:  rk_allowed_sources: ["100.64.0.180"]
-# sim mode: not used (the sockets bind 127.0.0.1).
-# Now: DA01 eth0 has both addresses (two DHCP leases). The kernel uses 10.0.0.208 as the source
-# toward 10.0.0.130 (`ip route get 10.0.0.130` on DA01 gives `src 10.0.0.208`).
-# If DA01 gets a new LAN address, update this list.
-rk_allowed_sources: ["10.0.0.208", "10.0.0.209"]
+# rk mode source filter: the board addresses are NOT in this file. They come from data/paired_boards.json
+# (the union of the "addresses" of the paired boards; the AGX dashboard writes it at pairing). agx-infer
+# reads that file again when it changes (no restart). Datagrams from other addresses are dropped and
+# counted (camera counter foreign_source_drops). No file or no board = accept all source addresses
+# (one WARNING line). A problem never opens the filter: a bad file at start (not JSON, not mode 600)
+# or boards with no usable address = refuse all sources. The same set is the peer allowlist of the RkCameraInfo SUB on port 5564
+# (infer/rkinfo.py, ZAP; all modes). The old key rk_allowed_sources is not used any more.
 
 # Camera state (FrameStore): STALE after stale_s without a new frame, NO SIGNAL after no_signal_s.
 stale_s: 0.5

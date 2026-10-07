@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import queue
+import socket
 import threading
 import time
 from collections import deque
@@ -34,6 +36,22 @@ from zmq.utils.monitor import recv_monitor_message
 from common import envelope as env
 from infer.publish import schema as sch
 from infer.publish.internal import PUB_MAX_IN_BYTES, RateLimitedLog
+
+
+def peer_address(fd: int) -> str:
+    """IP address of the TCP peer of a socket fd (the value of a ZMQ EVENT_ACCEPTED), or "?" when not known.
+    Uses a dup of the fd: the ZMQ socket is not touched."""
+    try:
+        s = socket.socket(fileno=os.dup(int(fd)))
+    except (OSError, ValueError, TypeError):
+        return "?"
+    try:
+        p = s.getpeername()
+        return str(p[0]) if isinstance(p, tuple) and p else "?"
+    except OSError:
+        return "?"
+    finally:
+        s.close()
 
 log = logging.getLogger("infer.results")
 
@@ -222,6 +240,7 @@ class ResultPublisher:
         self.dropped_duplicate = 0
         self.errors = 0
         self.subscribers = 0
+        self._peers: dict[int, str] = {}       # fd of an accepted connection -> peer IP address
         self.last_result_t: float | None = None
         self.multi_segment = 0
         self._last_id: dict[tuple, tuple] = {}
@@ -307,11 +326,18 @@ class ResultPublisher:
             except zmq.ZMQError:
                 return
             e = ev.get("event")
+            fd = ev.get("value")
+            # the peer address once per connection (getpeername of a dup of the fd), never per message
+            addr = peer_address(fd) if e == zmq.EVENT_ACCEPTED else None
             with self._lock:
                 if e == zmq.EVENT_ACCEPTED:
                     self.subscribers += 1
+                    if fd is not None:
+                        self._peers[int(fd)] = addr
                 elif e == zmq.EVENT_DISCONNECTED:
                     self.subscribers = max(0, self.subscribers - 1)
+                    if fd is not None:
+                        self._peers.pop(int(fd), None)
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -351,7 +377,8 @@ class ResultPublisher:
         rate = self.rate_hz()
         with self._lock:
             return {"results_port": self.port, "results_rate_hz": rate,
-                    "subscribers": self.subscribers, "results_total": self.results_total,
+                    "subscribers": self.subscribers, "subscriber_addresses": sorted(self._peers.values()),
+                    "results_total": self.results_total,
                     "last_result_t": self.last_result_t, "dropped_queue": self.dropped_queue,
                     "dropped_duplicate": self.dropped_duplicate, "errors": self.errors}
 

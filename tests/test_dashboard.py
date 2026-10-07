@@ -65,8 +65,18 @@ def server(creds):
     OUT.mkdir(parents=True, exist_ok=True)
     port = _free_port()
     log = open(OUT / "dashboard_test.log", "w")
+    # the real config, but the pairing files in tests/out: the start-up pairing migration must never move the real
+    # data/control.token or write the real data/paired_boards.json (docs/PAIRING_API.md)
+    import yaml
+    with open(ROOT / "config" / "dashboard.yaml", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    cfg.update({"control_token_file": str(OUT / "control_test.token"),
+                "paired_boards_file": str(OUT / "paired_boards_test.json"),
+                "link_settings_file": str(OUT / "link_settings_test.json")})
+    cfg_path = OUT / "dashboard_test.yaml"
+    cfg_path.write_text(yaml.safe_dump(cfg))
     proc = subprocess.Popen(
-        [sys.executable, "-m", "dashboard.main", "--config", "config/dashboard.yaml",
+        [sys.executable, "-m", "dashboard.main", "--config", str(cfg_path),
          "--port", str(port), "--port-file", str(OUT / "dashboard_port"),
          "--history-db", str(OUT / "history_test.sqlite"),
          "--engines-cache", str(OUT / "engines_cache_test.json"),

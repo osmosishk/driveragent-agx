@@ -5,8 +5,8 @@ Run: .venv/bin/python -m pytest -p no:cacheprovider -q tests/test_dashboard_page
 - tokens.css: a copy of the rk console tokens with the source line; it loads before style.css.
 - style.css: every colour, corner radius, shadow and font value is a token (var(--da-...)).
 - Pages and nav: one section and one nav link per page; the element ids of the old page (inventory) exist.
-- Model control: the only POST is in postModelControl() and goes to /api/models/; no delete anywhere; no
-  service control words on the page.
+- Writes: the only POST is in postWrite() and goes to /api/models/ (model control) or /api/pair/ (pairing, Settings
+  page); no delete anywhere; no service control words on the page.
 - The TensorRT device warning is only in the model details code path.
 - router.js: pure functions, tested in QuickJS (like tiles.js in tests/test_dashboard_v2.py).
 """
@@ -171,19 +171,25 @@ def test_info_controls():
 
 
 # ---------------------------------------------------------------- model control
-def test_post_only_in_one_function_and_only_to_api_models():
+def test_post_only_in_one_function_and_only_to_api_models_or_pair():
     assert APP.count('"POST"') == 1 and re.findall(r"\bmethod\s*:\s*[\"']([A-Z]+)[\"']", APP) == ["POST"]
-    body = _function_body(APP, "postModelControl")
-    assert 'method: "POST"' in body and 'fetch("/api/models/" + path' in body
+    body = _function_body(APP, "postWrite")
+    assert 'method: "POST"' in body and "fetch(path, {" in body
+    assert 'if (!WRITE_PREFIXES.some((p) => path.startsWith(p))) throw' in body
+    assert 'const WRITE_PREFIXES = ["/api/models/", "/api/pair/"];' in APP
     assert '"X-AGX-CSRF": "1"' in body and '"Content-Type": "application/json"' in body
     assert 'credentials: "same-origin"' in body
-    # only one call of the function; its paths: rollback or name/version/{build|activate|deactivate}
-    assert APP.count("async function postModelControl(") == 1 and APP.count("await postModelControl(") == 1
+    # one definition; each call names its path: /api/models/ (rollback or name/version/{build|activate|deactivate})
+    # or /api/pair/ (code, settings, boards/{id}/remove)
+    assert APP.count("async function postWrite(") == 1
+    calls = re.findall(r"await postWrite\(\"(/api/[a-z]+/[a-z]*)", APP)
+    assert len(calls) == APP.count("await postWrite(") == 4, calls
+    assert sorted(calls) == ["/api/models/", "/api/pair/boards", "/api/pair/code", "/api/pair/settings"], calls
     assert '"rollback"' in APP and "encodeURIComponent(entry.name)" in APP
     for k in ("build", "activate", "deactivate"):
         assert f'"{k}"' in APP
-    # every other fetch is a GET: a method is only in postModelControl (above), 3 fetch calls in all
-    assert len(re.findall(r"\bfetch\(", APP)) == 3   # getJSON, the snapshot, postModelControl
+    # every other fetch is a GET: a method is only in postWrite (above), 3 fetch calls in all
+    assert len(re.findall(r"\bfetch\(", APP)) == 3   # getJSON, the snapshot, postWrite
     for bad in ('"PUT"', '"PATCH"', '"DELETE"'):
         assert bad not in APP
     assert not re.search(r"delete", APP, re.I) and not re.search(r"delete", ROUTER, re.I)
@@ -196,6 +202,11 @@ def test_no_service_control_words_and_no_delete_control():
     # button labels made by app.js
     labels = set(re.findall(r'btn\("([A-Za-z ]+)"', APP))
     assert labels == {"Deactivate", "Build", "Activate"}, labels
+    # the one "Remove" of the page: the removal of a pairing (Settings, RK link), with its confirmation dialog
+    a, b = APP.index("/* ---------------- Settings, RK link: pairing"), APP.index("/* ---------------- pages (hash")
+    hits = [m.start() for m in re.finditer('"Remove"', APP)]
+    assert hits and all(a < i < b for i in hits)
+    assert '<dialog id="pr-dlg"' in PAGE and PAGE.index('<dialog id="pr-dlg"') > PAGE.index("</main>")
     assert 'id="mc-rollback">Rollback</button>' in PAGE
     assert "showModal" in APP and '<dialog id="mc-dlg"' in PAGE   # the confirmation step (native <dialog>)
 

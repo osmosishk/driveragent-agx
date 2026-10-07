@@ -8,11 +8,22 @@ The model controller runs in the agx-dashboard process (`controller/`). Its API 
 | Who | How | Where |
 |---|---|---|
 | A person on the AGX dashboard page | HTTP Basic (`AGX_DASH_USER` / `AGX_DASH_PASSWORD` in `.env`) | every route |
-| The DA01 rk console **server** | `Authorization: Bearer <token>` | `/api/models/*` only |
+| The rk console **server** of a paired board (for example DA01) | `Authorization: Bearer <token>` | `/api/models/*` and `GET /api/pair/boards` only |
 
-- The token is in `data/control.token` on AGX02 (mode 600, owner tonyho, not in git) and in a mode-600 file on DA01.
+- Each paired board has its own token. A board gets it one time, in the answer of `POST /api/pair` (pairing with a
+  one-time code, `docs/PAIRING_API.md`). AGX02 keeps only the SHA-256 of each token, in `data/paired_boards.json`
+  (mode 600, not in git). The board keeps its token in a mode-600 file (DA01: `~/.config/driveragent/agx_tokens/`).
   A browser never gets the token: the rk console server sends the request (owner rule M8).
-- A token file with a wrong mode or owner, or with fewer than 32 characters, turns the token off (Basic still works).
+- The token check is a constant-time compare with each stored hash. A removed board's token gets 401 at once,
+  with `{"ok": false, "reason": "..."}` (`docs/PAIRING_API.md` Section 2). A refused token is not a failed login
+  (no 429 from the polling of a removed board).
+- With an accepted board address (`data/link_settings.json`, Settings page part "RK link"), a token request from an
+  other client address gets `403 {"ok": false, "reason": "control is accepted only from <address>"}`.
+- The old single token file `data/control.token` is not used any more: at the first start of this version, the
+  dashboard moves it to the paired board `rk3588-da01` (only its hash) and renames it to `data/control.token.migrated`.
+  The DA01 token stays the same, so the present pair keeps working with no new pairing.
+- A `paired_boards.json` with a wrong mode or owner, or bad JSON, turns all board tokens off (Basic still works); the
+  Settings page shows the problem.
 - The IP allowlist of `config/dashboard.yaml` applies first (403). 10 failed logins in 300 s from one address give 429.
 - Write requests from the page (Basic) also need the header `X-AGX-CSRF: 1` (Section 3).
 
@@ -87,7 +98,8 @@ The newest controller events, newest first (the audit log of Section 3): `{"t", 
   - `sparsedrive_convnext_orin@1 is NO ADAPTER: no adapter for type 'sparsedrive_backbone' ...`
   - `x@1: the checks are not done yet (owner rule M5)`, `not enough free memory for ...`
 - A request from the page (Basic) must send `X-AGX-CSRF: 1`; a request with an `Origin` of another site is refused (403).
-  A request of the rk console server (Bearer) sends its user name in `X-Actor`.
+  A request of the rk console server (Bearer) sends its user name in `X-Actor`. The audit user is then
+  `<X-Actor>@<board name>` (for example `tony@rk3588-da01`), or the board name when there is no `X-Actor`.
 
 ### Rules of the controller
 - **One change at a time** (M4). A build is a change: during a build every other change is refused.

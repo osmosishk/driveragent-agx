@@ -14,8 +14,14 @@ overrun) and does the CRC check and the rest.
 Slot layout: u64 generation (0 while the slot is written) + frame bytes (FrameLink header+payload).
 
 Source filter (rk mode): when `allowed_sources` is not empty, the loop uses recvfrom_into and drops
-each datagram whose source IP address is not in the list (counter foreign_source_drops). When the
-list is empty, the loop uses recv_into (fast path, no address check).
+each datagram whose source IP address is not in the list (counter foreign_source_drops, and a count
+per dropped source address). When the list is empty, the loop uses recv_into (fast path, no address
+check) and reads the source address with recvfrom_into only once per stats interval.
+The list can change at run time without a new process (data/paired_boards.json changes): the main
+process sends ("allow", [addresses]) on the control pipe `ctl`. The loop reads the pipe only at a
+stats time (every stats_interval_s, and on a socket timeout), never per datagram.
+Source of a frame: the "f" message has the source address of the datagram that completed the frame
+(filter on: exact; filter off: the address sampled in this stats interval).
 
 Keep the imports small: the spawn start method imports this module in the child.
 """
@@ -179,9 +185,17 @@ class ShmReassembler:
         return None
 
 
+def _allowed_set(addrs):
+    """None (no filter) or a frozenset of address strings."""
+    return frozenset(str(a) for a in addrs) if addrs else None
+
+
+FDROP_MAX = 64    # dropped-source addresses counted one by one; more go to the key "other"
+
+
 def run(cam: int, bind_host: str, port: int, rcvbuf: int, shm_name: str, nslots: int,
         slot_size: int, conn, stop_evt, reassembly_timeout_s: float = 0.2,
-        stats_interval_s: float = 0.05, allowed_sources=()) -> None:
+        stats_interval_s: float = 0.05, allowed_sources=(), ctl=None) -> None:
     import gc
     from multiprocessing import shared_memory
 
@@ -211,31 +225,51 @@ def run(cam: int, bind_host: str, port: int, rcvbuf: int, shm_name: str, nslots:
     mv = memoryview(buf)
     recv_into = sock.recv_into
     recvfrom_into = sock.recvfrom_into
-    allowed = frozenset(str(a) for a in allowed_sources) if allowed_sources else None
+    allowed = _allowed_set(allowed_sources)
+    fast = False         # True: no filter and the source of this stats interval is known
+    src = ""             # source address of the newest datagram read with recvfrom_into
     drops = [0]          # foreign_source_drops: datagrams from an address not in `allowed`
+    fdrop: dict = {}     # dropped datagrams per source address (at most FDROP_MAX + "other")
     push = r.push
     mono = time.monotonic
     send = conn.send
+    ctl_poll = ctl.poll if ctl is not None else (lambda: False)
     t_stats = 0.0
     gc.freeze()          # few objects live here; no long GC pauses in the receive loop
 
     def stats():
         send(("s", r.datagrams, r.bytes, r.lost_fragments, r.abandoned, r.bad, r.last_error,
-              r.late, r.new_streams, r.start_partial, drops[0]))
+              r.late, r.new_streams, r.start_partial, drops[0], fdrop))
+
+    def control(allowed):
+        """Read the control pipe (stats time only). Returns the new allowed set."""
+        while ctl_poll():
+            msg = ctl.recv()
+            if msg and msg[0] == "allow":
+                allowed = _allowed_set(msg[1])
+        return allowed
 
     try:
         while True:
             try:
-                if allowed is None:
+                if fast:
                     n = recv_into(buf)            # fast path: no source filter
                 else:
                     n, addr = recvfrom_into(buf)
-                    if addr[0] not in allowed:
+                    src = addr[0]
+                    if allowed is None:
+                        fast = True               # source known for this stats interval
+                    elif src not in allowed:
                         drops[0] += 1
+                        if src in fdrop or len(fdrop) < FDROP_MAX:
+                            fdrop[src] = fdrop.get(src, 0) + 1
+                        else:
+                            fdrop["other"] = fdrop.get("other", 0) + 1
                         now = mono()
                         if now - t_stats >= stats_interval_s:   # also during a flood
                             t_stats = now
                             stats()
+                            allowed = control(allowed)
                             if stop_evt.is_set() or os.getppid() != ppid:
                                 break
                         continue
@@ -245,16 +279,20 @@ def run(cam: int, bind_host: str, port: int, rcvbuf: int, shm_name: str, nslots:
                 # partial frame continues when the sender continues.
                 stats()
                 t_stats = now
+                allowed = control(allowed)
+                fast = False
                 if stop_evt.is_set() or os.getppid() != ppid:
                     break  # stop, or the main process is gone
                 continue
             now = mono()
             out = push(mv[:n], now)
             if out is not None:
-                send(("f", out[0], out[1], out[2], time.time_ns(), out[3]))
+                send(("f", out[0], out[1], out[2], time.time_ns(), out[3], src))
             if now - t_stats >= stats_interval_s:
                 t_stats = now
                 stats()
+                allowed = control(allowed)
+                fast = False                      # read the source again (and the filter)
                 if stop_evt.is_set():
                     break
     except (BrokenPipeError, EOFError, OSError):
