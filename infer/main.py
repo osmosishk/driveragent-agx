@@ -5,6 +5,10 @@
 Parts: Ingest (six cameras -> FrameStore), ModelManager (TensorRT models; on_result ->
 ResultPublisher 5560 + result cache), StatusPublisher (5561 AgxInferStatus + 127.0.0.1:5562 JSON),
 SnapshotTask (127.0.0.1:5562 JPEG), AdminServer (127.0.0.1:5563).
+Start set (config/infer.yaml start_set): "last_good" (default) runs the controller's last good set
+(<model_store>/_state/last_good.json, built with controller.runtime.configs_for_set) when that file has a
+non-empty set; else (and with "models_yaml") config/models.yaml as before. Instances can then be added and
+removed at runtime over the admin socket (no process restart).
 Logs go to stdout (journald). SIGTERM / SIGINT: clean stop of all parts within 5 s.
 Rule R8: this node publishes perception results only. Rule R13: results from simulated frames have
 simulated = true and envelope flag bit0.
@@ -38,6 +42,54 @@ def load_config(path: str) -> dict:
     return cfg
 
 
+START_SETS = ("last_good", "models_yaml")
+
+
+def _models_yaml(cfg: dict) -> tuple[dict, str]:
+    path = _path(cfg.get("models_config", "config/models.yaml"))
+    with open(path) as f:
+        return (yaml.safe_load(f) or {}), path
+
+
+def select_models(cfg: dict) -> tuple[dict, str, list[str]]:
+    """The model list at start: ({"models": [...]}, source in plain words, problems).
+
+    start_set last_good (default): the controller's last good set when <model_store>/_state/last_good.json has a
+    non-empty "set". A version that cannot run is left out and its reason is a problem. When no version of the
+    set can run, config/models.yaml is used (and that is a problem too). start_set models_yaml, or no last good
+    set: config/models.yaml."""
+    problems: list[str] = []
+    why = "no last good set"
+    mode = str(cfg.get("start_set") or "last_good")
+    if mode not in START_SETS:
+        problems.append(f"start_set {mode!r} is not one of {', '.join(START_SETS)}: config/models.yaml is used")
+        mode = "models_yaml"
+    if mode == "last_good":
+        try:
+            from controller import runtime
+            from controller.store import Store
+            store = Store(cfg.get("model_store") or None)
+            d = runtime.read_set(store, runtime.LAST_GOOD)
+            items = list(d["set"]) if d else []
+            if items:
+                cfgs, bad = runtime.configs_for_set(store, items)
+                problems += [f"last good set: {b}" for b in bad]
+                where = store.state / runtime.LAST_GOOD
+                if cfgs:
+                    keys = ", ".join(f"{c['name']}@{c['version']}" for c in cfgs)
+                    return ({"models": cfgs}, f"last good set {where} ({len(cfgs)} of {len(items)} instances: "
+                            f"{keys})", problems)
+                problems.append(f"no instance of the last good set {where} can run: config/models.yaml is used")
+                why = "no instance of the last good set can run"
+        except Exception as e:  # noqa: BLE001
+            problems.append(f"last good set cannot be read: {type(e).__name__}: {e}: config/models.yaml is used")
+            why = "the last good set cannot be read"
+    models, path = _models_yaml(cfg)
+    if mode == "models_yaml":
+        why = "start_set models_yaml"
+    return models, f"{path} ({why})", problems
+
+
 class FallbackManager:
     """Used only when the ModelManager cannot be created: every enabled model is FAILED with the
     reason, so the status shows the problem (node state ERROR)."""
@@ -57,11 +109,20 @@ class FallbackManager:
 
     start_model = stop_model
 
+    def add_model(self, cfg):
+        return False, self.error
+
+    def remove_model(self, key):
+        return False, self.error
+
     def status(self):
         out = []
         for m in self.models:
             en = bool(m.get("enabled"))
-            out.append({"name": m.get("name"), "engine": m.get("engine"), "engine_version": None,
+            ver = str(m.get("version") or "")
+            out.append({"name": m.get("name"), "version": ver,
+                        "instance": f"{m.get('name')}@{ver}" if ver else m.get("name"),
+                        "engine": m.get("engine"), "engine_version": None,
                         "state": "FAILED" if en else "OFF", "error": self.error if en else None,
                         "reason": m.get("reason"), "enabled": en, "cameras": m.get("cameras") or [],
                         "fps": 0.0, "results_total": 0})
@@ -106,8 +167,11 @@ class Node:
             self.cache = ResultCache()
             self.ingest = Ingest(_path(cfg.get("sources_config", "config/sources.yaml")), mode=mode)
             log.info("ingest mode %s", self.ingest.mode)
-            with open(_path(cfg.get("models_config", "config/models.yaml"))) as f:
-                self.models_cfg = yaml.safe_load(f) or {}
+            self.models_cfg, source, problems = select_models(cfg)
+            log.info("model list from %s", source)
+            for p in problems:
+                log.error("start set: %s", p)
+                self.state.add_error(f"start set: {p}")
             self.manager = self._make_manager()
             self.status = StatusPublisher(
                 self.state, self.ingest, self.manager, self.results, self.internal,

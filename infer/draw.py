@@ -200,10 +200,19 @@ def short_model(name: str) -> str:
     return name.replace("driverguard_", "")
 
 
+def result_label(r: dict) -> str:
+    """Short model label of a result: "name" (legacy entry) or "name vV" (model store instance name@V)."""
+    inst = str(r.get("instance") or "")
+    label = short_model(str(r.get("model") or inst))
+    if "@" in inst:
+        label += f" v{inst.split('@', 1)[1]}"
+    return label
+
+
 def corner_text(frame_seq: int, results) -> str:
     parts = [f"frame {frame_seq}"]
     for r in results:
-        parts.append(f"{short_model(r['model'])} {r['frame_seq']}")
+        parts.append(f"{result_label(r)} {r['frame_seq']}")
     return " | ".join(parts)
 
 

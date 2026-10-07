@@ -8,6 +8,10 @@ Result dict (from the ModelManager on_result callback). Snake-case names of the 
   trajectory: None | {frame, points: [{x, y, t_s}] or [(x, y, t_s)], inputs_valid, note}
   masks:      [{name, width, height, encoding, data(bytes)}]
   timing:     {queue_ms, pre_ms, infer_ms, post_ms, total_ms}
+  instance:   "<name>@<version>" of a model store instance, or the model name of a legacy entry (default:
+              model). Not on the wire: the duplicate check and the result cache use (instance, cam), so two
+              versions of one model name can run at the same time. On the wire: model + modelVersion
+              ("<version>:<engine sha256 16 hex>" for a store instance).
 Some other names are also accepted (normalize_result). Other keys are ignored: the capnp struct has
 no field for control values (rule R8: throttle, steer, brake, mu, sigma, pred_speed are never sent).
 
@@ -108,8 +112,10 @@ def normalize_result(r: dict) -> dict:
     sim = bool(r.get("simulated", True)) or source != "live"
     timing = r.get("timing") or {}
     t_res = _get(r, "t_result_ns")
+    model = str(r.get("model", "") or "")
     return {
-        "model": str(r.get("model", "") or ""),
+        "model": model,
+        "instance": str(r.get("instance") or model),
         "model_version": str(_get(r, "model_version", "") or ""),
         "cam": int(_get(r, "cam", 0)),
         "frame_seq": int(_get(r, "frame_seq", 0)) & 0xFFFFFFFF,
@@ -255,10 +261,10 @@ class ResultPublisher:
         the queue is full uses no seq."""
         if self._stop.is_set():
             return None
-        key = (str(result.get("model", "")), int(_get(result, "cam", 0)))
+        key = (str(result.get("instance") or result.get("model", "")), int(_get(result, "cam", 0)))
         ident = (int(_get(result, "frame_seq", 0)), int(_get(result, "t_capture_ns", 0)))
         with self._build_lock:
-            if self._last_id.get(key) == ident:   # never re-send an old result
+            if self._last_id.get(key) == ident:   # never re-send an old result (per model instance + camera)
                 self.dropped_duplicate += 1
                 return None
             self._last_id[key] = ident

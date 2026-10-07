@@ -79,6 +79,8 @@ def normalize_model_status(m: dict) -> dict:
         lat[k] = {p: _num(src.get(p)) for p in _PCT_KEYS}
     return {
         "name": m.get("name"),
+        "version": str(m.get("version") or ""),           # "" for a legacy config/models.yaml entry
+        "instance": m.get("instance") or m.get("name"),   # <name>@<version>, or the name (legacy)
         "engine": m.get("engine"),
         "engine_version": m.get("engine_version"),
         "state": m.get("state") or "OFF",
@@ -160,7 +162,7 @@ class StatusPublisher:
 
     def _collect_errors(self, models: list[dict], cams: list[dict]) -> None:
         for m in models:
-            name = str(m.get("name"))
+            name = str(m.get("instance") or m.get("name"))
             err = m.get("error") or ""
             if err and self._seen_model_err.get(name) != err:
                 self.node.add_error(f"model {name}: {err}")

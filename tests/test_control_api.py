@@ -59,3 +59,27 @@ def test_token_file_must_be_mode_600(client):
     assert client.get("/api/models/catalog", headers={"Authorization": "Bearer " + TOKEN}).status_code == 200
     client.tok.write_text("short\n")                                           # fewer than 32 characters: off
     assert client.get("/api/models/catalog", headers={"Authorization": "Bearer short"}).status_code == 401
+
+
+def test_write_routes_csrf_and_actor(client, tmp_path):
+    from controller import audit
+
+    # a page request (Basic) without the CSRF header is refused before the controller sees it
+    r = client.post("/api/models/x/1/activate", headers=basic(), json={})
+    assert r.status_code == 403 and "X-AGX-CSRF" in r.json()["reason"]
+    r = client.post("/api/models/x/1/activate", headers=dict(basic(), **{"X-AGX-CSRF": "1", "Origin": "http://evil"}))
+    assert r.status_code == 403 and "another site" in r.json()["reason"]
+    r = client.post("/api/models/x/1/activate", headers=dict(basic(), **{"X-AGX-CSRF": "1"}), json={"cameras": [0]})
+    assert r.status_code == 404 and r.json() == {"ok": False, "action": "activate", "model": "x@1",
+                                                 "reason": "no model x@1 in the store"}
+    # the rk console server (token) needs no CSRF header; its user comes in X-Actor
+    tok = {"Authorization": "Bearer " + TOKEN, "X-Actor": "tony"}
+    r = client.post("/api/models/rollback", headers=tok)
+    assert r.status_code == 409 and r.json()["reason"] == "no last good set is stored yet"
+    assert client.post("/api/models/x/1/explode", headers=tok).status_code == 404
+    assert client.post("/api/models/x/1/build", headers=tok, content=b"[1]").status_code == 400
+    ev = audit.read(tmp_path / "store" / "_state")
+    assert [(e["action"], e["source"], e["user"], e["result"]) for e in ev[:2]] == [
+        ("rollback", "rk-console", "tony", "refused"), ("activate", "agx-dashboard", "u", "refused")]
+    # a GET of /api/models (the old page route) stays read-only
+    assert client.post("/api/models", headers=tok).status_code in (401, 405)

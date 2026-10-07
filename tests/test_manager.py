@@ -27,7 +27,7 @@ DTCP_ONNX = "/home/tonyho/model/jetson_bundle/onnx/dtcp_v1.onnx"
 FORBIDDEN = {"throttle", "steer", "brake", "mu", "sigma", "pred_speed", "pred_speed_mps"}
 CONTRACT_KEYS = {"name", "engine", "engine_version", "state", "error", "reason", "enabled", "cameras", "fps",
                  "lat_ms", "gpu_mem_mb", "gpu_mem_note", "trt_match", "trt_build_device", "trt_device_warning",
-                 "trt_version", "load_warnings", "inputs", "outputs", "results_total"}
+                 "trt_version", "load_warnings", "inputs", "outputs", "results_total", "version", "instance"}
 
 pytestmark = pytest.mark.skipif(not os.path.isfile(DTCP_ENGINE), reason="DTCP engine missing")
 
@@ -163,7 +163,8 @@ def test_failed_model_is_isolated_and_stop_start(bad_engine, scratch):
             assert r["simulated"] is True and r["source"] == "test-pattern" and r["cam"] == 0
             assert (r["frame_w"], r["frame_h"]) == (1280, 720) and r["detections"] == [] and r["masks"] == []
             assert r["trajectory"]["inputs_valid"] is False and len(r["trajectory"]["points"]) == 4
-            assert r["model_version"] == "dtcp_v1_fp16.engine:1071ea90213eddc2"
+            assert r["model_version"] == "dtcp_v1_fp16.engine:1071ea90213eddc2"   # legacy entry: no version
+            assert r["instance"] == "driverguard_dtcp" and d["instance"] == "driverguard_dtcp" and d["version"] == ""
             assert set(r["timing"]) == {"queue_ms", "pre_ms", "infer_ms", "post_ms", "total_ms"}
             assert r["t_result_ns"] >= r["t_ready_ns"]
             assert not (FORBIDDEN & set(walk_keys(col.results)))

@@ -1,4 +1,9 @@
-"""ModelManager: loads the models of config/models.yaml, runs their workers, reports their status.
+"""ModelManager: loads the model instances, runs their workers, reports their status.
+
+Model instances: an entry is keyed "<name>@<version>" (controller.manifest.key) when its config has a version
+(model store, controller/runtime.py runtime_cfg), else by its name (a legacy config/models.yaml entry). Instances
+can be added and removed at runtime with add_model() / remove_model() (admin socket "add" / "remove"); two versions
+of one model name can run at the same time. models and order are changed only under ModelManager._lock.
 
 Model states (dashboard contract):
   OFF      enabled: false in the config (the "reason" is kept), or stopped with stop_model()
@@ -22,6 +27,7 @@ a new engine is built with trtexec into engines_dir (<name>_fp16.engine) and tha
 """
 from __future__ import annotations
 
+import gc
 import logging
 import os
 import subprocess
@@ -87,6 +93,8 @@ class ModelEntry:
         self.cfg = dict(cfg)
         self.manager = manager
         self.name = str(cfg.get("name"))
+        self.version = str(cfg.get("version") or "")      # "" for a legacy config/models.yaml entry
+        self.key = f"{self.name}@{self.version}" if self.version else self.name
         self.group = cfg.get("group")
         self.enabled = bool(cfg.get("enabled", False))
         self.engine_path = cfg.get("engine")
@@ -111,6 +119,8 @@ class ModelEntry:
         self.build_proc: subprocess.Popen | None = None
         self.build_thread: threading.Thread | None = None
         self.cancel_build = threading.Event()
+        self.load_thread: threading.Thread | None = None   # background load of an instance added at runtime
+        self.removed = False                               # remove_model() runs or ran: never start again
         # automatic restart after worker errors (see the module doc)
         self.auto_restarts = 0
         self.restart_due: float | None = None      # time.monotonic() of the next attempt
@@ -146,10 +156,10 @@ class ModelEntry:
                 self.restart_backoff = min(float(mgr.restart_backoff_max_s), delay * 2.0)
             else:
                 self.restart_due = None
-        log.error("model %s FAILED: %s", self.name, text)
+        log.error("model %s FAILED: %s", self.key, text)
         if delay is not None:
             log.warning("model %s: automatic restart in %.1f s (restarts so far: %d)",
-                        self.name, delay, self.auto_restarts)
+                        self.key, delay, self.auto_restarts)
             self.manager._ensure_supervisor()
 
 
@@ -175,20 +185,43 @@ class ModelManager:
         self._sup_stop = threading.Event()        # set by stop(): no automatic restart
         self._sup_thread: threading.Thread | None = None
         self._sup_lock = threading.Lock()
-        self._lock = threading.Lock()
-        self.models: dict[str, ModelEntry] = {}
-        self.order: list[str] = []
+        self._lock = threading.Lock()              # every change of models / order
+        self._stopping = threading.Event()        # set by stop(): add_model() is refused
+        self.models: dict[str, ModelEntry] = {}   # key -> entry
+        self.order: list[str] = []                # keys
         for i, c in enumerate(models_cfg):
             e = ModelEntry(c or {}, self)
             if not c or not c.get("name"):
-                e.name = f"model{i}"
+                e.name = e.key = f"model{i}"
                 e.fail("config: model has no name")
-            elif e.name in self.models:
-                e.name = f"{e.name}#{i}"
-                e.fail("config: duplicate model name")
-            self.models[e.name] = e
-            self.order.append(e.name)
+            elif e.key in self.models:
+                if e.version:
+                    e.key = f"{e.key}#{i}"
+                else:
+                    e.name = e.key = f"{e.name}#{i}"
+                e.fail("config: duplicate model instance" if e.version else "config: duplicate model name")
+            self.models[e.key] = e
+            self.order.append(e.key)
         self._started = False
+
+    def _entries(self) -> list[ModelEntry]:
+        """The entries in order (a copy: safe while instances are added or removed)."""
+        with self._lock:
+            return [self.models[k] for k in self.order if k in self.models]
+
+    def _resolve(self, ref: str) -> tuple[ModelEntry | None, str | None]:
+        """Entry of an instance key, or of a model name with exactly one instance. -> (entry, error)."""
+        with self._lock:
+            e = self.models.get(ref)
+            if e is not None:
+                return e, None
+            hits = [m for m in self.models.values() if m.name == ref]
+        if len(hits) == 1:
+            return hits[0], None
+        if not hits:
+            return None, f"no model {ref!r}"
+        return None, (f"model name {ref!r} has {len(hits)} instances ({', '.join(m.key for m in hits)}): "
+                      f"give the instance key <name>@<version>")
 
     # -- public API ---------------------------------------------------------------------------------
     def start(self, should_stop=None) -> None:
@@ -197,43 +230,46 @@ class ModelManager:
         should_stop: optional function; when it returns True (for example SIGTERM during the start),
         the models that are not loaded yet are not loaded and no more workers start."""
         self._started = True
+        self._stopping.clear()
         self._sup_stop.clear()
-        for name in self.order:
-            e = self.models[name]
-            if not e.enabled or e.state == FAILED:
+        for e in self._entries():
+            if not e.enabled or e.state == FAILED or e.removed or e.load_thread is not None:
                 continue
             if should_stop is not None and should_stop():
-                log.info("stop requested: model %s and the next models are not loaded", name)
+                log.info("stop requested: model %s and the next models are not loaded", e.key)
                 break
             self._load_and_run(e, should_stop)
 
     def stop(self) -> None:
-        """Stop all workers and engine builds. Engines stay loaded. No automatic restart after it."""
+        """Stop all workers and engine builds. Engines stay loaded. No automatic restart after it.
+        add_model() is refused after it."""
+        self._stopping.set()
         self._sup_stop.set()
-        for e in self.models.values():
+        entries = self._entries()
+        for e in entries:
             with e.lock:
                 e.restart_due = None
         t = self._sup_thread
         if t is not None and t is not threading.current_thread():
             t.join(timeout=10)
-        for name in self.order:
-            e = self.models[name]
+        for e in entries:   # a background load sees _stopping and starts no workers
+            self._join_load(e, 30.0)
+        for e in entries:
             self._cancel_build(e)
             self._stop_workers(e)
             with e.lock:
                 if e.state in (RUNNING, LOADING):
                     e.state = LOADED if e.engine is not None else OFF
-        for name in self.order:
-            t = self.models[name].build_thread
+        for e in entries:
+            t = e.build_thread
             if t is not None:
                 t.join(timeout=10)
 
     def close(self) -> None:
         """stop() and release the engines (GPU memory)."""
         self.stop()
-        for e in self.models.values():
-            with e.lock:
-                e.slots, e.adapter, e.engine = [], None, None
+        for e in self._entries():
+            self._free(e)
         try:
             import torch
             torch.cuda.synchronize()
@@ -241,11 +277,95 @@ class ModelManager:
         except Exception:
             pass
 
+    # -- instances added / removed at runtime ---------------------------------------------------------
+    def add_model(self, cfg: dict) -> tuple[bool, str]:
+        """Add one instance (controller.runtime.runtime_cfg() format) and load + start it in a background
+        thread (LOADING -> RUNNING, or FAILED with the error). Returns at once: (True, key) or (False, error)."""
+        if not isinstance(cfg, dict) or not cfg.get("name"):
+            return False, "the model config needs a name"
+        version = str(cfg.get("version") or "")
+        if not version:
+            return False, f"the model config of {cfg.get('name')} needs a version (instance = <name>@<version>)"
+        if not cfg.get("adapter") or cfg.get("adapter") == "none" or not (cfg.get("engine") or cfg.get("onnx")):
+            return False, f"{cfg.get('name')}@{version}: no adapter or no engine: it cannot run"
+        if not cfg.get("cameras"):
+            return False, f"{cfg.get('name')}@{version}: no camera"
+        cfg = dict(cfg, enabled=True)
+        with self._lock:
+            if self._stopping.is_set():
+                return False, "the model manager is stopping"
+            e = ModelEntry(cfg, self)
+            if e.key in self.models:
+                return False, f"model instance {e.key} exists already"
+            e.state = LOADING
+            t = threading.Thread(target=self._load_added, args=(e,), name=f"load-{e.key}", daemon=True)
+            e.load_thread = t
+            self.models[e.key] = e
+            self.order.append(e.key)
+        t.start()
+        log.info("model %s added (cams %s, engine %s): loading", e.key, e.cameras, e.engine_path)
+        return True, e.key
+
+    def _load_added(self, e: ModelEntry) -> None:
+        self._load_and_run(e, should_stop=lambda: self._stopping.is_set() or e.removed)
+
+    def remove_model(self, key: str) -> tuple[bool, str]:
+        """Stop the workers of one instance, cancel its build, free its slots / adapter / engine and delete it."""
+        with self._lock:
+            e = self.models.get(key)
+            if e is None:
+                return False, f"no model instance {key}"
+            if e.removed:
+                return False, f"model instance {key} is being removed"
+            e.removed = True
+        with e.lock:   # first: no automatic restart
+            e.enabled = False
+            e.restart_due = None
+        self._cancel_build(e)
+        self._join_load(e, 60.0)
+        self._stop_workers(e)
+        with e.lock:
+            e.state = OFF
+            e.reason = "removed"
+        self._free(e)
+        with self._lock:
+            self.models.pop(key, None)
+            if key in self.order:
+                self.order.remove(key)
+        try:
+            import torch
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+        log.info("model %s removed", key)
+        return True, f"model instance {key} removed"
+
+    def _join_load(self, e: ModelEntry, timeout: float) -> None:
+        t = e.load_thread
+        if t is not None and t.is_alive() and t is not threading.current_thread():
+            t.join(timeout=timeout)
+            if t.is_alive():
+                log.error("model %s: engine load did not end in %.0f s", e.key, timeout)
+
+    def _free(self, e: ModelEntry) -> None:
+        """Release the slots, the adapter and the engine of one entry (the workers are stopped)."""
+        with e.lock:
+            eng = e.engine
+            e.slots, e.adapter, e.engine = [], None, None
+        if eng is not None and not any(w.is_alive() for w in e.workers):
+            try:
+                eng.slots.clear()   # slot <-> engine references: free the GPU buffers now, not at a later GC
+            except AttributeError:
+                pass
+            del eng
+            gc.collect()
+
     def stop_model(self, name: str) -> dict:
-        """-> OFF. Workers stop, the engine stays loaded."""
-        e = self.models.get(name)
+        """-> OFF. Workers stop, the engine stays loaded. name: an instance key, or a model name with one
+        instance."""
+        e, err = self._resolve(name)
         if e is None:
-            return {"ok": False, "error": f"no model {name!r}"}
+            return {"ok": False, "error": err}
         with e.lock:   # first: no automatic restart of a model the operator stops
             e.enabled = False
             e.restart_due = None
@@ -256,19 +376,24 @@ class ModelManager:
             e.enabled = False
             e.reason = "stopped by operator (engine stays loaded)" if e.engine is not None \
                 else "stopped by operator"
-        log.info("model %s stopped", name)
+        log.info("model %s stopped", e.key)
         return {"ok": True, "state": OFF}
 
     def start_model(self, name: str) -> dict:
-        """-> RUNNING (or LOADING while an engine rebuild runs). Loads the engine when needed."""
-        e = self.models.get(name)
+        """-> RUNNING (or LOADING while an engine rebuild runs). Loads the engine when needed. name: an
+        instance key, or a model name with one instance."""
+        e, err = self._resolve(name)
         if e is None:
-            return {"ok": False, "error": f"no model {name!r}"}
+            return {"ok": False, "error": err}
         with e.lock:
+            if e.removed:
+                return {"ok": False, "state": e.state, "error": "the instance is being removed"}
             if e.state == RUNNING:
                 return {"ok": True, "state": RUNNING}
             if e.state == LOADING and e.build_thread is not None and e.build_thread.is_alive():
                 return {"ok": False, "state": LOADING, "error": "engine build is running"}
+            if e.state == LOADING and e.load_thread is not None and e.load_thread.is_alive():
+                return {"ok": True, "state": LOADING, "error": None}
             if not e.adapter_name or e.adapter_name == "none" or (not e.engine_path and not e.onnx_path):
                 return {"ok": False, "state": e.state,
                         "error": "model has no adapter or no engine: it cannot run"}
@@ -280,15 +405,16 @@ class ModelManager:
 
     @property
     def results_total(self) -> int:
-        return sum(e.metrics.results_total for e in self.models.values())
+        return sum(e.metrics.results_total for e in self._entries())
 
     @property
     def last_result_t(self) -> float | None:
-        ts = [e.metrics.last_result_t for e in self.models.values() if e.metrics.last_result_t]
+        ts = [e.metrics.last_result_t for e in self._entries() if e.metrics.last_result_t]
         return max(ts) if ts else None
 
     def status(self) -> list[dict]:
-        return [self._status_one(self.models[n]) for n in self.order]
+        """Status of every instance, in order. Safe while instances are added or removed."""
+        return [self._status_one(e) for e in self._entries()]
 
     # -- automatic restart ----------------------------------------------------------------------------
     def auto_restart_allowed(self) -> bool:
@@ -309,23 +435,22 @@ class ModelManager:
         tick = min(1.0, self.restart_backoff_s / 4.0)
         while not self._sup_stop.wait(tick):
             now = time.monotonic()
-            for name in list(self.order):
-                e = self.models[name]
+            for e in self._entries():
                 with e.lock:
                     due = e.restart_due
                     if due is None or now < due:
                         continue
                     e.restart_due = None
-                    if e.state != FAILED or not e.enabled or self._sup_stop.is_set():
+                    if e.state != FAILED or not e.enabled or e.removed or self._sup_stop.is_set():
                         continue
                     if e.engine is None:   # only worker failures (engine loaded) are restarted
                         continue
                     e.auto_restarts += 1
                     n = e.auto_restarts
-                    log.warning("model %s: automatic restart %d (after FAILED: %s)", e.name, n, e.error)
+                    log.warning("model %s: automatic restart %d (after FAILED: %s)", e.key, n, e.error)
                     try:
                         # under e.lock: stop_model() cannot run between the check and the start
-                        res = self.start_model(name)
+                        res = self.start_model(e.key)
                     except Exception as ex:  # noqa: BLE001
                         res = {"ok": False, "error": f"{type(ex).__name__}: {ex}"}
                     if not res.get("ok"):
@@ -333,9 +458,9 @@ class ModelManager:
                         e.restart_due = time.monotonic() + delay
                         e.restart_backoff = min(self.restart_backoff_max_s, delay * 2.0)
                         log.warning("model %s: automatic restart %d failed (%s); next try in %.1f s",
-                                    e.name, n, res.get("error"), delay)
+                                    e.key, n, res.get("error"), delay)
                     else:
-                        log.warning("model %s: automatic restart %d -> %s", e.name, n, res.get("state"))
+                        log.warning("model %s: automatic restart %d -> %s", e.key, n, res.get("state"))
 
     # -- loading ------------------------------------------------------------------------------------
     def _load_and_run(self, e: ModelEntry, should_stop=None) -> None:
@@ -353,15 +478,18 @@ class ModelManager:
                     with e.lock:
                         e.reason = f"engine rebuild from ONNX with trtexec; load errors: {'; '.join(errors)}"
                     t = threading.Thread(target=self._build_then_run, args=(e, cls, errors),
-                                         name=f"build-{e.name}", daemon=True)
+                                         name=f"build-{e.key}", daemon=True)
                     e.build_thread = t
                     t.start()
                     return
                 onnx_txt = f"ONNX file not found: {e.onnx_path}" if e.onnx_path else "no ONNX file configured"
                 raise RuntimeError(f"{'; '.join(errors)}; {onnx_txt}: no rebuild possible")
             self._finish_load(e, cls, eng)
+            if e.removed:   # removed while the engine loaded: free it again
+                self._free(e)
+                return
             if should_stop is not None and should_stop():
-                log.info("stop requested: model %s loaded, workers not started", e.name)
+                log.info("stop requested: model %s loaded, workers not started", e.key)
                 return
             self._start_workers(e)
         except Exception as ex:
@@ -369,9 +497,10 @@ class ModelManager:
             e.fail(f"load: {type(ex).__name__}: {ex}")
 
     def _rebuilt_path(self, e: ModelEntry) -> str:
-        p = os.path.join(self.engines_dir, f"{e.name}_fp16.engine")
+        base = f"{e.name}_{e.version}" if e.version else e.name
+        p = os.path.join(self.engines_dir, f"{base}_fp16.engine")
         if e.engine_path and os.path.realpath(e.engine_path) == os.path.realpath(p):
-            p = os.path.join(self.engines_dir, f"{e.name}_fp16_rebuilt.engine")
+            p = os.path.join(self.engines_dir, f"{base}_fp16_rebuilt.engine")
         return p
 
     def _try_engines(self, e: ModelEntry):
@@ -408,7 +537,7 @@ class ModelManager:
             e.state = LOADED
             if e.enabled and e.engine_source == "rebuilt":
                 e.reason = f"running a rebuilt engine: {eng.path}"
-        log.info("model %s loaded: %s (%s)", e.name, eng.version_tag, e.engine_source)
+        log.info("model %s loaded: %s (%s)", e.key, eng.version_tag, e.engine_source)
 
     def build_command(self, e: ModelEntry, out_path: str, cls) -> list[str]:
         cmd = [self.trtexec, f"--onnx={e.onnx_path}", f"--saveEngine={out_path}", "--fp16"]
@@ -429,7 +558,7 @@ class ModelManager:
                     raise RuntimeError(f"refused: {p} is the configured engine")
             cmd = self.build_command(e, tmp, cls)
             log_path = final + ".build.log"
-            log.warning("model %s: building engine: %s", e.name, " ".join(cmd))
+            log.warning("model %s: building engine: %s", e.key, " ".join(cmd))
             t0 = time.monotonic()
             with open(log_path, "w") as lf:
                 lf.write(" ".join(cmd) + "\n")
@@ -450,7 +579,7 @@ class ModelManager:
             if e.cancel_build.is_set():
                 if os.path.exists(tmp):
                     os.remove(tmp)
-                log.warning("model %s: engine build cancelled", e.name)
+                log.warning("model %s: engine build cancelled", e.key)
                 return
             if proc.returncode != 0 or not os.path.isfile(tmp):
                 tail = ""
@@ -464,7 +593,7 @@ class ModelManager:
                     os.remove(tmp)
                 raise RuntimeError(f"trtexec failed ({why}, log {log_path}): {tail}")
             os.replace(tmp, final)
-            log.warning("model %s: engine built in %.0f s: %s", e.name, time.monotonic() - t0, final)
+            log.warning("model %s: engine built in %.0f s: %s", e.key, time.monotonic() - t0, final)
             from infer.models.trt_engine import TrtEngine
             eng = TrtEngine(final)
             e.engine_source = "rebuilt"
@@ -485,7 +614,7 @@ class ModelManager:
     # -- workers ------------------------------------------------------------------------------------
     def _start_workers(self, e: ModelEntry) -> None:
         with e.lock:
-            if e.state == RUNNING or e.engine is None:
+            if e.state == RUNNING or e.engine is None or e.removed:
                 return
             self._join_workers(e)
             e.stop_event = threading.Event()
@@ -499,7 +628,7 @@ class ModelManager:
                 e.reason = e.cfg.get("reason") if not e.cfg.get("enabled", False) else None
             for w in e.workers:
                 w.start()
-        log.info("model %s RUNNING (%d workers, cams %s)", e.name, e.workers_n, e.cameras)
+        log.info("model %s RUNNING (%d workers, cams %s)", e.key, e.workers_n, e.cameras)
 
     def _stop_workers(self, e: ModelEntry) -> None:
         e.stop_event.set()
@@ -510,7 +639,7 @@ class ModelManager:
             if w is not threading.current_thread():
                 w.join(timeout=5)
                 if w.is_alive():
-                    log.error("model %s: worker %s did not stop in 5 s", e.name, w.name)
+                    log.error("model %s: worker %s did not stop in 5 s", e.key, w.name)
         e.workers = [w for w in e.workers if w.is_alive()]
 
     # -- status -------------------------------------------------------------------------------------
@@ -521,6 +650,8 @@ class ModelManager:
             lat = m.latency()
             d = {
                 "name": e.name,
+                "version": e.version,          # "" for a legacy config/models.yaml entry
+                "instance": e.key,             # <name>@<version>, or the name for a legacy entry
                 "engine": eng.path if eng is not None else e.engine_path,
                 "engine_version": eng.version_tag if eng is not None else None,
                 "state": e.state,

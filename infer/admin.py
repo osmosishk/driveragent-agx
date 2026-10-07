@@ -1,8 +1,13 @@
 """Admin socket: ZMQ REP on tcp://127.0.0.1:5563 (localhost only). JSON requests:
 
   {"cmd": "models"}                        -> {"ok": true, "models": [ModelManager.status() ...]}
-  {"cmd": "stop",  "model": name}          -> {"ok": ..., "model": name, "result": ...}
-  {"cmd": "start", "model": name}          -> same
+  {"cmd": "instances"}                     -> {"ok": true, "instances": [ModelManager.status() ...]}
+  {"cmd": "add", "model": cfg}             -> {"ok": true, "key": "<name>@<version>"} or {"ok": false, "error"}
+                                              cfg: controller.runtime.runtime_cfg() format; the load runs in
+                                              the background (state LOADING -> RUNNING or FAILED)
+  {"cmd": "remove", "key": key}            -> {"ok": true, "key": key} or {"ok": false, "error"}
+  {"cmd": "stop",  "model": key or name}   -> {"ok": ..., "model": name, "result": ...}
+  {"cmd": "start", "model": key or name}   -> same (a name works when it has exactly one instance)
   {"cmd": "frame", "cam": c, "seq": s}     -> multipart [json meta, JPEG of the RAW frame
                                               (no drawing, full size, quality 90)]
   {"cmd": "newest", "cam": c}              -> same for the newest frame
@@ -22,6 +27,11 @@ from infer.draw import encode_jpeg, nv12_to_bgr
 
 log = logging.getLogger("infer.admin")
 MAX_REQ = 65536
+COMMANDS = ["models", "instances", "add", "remove", "stop", "start", "frame", "newest"]
+
+
+def _reply(obj: dict) -> list[bytes]:
+    return [json.dumps(obj, default=str).encode()]
 
 
 def frame_meta(f) -> dict:
@@ -66,9 +76,27 @@ class AdminServer:
             return [json.dumps({"ok": False, "error": f"bad request: {e}"}).encode()]
         cmd = req.get("cmd")
         try:
-            if cmd == "models":
+            if cmd in ("models", "instances"):
                 st = self.manager.status() if self.manager is not None else []
-                return [json.dumps({"ok": True, "models": st}, default=str).encode()]
+                return _reply({"ok": True, cmd: st})
+            if cmd == "add":
+                cfg = req.get("model")
+                if not isinstance(cfg, dict):
+                    return _reply({"ok": False, "error": "field 'model' (the model config object) is missing"})
+                if self.manager is None or not hasattr(self.manager, "add_model"):
+                    return _reply({"ok": False, "error": "no model manager"})
+                ok, txt = self.manager.add_model(cfg)
+                log.info("admin add %s@%s -> %s %s", cfg.get("name"), cfg.get("version"), ok, txt)
+                return _reply({"ok": True, "key": txt} if ok else {"ok": False, "error": txt})
+            if cmd == "remove":
+                key = req.get("key")
+                if not isinstance(key, str) or not key:
+                    return _reply({"ok": False, "error": "field 'key' is missing"})
+                if self.manager is None or not hasattr(self.manager, "remove_model"):
+                    return _reply({"ok": False, "error": "no model manager"})
+                ok, txt = self.manager.remove_model(key)
+                log.info("admin remove %s -> %s %s", key, ok, txt)
+                return _reply({"ok": True, "key": key} if ok else {"ok": False, "error": txt})
             if cmd in ("stop", "start"):
                 name = req.get("model")
                 if not isinstance(name, str) or not name:
@@ -95,8 +123,7 @@ class AdminServer:
                 except (TypeError, ValueError):
                     return [json.dumps({"ok": False, "error": "field 'seq' is missing"}).encode()]
                 return self._frame_reply(self.store.find(cam, seq), req)
-            return [json.dumps({"ok": False, "error": f"unknown command {cmd!r}",
-                                "commands": ["models", "stop", "start", "frame", "newest"]}).encode()]
+            return _reply({"ok": False, "error": f"unknown command {cmd!r}", "commands": COMMANDS})
         except Exception as e:  # noqa: BLE001
             log.exception("admin command %r failed", cmd)
             return [json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}).encode()]

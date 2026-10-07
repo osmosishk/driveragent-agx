@@ -62,8 +62,9 @@ def _check_part(c: dict | None) -> dict | None:
     return d
 
 
-def entry(m: mf.Manifest, store, check: dict | None, lm: dict | None, job: dict | None, check_state: str | None) -> dict:
-    """One catalog row. check_state: None | "queued" | "running"."""
+def entry(m: mf.Manifest, store, check: dict | None, lm: dict | None, job: dict | None, check_state: str | None,
+          failure: dict | None = None) -> dict:
+    """One catalog row. check_state: None | "queued" | "running". failure: a watchdog failure {reason, t} (rule M6)."""
     e = {"key": m.key, "name": m.name, "version": m.version, "type": m.type or None, "folder": m.folder,
          "manifest_errors": list(m.errors)}
     if not m.errors:
@@ -98,6 +99,10 @@ def entry(m: mf.Manifest, store, check: dict | None, lm: dict | None, job: dict 
             return put("FAILED", "failed in agx-infer: " + str(lm.get("error") or "no error text"))
     if job and job.get("kind") == "build" and job.get("state") in ("queued", "running"):
         return put("BUILDING", f"build {job.get('state')}: {job.get('progress') or ''}".rstrip(": "))
+    if failure:
+        e["failure"] = failure
+        return put("FAILED", f"{failure.get('reason')} (at {time.strftime('%H:%M:%S', time.localtime(failure.get('t', 0)))}); "
+                             "the controller stopped it and put the last good set back")
     onnx = m.file("onnx")
     onnx_ok = onnx is not None and os.path.isfile(onnx["path"])
     if eng is None:
@@ -118,7 +123,7 @@ def entry(m: mf.Manifest, store, check: dict | None, lm: dict | None, job: dict 
     return put("FAILED", "check failed: " + str(check.get("reason") or "no reason given"))
 
 
-def build(store, checks, live_models, jobs: dict | None = None) -> list[dict]:
+def build(store, checks, live_models, jobs: dict | None = None, failures: dict | None = None) -> list[dict]:
     """All catalog rows. checks: a CheckRunner (result(key), busy(), pending()) or None."""
     by_key, by_engine = live_index(live_models)
     busy = checks.busy() if checks else None
@@ -133,7 +138,8 @@ def build(store, checks, live_models, jobs: dict | None = None) -> list[dict]:
                 if cand is not None and not cand.get("version"):  # an agx-infer that does not send versions yet
                     lm = cand
         cs = "running" if busy == m.key else ("queued" if m.key in pending else None)
-        rows.append(entry(m, store, checks.result(m.key) if checks else None, lm, (jobs or {}).get(m.key), cs))
+        rows.append(entry(m, store, checks.result(m.key) if checks else None, lm, (jobs or {}).get(m.key), cs,
+                          (failures or {}).get(m.key)))
     return rows
 
 

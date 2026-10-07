@@ -141,16 +141,31 @@ class _Run:
             if got != f["sha256"]:
                 raise CheckFailed(f"sha256 of {f['path']} does not agree with the manifest "
                                   f"(file {got[:16]}..., manifest {f['sha256'][:16]}...)")
-        eng = self.m.file("engine")
+        eng = self._engine()
+        if eng and eng["built"]:   # an engine built on this AGX: its sha256 is in build.json
+            if not os.path.isfile(eng["path"]):
+                raise CheckFailed(f"built engine {eng['path']} does not exist")
+            got = sha256_file(eng["path"])
+            self.hashes[eng["path"]] = got
+            if got != eng["sha256"]:
+                raise CheckFailed(f"sha256 of the built engine {eng['path']} does not agree with build.json "
+                                  f"(file {got[:16]}..., build.json {str(eng['sha256'])[:16]}...)")
         if eng:
             self.out["engine"] = eng["path"]
             self.out["engine_sha256"] = self.hashes.get(eng["path"])
-        return f"{len(files)} file(s) agree"
+        return f"{len(files) + (1 if eng and eng['built'] else 0)} file(s) agree"
+
+    def _engine(self) -> dict | None:
+        """The engine of this version: the manifest engine file, else the engine built on this AGX (build.json)."""
+        from pathlib import Path
+
+        from controller.store import Store
+        return Store(str(Path(self.m.folder).parents[1])).engine(self.m)
 
     def engine_load(self) -> str:
-        eng = self.m.file("engine")
+        eng = self._engine()
         if not eng:
-            raise CheckFailed("the manifest has no engine file (role engine)")
+            raise CheckFailed("no engine: the manifest has no engine file and no build is done")
         try:
             import tensorrt as trt
             import torch

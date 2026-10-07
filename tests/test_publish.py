@@ -28,7 +28,8 @@ STATUS_KEYS = {"schema", "t", "node", "cameras", "models", "publish", "link"}
 NODE_KEYS = {"state", "uptime_s", "pid", "version", "simulated", "errors"}
 MODEL_KEYS = {"name", "engine", "engine_version", "state", "error", "reason", "enabled", "cameras",
               "fps", "lat_ms", "gpu_mem_mb", "gpu_mem_note", "trt_match", "trt_build_device",
-              "trt_device_warning", "trt_version", "load_warnings", "inputs", "outputs", "results_total"}
+              "trt_device_warning", "trt_version", "load_warnings", "inputs", "outputs", "results_total",
+              "version", "instance"}
 DEV_WARN = "WARNING: Using an engine plan file across different models of devices (fake)"
 PUBLISH_KEYS = {"results_port", "status_port", "results_rate_hz", "subscribers", "results_total",
                 "last_result_t"}
@@ -280,6 +281,7 @@ def test_status_publisher(ctx):
             assert set(mm["lat_ms"]) == {"pre", "infer", "post", "total"}
             assert mm["gpu_mem_note"] == "estimate: engine file + activation + I/O"
         y, s1 = js["models"]
+        assert (y["version"], y["instance"]) == ("", "driverguard_yolopx")   # legacy entries: no version
         assert y["trt_match"] is True and y["trt_build_device"] == "Orin GPU (sm87)"
         assert y["trt_device_warning"] == DEV_WARN and y["load_warnings"] == [DEV_WARN]
         assert s1["trt_build_device"] is None and s1["trt_device_warning"] is None

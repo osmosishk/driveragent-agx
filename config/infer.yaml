@@ -1,7 +1,10 @@
 # AGX inference node (infer/main.py). Paths are absolute or relative to the project root.
 
 sources_config: config/sources.yaml     # ingest (cameras, mode)
-models_config: config/models.yaml       # model list (coordinator file)
+models_config: config/models.yaml       # model list (coordinator file); used when there is no last good set
+model_store: ~/agx-models               # model store of the controller (controller/store.py; not in git)
+start_set: last_good                    # last_good: <model_store>/_state/last_good.json when it has a set, else
+                                        # models_config | models_yaml: always models_config
 engines_dir: engines                    # new engines are built here (old engines are read-only)
 proto: proto/agx_infer.capnp            # AgxPerceptionResult + AgxInferStatus, schema version 1
 

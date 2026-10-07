@@ -69,7 +69,41 @@ The TensorRT device warning is in `check.trt_device_warning` and `live.trt_devic
 The newest controller events, newest first (the audit log of Section 3): `{"t", "events": [...], "file"}`.
 
 ## 3. Write routes
-Added with the actions (task N3).
+
+| Route | Body | Does |
+|---|---|---|
+| `POST /api/models/{name}/{version}/build` | none | Build an engine from the version's ONNX file (state `NEEDS BUILD`) |
+| `POST /api/models/{name}/{version}/activate` | `{"cameras": [0, 1]}` (optional) | Start the version on these cameras (default: the manifest default cameras) |
+| `POST /api/models/{name}/{version}/deactivate` | none | Stop the version |
+| `POST /api/models/rollback` | none | Put the last good set back |
+
+- `202 {"ok": true, "accepted": true, "change": {"id", "action", "model", "t", "source", "user", "params"}}`: the change
+  started. Its end is in `GET /api/models/control` (`change_in_progress` becomes null, `last_change` has `result` and
+  `reason`) and in `GET /api/models/events`. A build answer also has `"warning"`: a build makes the active models slower.
+- `4xx {"ok": false, "action", "model", "reason"}`: refused. The dashboards show `reason` as it is. Examples:
+  - `control mode is vehicle: build, activate, deactivate and rollback are refused. Only the owner changes config/control.yaml.`
+  - `another change runs now: activate driverguard_yolopx@2 since 21:14:03 (rk-console, tony). Only one change at a time.`
+  - `driverguard_yolopx@1 is already active on cameras [0, 1, 2, 3, 4, 5]: deactivate it first to change its cameras`
+  - `sparsedrive_convnext_orin@1 is NO ADAPTER: no adapter for type 'sparsedrive_backbone' ...`
+  - `x@1: the checks are not done yet (owner rule M5)`, `not enough free memory for ...`
+- A request from the page (Basic) must send `X-AGX-CSRF: 1`; a request with an `Origin` of another site is refused (403).
+  A request of the rk console server (Bearer) sends its user name in `X-Actor`.
+
+### Rules of the controller
+- **One change at a time** (M4). A build is a change: during a build every other change is refused.
+- **Checks first** (M5): only a version whose checks passed (state `READY`) can be activated.
+- **Watchdog** (M6): after activate, agx-infer must give a valid result of the new instance in 20 s. If not, or if the
+  instance fails, or agx-infer stops, the controller removes it, puts the last good set back and sets the version
+  `FAILED` with the reason. Such a version can be activated again (its checks passed).
+- **Control mode** (M7): `config/control.yaml` `control_mode: vehicle` refuses build, activate, deactivate and rollback.
+- **No delete** (M2): no route and no tool deletes a model version.
+- **Active set**: `~/agx-models/_state/active.json` (now) and `last_good.json` (the last set with valid results). Both are
+  written only after a change that worked. After a restart, agx-infer loads `last_good.json`.
+- **Audit** (M3): each request is one line in `~/agx-models/_state/audit.jsonl`: time, source (`agx-dashboard`,
+  `rk-console`, `command-line`, `controller`), user, action, model, version, result (`started`, `ok`, `refused`,
+  `failed`), reason.
+- Several models can be active at the same time, also two versions of one model. Each result carries the model name and
+  `modelVersion` = `<version>:<engine sha256[:16]>`.
 
 ## 4. Errors
 `{"ok": false, "reason": "<plain words>"}` with 400 (bad request), 404 (no such model version), 409 (refused: another

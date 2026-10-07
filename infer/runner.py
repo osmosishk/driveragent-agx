@@ -10,7 +10,7 @@ Scheduling (each worker, in a loop):
   3. CLAIM under the model lock: of the returned frames, take the camera whose last processed time
      is the oldest (fairness). A claimed (cam, seq) is never given to a second worker.
   4. preprocess -> ExecutionSlot.infer -> postprocess, timed; build the result dict; on_result(result)
-     at most once per (model, cam, seq), and never for a frame older than the last result given out
+     at most once per (model instance, cam, seq), and never for a frame older than the last result given out
      for that camera (FrameScheduler.mark_emitted). Each claim keeps the camera "epoch" (it goes up
      on every source restart): a result of a frame claimed before a restart is never given out
      after the restart. A result whose frame is older than the stale time (FrameStore.stale_s,
@@ -221,12 +221,23 @@ def adapter_outputs(adapter, outs: dict) -> dict:
     return {k: outs[k] for k in names if k in outs}
 
 
+def result_ids(entry) -> tuple[str, str]:
+    """(instance key, model_version) of the results of one entry. A store instance (with a version):
+    "<version>:<engine sha256 16 hex>"; a legacy entry (no version): the engine version tag."""
+    version = str(getattr(entry, "version", "") or "")
+    key = str(getattr(entry, "key", "") or entry.name)
+    if version:
+        return key, f"{version}:{entry.engine.sha256_16}"
+    return key, entry.engine.version_tag
+
+
 class ModelWorker(threading.Thread):
-    """One worker thread of one model. `entry` is the manager's ModelEntry (duck-typed): it gives
-    name, cameras, adapter, engine, scheduler, metrics, stop_event and report_error(text) -> None."""
+    """One worker thread of one model instance. `entry` is the manager's ModelEntry (duck-typed): it gives
+    name, cameras, adapter, engine, scheduler, metrics, stop_event and report_error(text) -> None; optional
+    version and key (instance "<name>@<version>")."""
 
     def __init__(self, entry, index: int, slot, store, on_result):
-        super().__init__(name=f"infer-{entry.name}-{index}", daemon=True)
+        super().__init__(name=f"infer-{getattr(entry, 'key', None) or entry.name}-{index}", daemon=True)
         self.entry = entry
         self.index = index
         self.slot = slot
@@ -279,9 +290,11 @@ class ModelWorker(threading.Thread):
             "post_ms": round((t_end - t_inf) * 1000.0, 3),
             "total_ms": round((t_end - frame.t_ready_mono) * 1000.0, 3),
         }
+        instance, model_version = result_ids(e)
         result = {
             "model": e.name,
-            "model_version": e.engine.version_tag,
+            "model_version": model_version,
+            "instance": instance,          # not on the wire (capnp has model + modelVersion): cache + duplicate check
             "cam": int(frame.cam),
             "frame_seq": int(frame.seq),
             "t_capture_ns": int(frame.t_capture_ns),
