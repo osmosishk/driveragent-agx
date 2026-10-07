@@ -9,8 +9,10 @@ import base64
 import binascii
 import ipaddress
 import logging
+import os
 import re
 import secrets
+import stat
 import time
 from collections import OrderedDict
 from typing import Iterable
@@ -40,6 +42,45 @@ FAIL_MAX_IPS = 4096
 LOG_MAX_KEYS = 4096
 LOG_EVERY_S = 60.0  # at most one deny / fail log line per IP and kind per minute
 _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+# The control token (owner rule M8) is accepted only on these paths: the DA01 rk console server uses it.
+TOKEN_PREFIXES = ("/api/models/",)
+TOKEN_MIN_LEN = 32
+
+
+class TokenFile:
+    """The model-control token: a file with mode 600, owned by this user, not in git. It is read again when it
+    changes. A missing file or a wrong mode turns the token off (Basic auth still works); `problem` says why."""
+
+    def __init__(self, path):
+        self.path = str(path) if path else None
+        self.problem: str | None = None
+        self._sig = None
+        self._token: bytes | None = None
+
+    def get(self) -> bytes | None:
+        if not self.path:
+            self.problem = "no control token file is configured"
+            return None
+        try:
+            st = os.stat(self.path)
+        except OSError:
+            self.problem, self._sig, self._token = f"{self.path} does not exist", None, None
+            return None
+        if stat.S_IMODE(st.st_mode) & 0o077 or st.st_uid != os.getuid():
+            self.problem, self._sig, self._token = f"{self.path} must be mode 600 and owned by this user", None, None
+            return None
+        sig = (st.st_mtime_ns, st.st_size, st.st_ino)
+        if sig != self._sig:
+            try:
+                with open(self.path, "rb") as f:
+                    tok = f.read().strip()
+            except OSError as e:
+                self.problem, self._token = f"{self.path} cannot be read: {e}", None
+                return None
+            self._token = tok if len(tok) >= TOKEN_MIN_LEN else None
+            self.problem = None if self._token else f"{self.path}: the token needs {TOKEN_MIN_LEN} characters or more"
+            self._sig = sig
+        return self._token
 
 
 def safe_path(path) -> str:
@@ -84,11 +125,12 @@ def check_basic(header_value: bytes | None, user: str, password: str) -> bool:
 
 
 class GuardMiddleware:
-    def __init__(self, app, user: str, password: str, allow_cidrs: Iterable[str]):
+    def __init__(self, app, user: str, password: str, allow_cidrs: Iterable[str], token_file=None):
         self.app = app
         self.user = user
         self.password = password
         self.networks = parse_networks(allow_cidrs)
+        self.token = TokenFile(token_file)
         # ip -> failure times (monotonic). Order: the IP with the oldest last failure first.
         self._fails: OrderedDict[str, list[float]] = OrderedDict()
         # (kind, ip) -> (last log t, skipped). Order: the oldest log line first.
@@ -170,7 +212,15 @@ class GuardMiddleware:
             if k == b"authorization":
                 auth = v
                 break
-        if not check_basic(auth, self.user, self.password):
+        kind = None
+        if auth is not None and auth[:7].lower() == b"bearer ":
+            if str(scope.get("path") or "").startswith(TOKEN_PREFIXES):
+                tok = self.token.get()
+                if tok is not None and secrets.compare_digest(auth[7:].strip(), tok):
+                    kind = "token"
+        elif check_basic(auth, self.user, self.password):
+            kind = "basic"
+        if kind is None:
             if auth is not None:
                 # wrong credentials (a request with no header is the normal browser first try)
                 self._log_limited("auth failed", ip, scope.get("path"))
@@ -181,4 +231,5 @@ class GuardMiddleware:
                     [(b"www-authenticate", f'Basic realm="{REALM}"'.encode())])
             return
         self._fails.pop(str(ip), None)
+        scope.setdefault("state", {})["auth_kind"] = kind   # "basic" (a person on the page) | "token" (rk console)
         return await self.app(scope, receive, send)

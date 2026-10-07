@@ -13,7 +13,8 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from common.env import get, load_env
+from common.env import PROJECT_ROOT, get, load_env
+from dashboard import control_api
 from dashboard.auth import GuardMiddleware
 from dashboard.collectors.engines import EngineScanner
 from dashboard.collectors.health import HealthCollector, worst
@@ -100,6 +101,15 @@ class Hub:
         self.views.scanner = self.engines
         self.health.add_listener(self._on_sample)
         self.mqtt = None
+        self.controller = None
+        self.controller_error = None
+        if cfg.get("model_control", True):
+            try:  # the model controller (controller/): the dashboard must start also when it cannot
+                from controller.control import from_config
+                self.controller = from_config(cfg, PROJECT_ROOT, self.infer)
+            except Exception as e:
+                log.exception("model controller not started")
+                self.controller_error = f"model controller not started: {e}"
 
     def _on_sample(self, s: dict):
         m = {
@@ -122,10 +132,17 @@ class Hub:
         self.link.start()
         self.services.start()
         self.engines.start()
+        if self.controller is not None:
+            try:
+                self.controller.start()
+            except Exception as e:  # the dashboard must keep running
+                log.exception("model controller start failed")
+                self.controller_error = f"model controller start failed: {e}"
         self.mqtt = start_mqtt(env, self.health_doc, self.cfg.get("mqtt_interval_s", 5))
 
     def stop(self):
-        for c in (self.mqtt, self.health, self.link, self.services, self.engines, self.infer, self.history):
+        for c in (self.mqtt, self.controller, self.health, self.link, self.services, self.engines, self.infer,
+                  self.history):
             if c is not None:
                 try:
                     c.stop()
@@ -339,9 +356,12 @@ def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"cache-control": "no-store", "x-accel-buffering": "no"})
 
+    control_api.register(app, hub)
+
     allow = cfg.get("allow_cidrs")
     # add_middleware puts the newest one outside: SecurityHeaders is outermost, so the
     # 401/403 replies of GuardMiddleware also get the security headers.
-    app.add_middleware(GuardMiddleware, user=user, password=password, allow_cidrs=allow)
+    app.add_middleware(GuardMiddleware, user=user, password=password, allow_cidrs=allow,
+                       token_file=resolve_path(cfg.get("control_token_file")))
     app.add_middleware(SecurityHeaders)
     return app

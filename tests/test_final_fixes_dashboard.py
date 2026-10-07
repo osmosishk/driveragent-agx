@@ -45,6 +45,7 @@ def _app(tmp_path=None, cfg_over=None, start=False):
         cfg["history"]["db"] = str(tmp_path / "h.sqlite")
         cfg["engines"]["cache"] = str(tmp_path / "ec.json")
         cfg["engines"]["scan_dirs"] = [str(tmp_path)]
+    cfg["model_control"] = False   # these tests do not test the model controller (tests/test_model_store.py)
     cfg.update(cfg_over or {})
     return create_app(cfg, env={"AGX_DASH_USER": "u", "AGX_DASH_PASSWORD": PW}, start_collectors=start)
 

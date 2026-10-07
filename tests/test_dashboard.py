@@ -69,7 +69,8 @@ def server(creds):
         [sys.executable, "-m", "dashboard.main", "--config", "config/dashboard.yaml",
          "--port", str(port), "--port-file", str(OUT / "dashboard_port"),
          "--history-db", str(OUT / "history_test.sqlite"),
-         "--engines-cache", str(OUT / "engines_cache_test.json")],
+         "--engines-cache", str(OUT / "engines_cache_test.json"),
+         "--model-store", str(OUT / "model_store_test")],   # never the real ~/agx-models
         cwd=str(ROOT), stdout=log, stderr=subprocess.STDOUT,
         env=dict(os.environ, PYTHONPATH=str(ROOT), PYTHONUNBUFFERED="1"))
     base = None
@@ -269,7 +270,7 @@ def test_guard_403_and_401_in_process():
     from dashboard.app import create_app
     from dashboard.config import load_config
 
-    app = create_app(load_config("config/dashboard.yaml"),
+    app = create_app(dict(load_config("config/dashboard.yaml"), model_control=False),
                      env={"AGX_DASH_USER": "u", "AGX_DASH_PASSWORD": "test-only-pw"},
                      start_collectors=False)
 

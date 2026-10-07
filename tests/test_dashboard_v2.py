@@ -226,6 +226,7 @@ def server(creds, fake, engines_dir):
         "sources_config": "config/sources.yaml",
     })
     cfg["history"]["db"] = str(OUT / "v2_history.sqlite")
+    cfg["model_store"] = str(OUT / "v2_model_store")   # never the real ~/agx-models
     cfg_path = OUT / "v2_dashboard_test.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg))
     port = _free_port(avoid=(int(fake.endpoint.rsplit(":", 1)[1]),))

@@ -31,6 +31,15 @@ link:
   clock_interval_s: 30
 
 infer_status_endpoint: tcp://127.0.0.1:5562
+
+# Model controller (controller/, docs/MODEL_CONTROL_API.md). The store is not in git. The control token file
+# (mode 600, not in git) lets the DA01 rk console server call /api/models/* with "Authorization: Bearer".
+# control_mode is in control_config: only the owner changes that file.
+model_control: true
+model_store: ~/agx-models
+control_config: config/control.yaml
+control_token_file: data/control.token
+model_check_timeout_s: 180
 infer_stale_s: 3           # no agx-infer status for this time -> NO DATA (models and cameras)
 
 # Models part: rows come from models_config; camera STALE / NO SIGNAL limits (stale_s, no_signal_s)

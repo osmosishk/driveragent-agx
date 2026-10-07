@@ -27,6 +27,12 @@ DEFAULTS: dict = {
         "clock_interval_s": 30,
     },
     "infer_status_endpoint": "tcp://127.0.0.1:5562",
+    # model controller (controller/, docs/MODEL_CONTROL_API.md)
+    "model_control": True,
+    "model_store": "~/agx-models",
+    "control_config": "config/control.yaml",
+    "control_token_file": "data/control.token",
+    "model_check_timeout_s": 180,
     "infer_stale_s": 3,
     "models_config": "config/models.yaml",
     "sources_config": "config/sources.yaml",
