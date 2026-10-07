@@ -21,7 +21,7 @@ bind:
   status: "0.0.0.0"
   internal: "127.0.0.1"
   admin: "127.0.0.1"   # do not change: the admin socket must not be reachable from the network
-  rkinfo: "0.0.0.0"    # peers: only the addresses of config/sources.yaml rk_allowed_sources (ZAP allowlist)
+  rkinfo: "0.0.0.0"    # peers: only the addresses of the paired boards (data/paired_boards.json; ZAP allowlist)
 
 results:
   sndhwm: 100          # messages per subscriber before ZMQ drops (PUB never blocks)
