@@ -497,11 +497,14 @@ def test_07_page_labels(server, creds):
     assert "No systemd unit exists for the old DriverAgent stack; it starts by hand (~/s.sh)" in page
     assert "SIMULATED" in page and "SIMULATED" in tiles and '"SIMULATED"' in js
     assert "(estimate)" in js
-    # read-only: the page only makes GET requests and has no stop / start / delete control
+    # the only write request of the page is the model control POST in postModelControl() (to /api/models/ only);
+    # no service control and no delete (tests/test_dashboard_pages.py checks the details)
     import re
-    assert not re.search(r"method\s*:\s*[\"'](POST|PUT|DELETE|PATCH)", js)
-    for bad in ('"POST"', '"DELETE"', '"PUT"', '"PATCH"'):
+    assert [m.group(1) for m in re.finditer(r"method\s*:\s*[\"'](POST|PUT|DELETE|PATCH)", js)] == ["POST"]
+    for bad in ('"DELETE"', '"PUT"', '"PATCH"'):
         assert bad not in js
+    assert js.count('"POST"') == 1 and 'fetch("/api/models/" + path' in js
+    assert "delete" not in js.lower()
     low = page.lower()
     for bad in (">stop<", ">start<", ">delete<", ">restart<", ">kill<"):
         assert bad not in low
@@ -839,9 +842,10 @@ def test_page_tile_state_quickjs():
                 worst.append(r["nosig"])
     NOW_LOG.append(f"QuickJS SSE push, {len(worst)} cases: no false state while frames flow; NO SIGNAL "
                    f"{min(worst):.2f} .. {max(worst):.2f} s after the last frame")
-    # app.js compiles (syntax) in QuickJS
-    src = (ROOT / "dashboard" / "static" / "app.js").read_text()
-    assert ctx.eval("typeof new Function(" + json.dumps(src) + ")") == "function"
+    # app.js and router.js compile (syntax) in QuickJS
+    for name in ("app.js", "router.js"):
+        src = (ROOT / "dashboard" / "static" / name).read_text()
+        assert ctx.eval("typeof new Function(" + json.dumps(src) + ")") == "function", name
     NOW_LOG.append(f"QuickJS timeline A (status at 1000.0+k): {tl_a}")
     NOW_LOG.append(f"QuickJS timeline B (status at 1000.95+k): {tl_b}")
 

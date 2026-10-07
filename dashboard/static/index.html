@@ -3,197 +3,399 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="light dark">
 <title>agx02 dashboard</title>
+<link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="/static/vendor/uPlot.min.css">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header class="top">
-  <div class="top-l">
-    <h1 id="host">agx02</h1>
-    <span id="node-state" class="badge lv-na" title="Node state">NO DATA</span>
-    <span id="sim-badge" class="badge sim" hidden>SIMULATED</span>
-  </div>
-  <div class="top-r">
-    <span class="kv"><span class="k">Time</span> <span id="time">-</span></span>
-    <span class="kv"><span class="k">Uptime</span> <span id="uptime">-</span></span>
-    <span class="kv"><span class="k">Power mode</span> <span id="nvp">-</span></span>
-    <span id="conn" class="conn off">Not connected</span>
-  </div>
-</header>
-<div id="state-reasons" class="reasons" hidden></div>
-
-<main class="grid">
-  <section class="card wide" id="c-cams">
-    <h2>Cameras <span id="cams-sim" class="badge sim" hidden>SIMULATED</span> <span id="cams-note" class="muted"></span></h2>
-    <div id="cam-tiles" class="tiles"></div>
-    <p class="note" id="cams-limits">STALE: agx-infer gives a frame age of 0.5 s or more. NO SIGNAL: no new frame for 1.0 s. This page shows NO SIGNAL 1.0 s to 1.6 s after the last frame. NO DATA: no status from agx-infer for 3 s.</p>
-  </section>
-
-  <section class="card wide" id="c-models">
-    <h2>Models <span id="models-sim" class="badge sim" hidden>SIMULATED</span> <span id="models-note" class="muted"></span></h2>
-    <p class="note" id="models-reason"></p>
-    <div class="scroll">
-    <table class="tbl" id="models-tbl">
-      <thead><tr><th>Name</th><th>Engine file</th><th class="n">Size</th><th>Date</th><th>TensorRT match</th><th>Inputs and outputs</th><th>State</th><th>Cameras</th><th class="n">fps</th><th class="n" title="Total time. The detail row shows each stage.">Latency p50 / p95 / p99</th><th class="n">GPU memory (estimate)</th></tr></thead>
-      <tbody></tbody>
-    </table>
+<div class="shell" id="shell" data-page="overview">
+  <aside class="side" aria-label="Main navigation">
+    <a class="brand" href="#/overview">
+      <svg class="brand__icon" viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="6" y="6" width="16" height="16" rx="3"/><rect x="10.5" y="10.5" width="7" height="7" rx="1.2"/>
+        <path d="M10 2.5v3.5M18 2.5v3.5M10 22v3.5M18 22v3.5M2.5 10h3.5M2.5 18h3.5M22 10h3.5M22 18h3.5"/>
+      </svg>
+      <span><span class="brand__name">agx dashboard</span><span class="brand__board" id="side-host">agx02</span></span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="#/overview" data-page="overview"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>Overview</span></a>
+      <a href="#/cameras" data-page="cameras"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.8l1.5-2h6.4l1.5 2h1.8A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z"/><circle cx="12" cy="13" r="3.6"/></svg><span>Cameras</span></a>
+      <a href="#/models" data-page="models"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8 20.5 7.5v9L12 21.2 3.5 16.5v-9Z"/><path d="M3.8 7.6 12 12.2l8.2-4.6M12 12.2v8.8"/></svg><span>Models</span></a>
+      <a href="#/rklink" data-page="rklink"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8" width="7" height="8" rx="1.5"/><rect x="14.5" y="5" width="7" height="14" rx="1.5"/><path d="M9.5 10.5h5M12.5 8.5l2 2-2 2M14.5 14h-5M11.5 12l-2 2 2 2"/></svg><span>RK link</span></a>
+      <a href="#/system" data-page="system"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="0.8"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg><span>System</span></a>
+      <a href="#/services" data-page="services"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="m3 12.5 9 5 9-5M3 16.5l9 5 9-5"/></svg><span>Services</span></a>
+      <a href="#/history" data-page="history"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 3.5v17h17"/><path d="m7 15 4-5 3.5 3L20 6.5"/></svg><span>History</span></a>
+      <a href="#/settings" data-page="settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span>Settings</span></a>
+    </nav>
+    <div class="side__foot">
+      <span id="side-feed" class="feed">Connecting</span>
+      <span id="side-ver"></span>
     </div>
-    <h3>Engine files not in the configuration <span id="extra-sum" class="muted"></span></h3>
-    <div class="scroll">
-    <table class="tbl" id="extra-tbl">
-      <thead><tr><th>Engine file</th><th class="n">Size</th><th>Date</th><th>sha256 (16)</th><th>TensorRT match</th><th>Inputs and outputs</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    </div>
-    <p class="note" id="scan-note"></p>
-  </section>
+  </aside>
 
-  <section class="card" id="c-cpu">
-    <h2>CPU <span class="big" id="cpu-avg">-</span></h2>
-    <div id="cpu-cores" class="cores"></div>
-  </section>
-
-  <section class="card" id="c-gpu">
-    <h2>GPU and memory</h2>
-    <div class="row"><span class="k">GPU load</span><span id="gpu-load" class="v">-</span></div>
-    <div class="bar"><i id="gpu-bar"></i></div>
-    <div class="row"><span class="k">GPU frequency</span><span id="gpu-freq" class="v">-</span></div>
-    <div class="row"><span class="k">RAM</span><span id="ram" class="v">-</span></div>
-    <div class="bar"><i id="ram-bar"></i></div>
-    <div class="row"><span class="k">Swap</span><span id="swap" class="v">-</span></div>
-    <p class="note">On Jetson, the GPU and the CPU use the same RAM.</p>
-  </section>
-
-  <section class="card" id="c-temp">
-    <h2>Temperatures <span class="big" id="temp-max">-</span></h2>
-    <table class="tbl" id="temp-tbl"><tbody></tbody></table>
-  </section>
-
-  <section class="card" id="c-power">
-    <h2>Power <span class="big" id="power-total">-</span></h2>
-    <p class="note" id="power-src"></p>
-    <table class="tbl" id="power-tbl">
-      <thead><tr><th>Rail</th><th class="n">V</th><th class="n">A</th><th class="n">W</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <div class="row"><span class="k">Fan</span><span id="fan" class="v">-</span></div>
-  </section>
-
-  <section class="card" id="c-disk">
-    <h2>Disks</h2>
-    <div id="disks"></div>
-  </section>
-
-  <section class="card wide" id="c-net">
-    <h2>Network</h2>
-    <div class="scroll">
-    <table class="tbl" id="net-tbl">
-      <thead><tr><th>Interface</th><th>State</th><th class="n">Speed</th><th class="n">RX</th><th class="n">TX</th><th>IPv4</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    </div>
-  </section>
-
-  <section class="card" id="c-link">
-    <h2>RK3588 link</h2>
-    <div class="row"><span class="k">RK3588 address</span><span id="rk-ip" class="v">-</span></div>
-    <div class="row"><span class="k">Ping time</span><span id="ping" class="v">-</span></div>
-    <div class="row"><span class="k" id="loss-k">Packet loss</span><span id="loss" class="v">-</span></div>
-    <div class="row"><span class="k">Clock offset (RK - AGX)</span><span id="clock" class="v">-</span></div>
-    <p class="note" id="clock-note"></p>
-    <h3>From agx-infer <span id="link-sim" class="badge sim" hidden>SIMULATED</span></h3>
-    <div class="row"><span class="k">Time since last frame</span><span id="frame-age" class="v">-</span></div>
-    <div class="row"><span class="k">Result publish rate</span><span id="res-rate" class="v">-</span></div>
-    <div class="row"><span class="k">Subscribers</span><span id="subs" class="v">-</span></div>
-    <div class="row"><span class="k">Results total</span><span id="res-total" class="v">-</span></div>
-    <div class="row"><span class="k">Last result</span><span id="res-last" class="v">-</span></div>
-  </section>
-
-  <section class="card" id="c-infer">
-    <h2>agx-infer <span id="infer-state" class="badge lv-na">NO DATA</span> <span id="infer-sim" class="badge sim" hidden>SIMULATED</span></h2>
-    <p id="infer-reason" class="note"></p>
-    <div class="placeholder" id="infer-wait">
-      <b>Models and cameras: no data from agx-infer</b>
-      <p class="note">This part shows data when agx-infer sends its status.</p>
-    </div>
-    <div id="infer-summary"></div>
-  </section>
-
-  <section class="card wide" id="c-svc">
-    <h2>Services</h2>
-    <h3>agx units</h3>
-    <div class="scroll">
-    <table class="tbl" id="agx-tbl">
-      <thead><tr><th>Unit</th><th>User manager</th><th>System manager</th><th class="n">PID</th><th class="n">Restarts</th><th class="n">Memory</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    </div>
-    <h3>Docker containers <span id="docker-sum" class="muted"></span></h3>
-    <div class="scroll">
-    <table class="tbl" id="docker-tbl">
-      <thead><tr><th>Name</th><th>State</th><th>Status</th><th>Restart policy</th><th>Image</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    </div>
-    <h3>Old DriverAgent processes <span id="oldp-sum" class="muted"></span></h3>
-    <p class="note" id="oldp-note">No systemd unit exists for the old DriverAgent stack; it starts by hand (~/s.sh).</p>
-    <div class="scroll">
-    <table class="tbl" id="oldp-tbl">
-      <thead><tr><th class="n">PID</th><th>User</th><th>Match</th><th>Command line</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    </div>
-    <details id="old-det">
-      <summary>Old units <span id="old-sum" class="muted"></span></summary>
-      <div class="scroll">
-      <table class="tbl" id="old-tbl">
-        <thead><tr><th>Unit</th><th>State</th><th>Unit file</th><th class="n">PID</th><th class="n">Memory</th></tr></thead>
-        <tbody></tbody>
-      </table>
+  <div class="content">
+    <header class="topbar">
+      <div class="topbar__left">
+        <h1 id="host" class="topbar__host">agx02</h1>
+        <span id="node-state" class="da-badge" title="Node state">NO DATA</span>
+        <span id="sim-badge" class="da-badge da-badge--info" hidden>SIMULATED</span>
       </div>
-    </details>
-    <p class="note" id="svc-err"></p>
-  </section>
-
-  <section class="card wide" id="c-logs">
-    <details id="logs-det">
-      <summary>Logs (last 100 lines)</summary>
-      <div class="logs-ctl">
-        <label for="logs-unit">Unit</label>
-        <select id="logs-unit">
-          <option value="agx-infer">agx-infer</option>
-          <option value="agx-dashboard">agx-dashboard</option>
-          <option value="agx-sim">agx-sim</option>
-        </select>
-        <span id="logs-t" class="muted"></span>
+      <div class="topbar__right">
+        <span class="kv"><span class="k">Time</span> <span id="time">-</span></span>
+        <span class="kv"><span class="k">Uptime</span> <span id="uptime">-</span></span>
+        <span class="kv"><span class="k">Power mode</span> <span id="nvp">-</span></span>
+        <span id="conn" class="conn conn--off">Not connected</span>
       </div>
-      <pre id="logs" class="logs">-</pre>
-    </details>
-  </section>
+    </header>
+    <div id="state-reasons" class="callout callout--amber reasons-bar" role="status" hidden></div>
 
-  <section class="card wide" id="c-hist">
-    <h2>History
-      <span class="seg" role="group" aria-label="Time range">
-        <button type="button" data-range="1h" class="on">1 h</button>
-        <button type="button" data-range="24h">24 h</button>
-      </span>
-    </h2>
-    <p class="note" id="hist-src"></p>
-    <div class="charts">
-      <div class="chart" id="ch-load"><h3>Load (%)</h3><div class="plot"></div></div>
-      <div class="chart" id="ch-ram"><h3>RAM used (%)</h3><div class="plot"></div></div>
-      <div class="chart" id="ch-temp"><h3>Maximum temperature (°C)</h3><div class="plot"></div></div>
-      <div class="chart" id="ch-power"><h3>Power total (W)</h3><div class="plot"></div></div>
-      <div class="chart" id="ch-fps"><h3>Frames per second per camera <span class="badge sim" hidden>SIMULATED</span></h3><div class="plot"></div></div>
-      <div class="chart" id="ch-lat"><h3>Latency p50 per model (ms) <span class="badge sim" hidden>SIMULATED</span></h3><div class="plot"></div></div>
-    </div>
-  </section>
-</main>
-<footer class="foot">Read-only page. Data comes from this machine (/proc, /sys, systemd, docker, agx-infer status). Values that are not available show "n/a". Values from a simulated source show SIMULATED.</footer>
+    <main class="main" id="main">
+      <!-- ======================================== Overview ======================================== -->
+      <section class="page" data-page="overview" id="page-overview" aria-labelledby="h-overview">
+        <div class="page-head">
+          <div>
+            <h1 id="h-overview">Overview</h1>
+            <p id="ov-sub">-</p>
+          </div>
+        </div>
+        <section class="banner" id="ov-banner" aria-live="polite">
+          <span id="ov-light"></span>
+          <div>
+            <h2 id="ov-title">No data</h2>
+            <p id="ov-reasons">The page waits for the first data.</p>
+          </div>
+        </section>
+        <div class="tiles" id="ov-tiles"></div>
+        <section class="card" id="c-infer">
+          <h2>agx-infer <span id="infer-state" class="da-badge">NO DATA</span> <span id="infer-sim" class="da-badge da-badge--info" hidden>SIMULATED</span>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-infer" title="Information">i</button></h2>
+          <div class="info-text" id="info-infer" hidden>
+            <p>agx-infer sends its status to this page each second (port 5562). This card shows the cameras and the models of that status.</p>
+            <p>The model controls are on the Models page.</p>
+          </div>
+          <p id="infer-reason" class="note"></p>
+          <div class="placeholder" id="infer-wait">
+            <b>Models and cameras: no data from agx-infer</b>
+            <p class="note">This part shows data when agx-infer sends its status.</p>
+          </div>
+          <div id="infer-summary"></div>
+        </section>
+      </section>
+
+      <!-- ======================================== Cameras ======================================== -->
+      <section class="page" data-page="cameras" id="page-cameras" hidden aria-labelledby="h-cameras">
+        <div class="page-head"><div><h1 id="h-cameras">Cameras</h1><p>Six cameras from DA01. The picture shows the newest snapshot.</p></div></div>
+        <section class="card" id="c-cams">
+          <h2>Cameras <span id="cams-sim" class="da-badge da-badge--info" hidden>SIMULATED</span> <span id="cams-note" class="card__sub"></span>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-cams" title="Information">i</button></h2>
+          <div class="info-text" id="info-cams" hidden>
+            <p id="cams-limits">STALE: agx-infer gives a frame age of 0.5 s or more. NO SIGNAL: no new frame for 1.0 s. This page shows NO SIGNAL 1.0 s to 1.6 s after the last frame. NO DATA: no status from agx-infer for 3 s.</p>
+            <p>The name and the role come from DA01. "role unconfirmed": DA01 has no role for that camera. "no camera info from DA01": the text comes from config/sources.yaml.</p>
+          </div>
+          <div id="cam-tiles" class="tiles"></div>
+        </section>
+      </section>
+
+      <!-- ======================================== Models ======================================== -->
+      <section class="page" data-page="models" id="page-models" hidden aria-labelledby="h-models">
+        <div class="page-head">
+          <div><h1 id="h-models">Models</h1><p>The model store of AGX02 and its control.</p></div>
+          <div class="page-head__tools">
+            <span class="muted small">Control mode</span>
+            <span id="mc-mode" class="da-badge da-badge--muted">Not known</span>
+            <span id="mc-change" class="da-badge da-badge--info" hidden></span>
+            <button type="button" class="da-btn da-btn--sm" id="mc-rollback">Rollback</button>
+          </div>
+        </div>
+        <div id="mc-problem" class="callout callout--amber" hidden></div>
+        <div id="mc-notice" class="callout callout--info" role="status" hidden></div>
+        <div id="mc-error" class="callout callout--red" role="alert" hidden></div>
+
+        <section class="card" id="c-models">
+          <h2>Models <span id="models-sim" class="da-badge da-badge--info" hidden>SIMULATED</span> <span id="mc-counts" class="card__sub"></span>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-models" title="Information">i</button></h2>
+          <div class="info-text" id="info-models" hidden>
+            <p>Each row is one model version of the store (~/agx-models). A row without a version comes from config/models.yaml or from the agx-infer status only.</p>
+            <ul>
+              <li>Build: makes an engine from the ONNX file on this AGX. It is possible for NEEDS BUILD, or for FAILED with an ONNX file and no engine.</li>
+              <li>Activate: starts a READY or FAILED version on the cameras that you select.</li>
+              <li>Deactivate: stops an ACTIVE version. The other models continue.</li>
+              <li>Rollback: puts the last good set of models back.</li>
+            </ul>
+            <p>Each action has a confirmation step. AGX02 can refuse an action (for example in vehicle mode). The page then shows the reason. No action deletes a model version.</p>
+            <p>Results/s and latency: from agx-infer on AGX02 (latency = total time of the model). Open a row to see all its values.</p>
+            <p id="models-gpu-note">GPU memory values are an estimate (engine file + activation + I/O).</p>
+          </div>
+          <p class="note" id="models-reason"></p>
+          <p class="note" id="models-note"></p>
+          <div class="row row--wrap small" id="mc-last" hidden></div>
+          <p class="note" id="mc-checks"></p>
+          <div class="da-table-wrap">
+            <table class="da-table da-table--stack" id="models-tbl">
+              <thead><tr><th>Name</th><th>Version</th><th>Type</th><th>State</th><th>Cameras</th><th class="n">Results/s</th><th class="num">Latency p50 / p95 / p99</th><th>Actions</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" id="c-extra">
+          <h2>Engine files not in the configuration <span id="extra-sum" class="card__sub"></span>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-extra" title="Information">i</button></h2>
+          <div class="info-text" id="info-extra" hidden>
+            <p>The engine scan finds these engine files on this AGX. config/models.yaml does not use them. Open a row to see all its values.</p>
+            <p id="scan-note"></p>
+          </div>
+          <div class="da-table-wrap">
+            <table class="da-table da-table--stack" id="extra-tbl">
+              <thead><tr><th>Engine file</th><th class="n">Size</th><th>Date</th><th>sha256 (16)</th><th>TensorRT match</th><th>Inputs and outputs</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" id="c-audit">
+          <h2>Audit <span class="card__sub">the newest 50 model controller events</span>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-audit" title="Information">i</button></h2>
+          <div class="info-text" id="info-audit" hidden>
+            <p>Each request to the model controller is one line: from this page (agx-dashboard), from the DA01 rk console (rk-console), from the command line or from the controller itself.</p>
+            <p>Result: started, ok, refused or failed. The reason is the text of AGX02.</p>
+          </div>
+          <p class="note" id="mc-events-note"></p>
+          <div class="da-table-wrap">
+            <table class="da-table da-table--stack da-table--compact" id="models-events">
+              <thead><tr><th>Time</th><th>Source</th><th>User</th><th>Action</th><th>Model</th><th>Result</th><th>Reason</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+      </section>
+
+      <!-- ======================================== RK link ======================================== -->
+      <section class="page" data-page="rklink" id="page-rklink" hidden aria-labelledby="h-rklink">
+        <div class="page-head"><div><h1 id="h-rklink">RK link</h1><p>The network link to the RK3588 (DA01) and the result stream of agx-infer.</p></div></div>
+        <div class="grid">
+          <section class="card" id="c-link">
+            <h2>RK3588 link <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-link" title="Information">i</button></h2>
+            <div class="info-text" id="info-link" hidden>
+              <p>This AGX sends a ping to the RK3588 each 2 s. Packet loss is for the window in the label.</p>
+              <p id="clock-note"></p>
+            </div>
+            <dl class="da-kv">
+              <div class="da-kv__row"><dt>RK3588 address</dt><dd id="rk-ip">-</dd></div>
+              <div class="da-kv__row"><dt>Ping time</dt><dd id="ping">-</dd></div>
+              <div class="da-kv__row"><dt id="loss-k">Packet loss</dt><dd id="loss">-</dd></div>
+              <div class="da-kv__row"><dt>Clock offset (RK - AGX)</dt><dd id="clock">-</dd></div>
+            </dl>
+            <h3>From agx-infer <span id="link-sim" class="da-badge da-badge--info" hidden>SIMULATED</span></h3>
+            <dl class="da-kv">
+              <div class="da-kv__row"><dt>Time since last frame</dt><dd id="frame-age">-</dd></div>
+              <div class="da-kv__row"><dt>Result publish rate</dt><dd id="res-rate">-</dd></div>
+              <div class="da-kv__row"><dt>Subscribers</dt><dd id="subs">-</dd></div>
+              <div class="da-kv__row"><dt>Results total</dt><dd id="res-total">-</dd></div>
+              <div class="da-kv__row"><dt>Last result</dt><dd id="res-last">-</dd></div>
+            </dl>
+          </section>
+        </div>
+      </section>
+
+      <!-- ======================================== System ======================================== -->
+      <section class="page" data-page="system" id="page-system" hidden aria-labelledby="h-system">
+        <div class="page-head"><div><h1 id="h-system">System</h1><p>CPU, GPU, memory, temperatures, power, disks and network of this AGX.</p></div></div>
+        <div class="grid">
+          <section class="card" id="c-cpu">
+            <h2>CPU <span class="big" id="cpu-avg">-</span></h2>
+            <div id="cpu-cores" class="cores"></div>
+          </section>
+          <section class="card" id="c-gpu">
+            <h2>GPU and memory <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-gpu" title="Information">i</button></h2>
+            <div class="info-text" id="info-gpu" hidden><p>On Jetson, the GPU and the CPU use the same RAM.</p></div>
+            <div class="row"><span class="k">GPU load</span><span id="gpu-load" class="v">-</span></div>
+            <div class="bar"><i id="gpu-bar"></i></div>
+            <div class="row"><span class="k">GPU frequency</span><span id="gpu-freq" class="v">-</span></div>
+            <div class="row"><span class="k">RAM</span><span id="ram" class="v">-</span></div>
+            <div class="bar"><i id="ram-bar"></i></div>
+            <div class="row"><span class="k">Swap</span><span id="swap" class="v">-</span></div>
+          </section>
+          <section class="card" id="c-temp">
+            <h2>Temperatures <span class="big" id="temp-max">-</span></h2>
+            <table class="da-table da-table--compact" id="temp-tbl"><tbody></tbody></table>
+          </section>
+          <section class="card" id="c-power">
+            <h2>Power <span class="big" id="power-total">-</span></h2>
+            <p class="note" id="power-src"></p>
+            <table class="da-table da-table--compact" id="power-tbl">
+              <thead><tr><th>Rail</th><th class="n">V</th><th class="n">A</th><th class="n">W</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <div class="row"><span class="k">Fan</span><span id="fan" class="v">-</span></div>
+          </section>
+          <section class="card" id="c-disk">
+            <h2>Disks</h2>
+            <div id="disks"></div>
+          </section>
+          <section class="card wide" id="c-net">
+            <h2>Network</h2>
+            <div class="da-table-wrap">
+              <table class="da-table da-table--stack" id="net-tbl">
+                <thead><tr><th>Interface</th><th>State</th><th class="n">Speed</th><th class="n">RX</th><th class="n">TX</th><th>IPv4</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ======================================== Services ======================================== -->
+      <section class="page" data-page="services" id="page-services" hidden aria-labelledby="h-services">
+        <div class="page-head"><div><h1 id="h-services">Services</h1><p>The agx units, docker, the old stack and the logs. This page does not control a service.</p></div></div>
+        <section class="card" id="c-svc">
+          <h2>Services <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-svc" title="Information">i</button></h2>
+          <div class="info-text" id="info-svc" hidden>
+            <p>User manager: systemctl --user. System manager: systemctl. The values come from the manager that has the unit loaded.</p>
+          </div>
+          <h3>agx units</h3>
+          <div class="da-table-wrap">
+            <table class="da-table da-table--stack" id="agx-tbl">
+              <thead><tr><th>Unit</th><th>User manager</th><th>System manager</th><th class="n">PID</th><th class="n">Restarts</th><th class="n">Memory</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <h3>Docker containers <span id="docker-sum" class="card__sub"></span></h3>
+          <div class="da-table-wrap">
+            <table class="da-table da-table--stack" id="docker-tbl">
+              <thead><tr><th>Name</th><th>State</th><th>Status</th><th>Restart policy</th><th>Image</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <h3>Old DriverAgent processes <span id="oldp-sum" class="card__sub"></span>
+            <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-oldp" title="Information">i</button></h3>
+          <div class="info-text" id="info-oldp" hidden>
+            <p id="oldp-note">No systemd unit exists for the old DriverAgent stack; it starts by hand (~/s.sh).</p>
+          </div>
+          <div class="da-table-wrap">
+            <table class="da-table da-table--stack" id="oldp-tbl">
+              <thead><tr><th class="n">PID</th><th>User</th><th>Match</th><th>Command line</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <details id="old-det">
+            <summary>Old units <span id="old-sum" class="muted"></span></summary>
+            <div class="da-table-wrap">
+              <table class="da-table da-table--stack" id="old-tbl">
+                <thead><tr><th>Unit</th><th>State</th><th>Unit file</th><th class="n">PID</th><th class="n">Memory</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </details>
+          <p class="note lv-crit" id="svc-err"></p>
+        </section>
+        <section class="card" id="c-logs">
+          <details id="logs-det">
+            <summary>Logs (last 100 lines)</summary>
+            <div class="logs-ctl">
+              <label for="logs-unit">Unit</label>
+              <select id="logs-unit">
+                <option value="agx-infer">agx-infer</option>
+                <option value="agx-dashboard">agx-dashboard</option>
+                <option value="agx-sim">agx-sim</option>
+              </select>
+              <span id="logs-t" class="muted small"></span>
+            </div>
+            <pre id="logs" class="logs">-</pre>
+          </details>
+        </section>
+      </section>
+
+      <!-- ======================================== History ======================================== -->
+      <section class="page" data-page="history" id="page-history" hidden aria-labelledby="h-history">
+        <div class="page-head"><div><h1 id="h-history">History</h1><p>1 h at 1 s, or 24 h at 10 s.</p></div></div>
+        <section class="card" id="c-hist">
+          <h2>History
+            <span class="card__end"><span class="seg" role="group" aria-label="Time range" id="hist-seg">
+              <button type="button" data-range="1h" aria-pressed="true">1 h</button>
+              <button type="button" data-range="24h" aria-pressed="false">24 h</button>
+            </span></span>
+          </h2>
+          <p class="note" id="hist-src"></p>
+          <div class="charts">
+            <div class="chart" id="ch-load"><h3>Load (%)</h3><div class="plot"></div></div>
+            <div class="chart" id="ch-ram"><h3>RAM used (%)</h3><div class="plot"></div></div>
+            <div class="chart" id="ch-temp"><h3>Maximum temperature (°C)</h3><div class="plot"></div></div>
+            <div class="chart" id="ch-power"><h3>Power total (W)</h3><div class="plot"></div></div>
+            <div class="chart" id="ch-fps"><h3>Frames per second per camera <span class="da-badge da-badge--info sim" hidden>SIMULATED</span></h3><div class="plot"></div></div>
+            <div class="chart" id="ch-lat"><h3>Latency p50 per model (ms) <span class="da-badge da-badge--info sim" hidden>SIMULATED</span></h3><div class="plot"></div></div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ======================================== Settings ======================================== -->
+      <section class="page" data-page="settings" id="page-settings" hidden aria-labelledby="h-settings">
+        <div class="page-head"><div><h1 id="h-settings">Settings</h1><p>The settings of this page. They change nothing on AGX02.</p></div></div>
+        <div class="grid">
+          <section class="card" id="c-theme">
+            <h2>Theme</h2>
+            <span class="seg" role="group" aria-label="Theme" id="theme-seg">
+              <button type="button" data-theme-set="system" aria-pressed="true">System</button>
+              <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+              <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+            </span>
+            <p class="note">This browser keeps the choice.</p>
+          </section>
+          <section class="card" id="c-mode">
+            <h2>Control mode</h2>
+            <dl class="da-kv">
+              <div class="da-kv__row"><dt>Mode</dt><dd><span id="set-mode" class="da-badge da-badge--muted">Not known</span></dd></div>
+              <div class="da-kv__row"><dt>File</dt><dd id="set-mode-file" class="mono">-</dd></div>
+            </dl>
+            <p class="note">Only the owner changes config/control.yaml.</p>
+            <p class="note lv-warn" id="set-mode-problem" hidden></p>
+          </section>
+          <section class="card" id="c-version">
+            <h2>Version</h2>
+            <dl class="da-kv">
+              <div class="da-kv__row"><dt>Dashboard page</dt><dd id="set-page-ver">-</dd></div>
+              <div class="da-kv__row"><dt>agx-infer</dt><dd id="set-infer-ver">-</dd></div>
+              <div class="da-kv__row"><dt>Design tokens</dt><dd id="set-tokens">tokens.css (copy of the rk console tokens)</dd></div>
+            </dl>
+          </section>
+          <section class="card wide" id="c-refresh">
+            <h2>Refresh periods</h2>
+            <div class="da-table-wrap">
+              <table class="da-table da-table--stack da-table--compact" id="refresh-tbl">
+                <thead><tr><th>Data</th><th>Source</th><th>Period</th><th>When</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <footer class="foot">Data comes from this machine (/proc, /sys, systemd, docker, agx-infer status). "n/a": the value is not available. SIMULATED: the value comes from a simulated source. Only the Models page can change something: the model controller.</footer>
+    </main>
+  </div>
+</div>
+<!-- the confirmation of the model controller (Models page). Outside the page sections: a page change closes it. -->
+  <dialog id="mc-dlg" class="da-dialog" aria-labelledby="mc-dlg-title">
+    <form id="mc-dlg-form">
+      <h2 class="da-dialog__title" id="mc-dlg-title">Confirm</h2>
+      <div class="da-dialog__body" id="mc-dlg-body"></div>
+      <fieldset class="agx-cams" id="mc-dlg-cams" hidden>
+        <legend class="small muted">Cameras (the model permits these)</legend>
+        <div class="row row--wrap" id="mc-dlg-camlist"></div>
+      </fieldset>
+      <p class="da-dialog__error" id="mc-dlg-error" role="alert" hidden></p>
+      <div class="da-dialog__actions">
+        <button type="button" class="da-btn" id="mc-dlg-cancel">Cancel</button>
+        <button type="submit" class="da-btn da-btn--primary" id="mc-dlg-ok">Confirm</button>
+      </div>
+    </form>
+  </dialog>
 <script src="/static/vendor/uPlot.iife.min.js"></script>
 <script src="/static/tiles.js"></script>
+<script src="/static/router.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

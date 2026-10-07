@@ -147,10 +147,18 @@ def test_page(server, creds):
     assert "<title>agx02 dashboard</title>" in r.text
     assert creds[1] not in r.text
     assert "http://" not in r.text and "https://" not in r.text
-    for p in ("/static/app.js", "/static/style.css", "/static/vendor/uPlot.iife.min.js"):
+    # tokens.css (the design values of the rk console) loads before style.css; router.js before app.js
+    t = r.text
+    assert t.index('href="/static/tokens.css"') < t.index('href="/static/style.css"')
+    assert t.index('src="/static/router.js"') < t.index('src="/static/app.js"')
+    for p in ("/static/app.js", "/static/router.js", "/static/tiles.js", "/static/style.css", "/static/tokens.css",
+              "/static/vendor/uPlot.iife.min.js"):
         rr = httpx.get(server + p, auth=creds, timeout=5)
         assert rr.status_code == 200
         assert creds[1] not in rr.text
+        assert "http://" not in rr.text and "https://" not in rr.text or p.startswith("/static/vendor/")
+    tok = httpx.get(server + "/static/tokens.css", auth=creds, timeout=5).text
+    assert tok.splitlines()[0].startswith("/* source: driveragent rk/console/ui/src/styles/tokens.css, commit ")
 
 
 def test_live_values_change(server, creds):
