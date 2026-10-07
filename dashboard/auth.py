@@ -57,7 +57,7 @@ LOG_EVERY_S = 60.0  # at most one deny / fail log line per IP and kind per minut
 _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 # Board tokens (owner rule M8) are accepted only on these paths: the rk console server of a paired board uses them.
 TOKEN_PREFIXES = ("/api/models/",)
-TOKEN_ROUTES = (("GET", "/api/pair/boards"),)
+TOKEN_ROUTES = (("GET", "/api/pair/boards"), ("GET", "/api/power/now"))
 # No credentials needed (the IP allowlist and the failed-login limit still apply).
 PUBLIC_ROUTES = (("GET", "/api/pair/info"), ("POST", "/api/pair"))
 

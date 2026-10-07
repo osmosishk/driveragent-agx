@@ -3,7 +3,7 @@
 Every period_s (1.0 s):
   1. Calculate the node state (infer.status.NodeState.evaluate) from ModelManager.status() and the
      camera states.
-  2. Publish AgxInferStatus (schema v2) with the dabus envelope (type_id 5561, src_board 1) as ONE
+  2. Publish AgxInferStatus (schema v2 or v3, see below) with the dabus envelope (type_id 5561, src_board 1) as ONE
      ZMQ frame on PUB tcp://<host>:5561.
   3. Publish the internal JSON status (dashboard contract agx-infer-status/1) on the internal PUB
      (127.0.0.1:5562), topic b"status".
@@ -23,6 +23,15 @@ Paired boards data (internal JSON only; docs/PAIRING_API.md "Paired boards" tabl
   board_sources        {ip: {framelink_frames_3s, framelink_last_t, rkinfo_last_t, result_subscriber, ...}}: one entry
                        per source address seen in the last 60 s (FrameLink frames or drops, RkCameraInfo, results)
 on_tick: a function called at the start of each tick (infer.main: read data/paired_boards.json again when it changed).
+Schema v3 data (power log; capnp status only):
+  status.schema_version  config/infer.yaml, 2 (default) or 3, read again when the file changes (no restart). With 2
+                       the status has no power fields, schemaVersion 2 and the v2 hash (schema.STATUS_V2_HASH): the
+                       DA01 rk-agxlink of before v3 reads it. With 3: the power fields, schemaVersion 3 and the v3 hash.
+                       A bad value gives 2 and a log line. The envelope hash always agrees with schemaVersion.
+  powerTotalW / powerRails / powerLabel / powerWhat   common.power_sources.JetsonRails, read once per tick (v3 only):
+                       the sum of the INA3221 module rails (SENSOR), or NaN, no rails and "NO SENSOR"
+  powerMode            "NV Power Mode: <name>" of `nvpmodel -q` (timeout 5 s), at most once per 30 s in a helper
+                       thread (v3 only); "" = not known
 """
 from __future__ import annotations
 
@@ -32,9 +41,12 @@ import json
 import logging
 import math
 import os
+import re
+import subprocess
 import threading
 import time
 
+import yaml
 import zmq
 
 from common import envelope as env
@@ -51,6 +63,12 @@ _PCT_KEYS = ("p50", "p95", "p99")
 ACTIVE_STATES = ("RUNNING", "LOADING", "LOADED")
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DEFAULT_CONTROL = os.path.join(ROOT, "config", "control.yaml")
+DEFAULT_SETTINGS = os.path.join(ROOT, "config", "infer.yaml")
+STATUS_VERSIONS = (2, 3)     # status.schema_version: 2 = no power fields (the default), 3 = power fields
+NVP_CMD = ("nvpmodel", "-q")
+NVP_PERIOD_S = 30.0          # nvpmodel -q at most once per 30 s
+NVP_TIMEOUT_S = 5.0
+NVP_RE = re.compile(r"NV Power Mode:\s*(.+)")
 CATALOG_FILE = "catalog.json"
 _CAT_KEYS = ("name", "version", "type", "state", "reason")
 CATALOG_MAX = 200            # catalog entries in one status (the store has about 5 now); keeps one capnp segment
@@ -130,6 +148,34 @@ def parse_catalog(path) -> dict | None:
     mode = d.get("control_mode")
     return {"entries": entries, "control_mode": mode if isinstance(mode, str) and mode else None,
             "change_in_progress": _text(d.get("change_in_progress")), "t": d.get("t")}
+
+
+def parse_status_settings(path) -> int:
+    """config/infer.yaml -> status.schema_version (2 or 3). No "status" key or no "schema_version": 2. Another value
+    raises ValueError (_MtimeFile then gives the default 2 and the error)."""
+    with open(path, encoding="utf-8") as f:
+        d = yaml.safe_load(f) or {}
+    st = d.get("status") if isinstance(d, dict) else None
+    if st is None:
+        return 2
+    if not isinstance(st, dict):
+        raise ValueError("status is not a mapping")
+    v = st.get("schema_version", 2)
+    if isinstance(v, bool) or v not in STATUS_VERSIONS:
+        raise ValueError(f"status.schema_version {v!r} is not 2 or 3")
+    return int(v)
+
+
+def read_nvpmodel(cmd=NVP_CMD, timeout: float = NVP_TIMEOUT_S) -> tuple[str, str | None]:
+    """(power mode name, None) from "NV Power Mode: <name>" of `nvpmodel -q`, or ("", error). Read only."""
+    try:
+        p = subprocess.run(list(cmd), capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError) as e:
+        return "", f"{type(e).__name__}: {e}"
+    m = NVP_RE.search(p.stdout or "")
+    if m is None or not m.group(1).strip():
+        return "", f"exit {p.returncode}: no 'NV Power Mode' line"
+    return m.group(1).strip(), None
 
 
 def read_temps() -> list[tuple[str, float]]:
@@ -251,10 +297,14 @@ class StatusPublisher:
     def __init__(self, node, ingest, manager, results_pub, internal_pub, host: str = "0.0.0.0",
                  port: int = 5561, period_s: float = 1.0, proto_path: str | None = None,
                  ctx: zmq.Context | None = None, model_store: str | None = None,
-                 control_file: str | None = DEFAULT_CONTROL, rkinfo=None, paired=None, on_tick=None):
+                 control_file: str | None = DEFAULT_CONTROL, rkinfo=None, paired=None, on_tick=None,
+                 settings_file: str | None = DEFAULT_SETTINGS, power_source=None, nvp_cmd=NVP_CMD):
         """model_store: the controller store root (None = no store: empty catalog and last good set);
         control_file: config/control.yaml; rkinfo: infer.rkinfo.RkInfoReceiver or None; paired: an object with
-        snapshot() (infer.ingest.ingest.PairedBoards) or None; on_tick: called at the start of each tick."""
+        snapshot() (infer.ingest.ingest.PairedBoards) or None; on_tick: called at the start of each tick;
+        settings_file: the file with status.schema_version (None = always 2); power_source: an object with
+        read() -> [common.powerlog.Reading] (None = common.power_sources.JetsonRails, made at the first v3 tick);
+        nvp_cmd: the power mode command."""
         self.node = node
         self.ingest = ingest
         self.manager = manager
@@ -294,7 +344,16 @@ class StatusPublisher:
         self._catalog = _MtimeFile(parse_catalog, None)
         self._control_mode = _MtimeFile(_control_mode_of, "bench")       # no file = bench (rule M7 default)
         self._last_good = _MtimeFile(self._parse_last_good, [])
-        log.info("status PUB bound %s (schema hash 0x%08x)", self.endpoint, self.hash)
+        self.settings_file = settings_file
+        self._settings = _MtimeFile(parse_status_settings, 2)
+        self._version_used: int | None = None
+        self.power_source = power_source
+        self.nvp_cmd = tuple(nvp_cmd)
+        self._nvp_mode = ""
+        self._nvp_t: float | None = None
+        self._nvp_thread: threading.Thread | None = None
+        log.info("status PUB bound %s (schema hash v3 0x%08x, v2 0x%08x; status.schema_version in %s)",
+                 self.endpoint, self.hash, sch.STATUS_V2_HASH, self.settings_file)
 
     # ---- collect ---------------------------------------------------------------------------------
     def _models(self) -> list[dict]:
@@ -385,6 +444,51 @@ class StatusPublisher:
         return mode != "rk" or any(c.get("simulated") and c.get("frame_age_ms") is not None
                                    for c in cams)
 
+    # ---- schema v3: power -------------------------------------------------------------------------
+    def status_version(self) -> int:
+        """2 or 3 from status.schema_version (read again when the file changes). 3 needs a v3 proto file."""
+        v = self._settings.get(self.settings_file) if self.settings_file else 2
+        if self._settings.error:
+            self._rlog.warning("settings", "status.schema_version not used (status v2 is sent): %s",
+                               self._settings.error)
+        if v >= 3 and self.schema.version < 3:
+            self._rlog.warning("settings_proto", "status.schema_version is 3, but %s has schema version %d: "
+                               "status v2 is sent", self.schema.path, self.schema.version)
+            v = 2
+        if v != self._version_used:
+            log.info("status schema version %s -> %d", self._version_used, v)
+            self._version_used = v
+        return v
+
+    def status_hash(self, version: int) -> int:
+        """The envelope hash of a status with this schemaVersion (v3: the hash of the proto file)."""
+        return self.hash if version >= 3 else sch.STATUS_V2_HASH
+
+    def power_reading(self):
+        """The newest common.powerlog.Reading of the AGX (one sysfs read; about 1 ms CPU)."""
+        if self.power_source is None:
+            from common.power_sources import JetsonRails
+            self.power_source = JetsonRails()
+        rs = self.power_source.read()
+        return rs[0] if rs else None
+
+    def power_mode(self) -> str:
+        """The last nvpmodel mode name ("" = not known). Starts a helper thread for `nvpmodel -q` when the last read
+        is NVP_PERIOD_S old: the status thread never waits for the command."""
+        now = time.monotonic()
+        busy = self._nvp_thread is not None and self._nvp_thread.is_alive()
+        if not busy and (self._nvp_t is None or now - self._nvp_t >= NVP_PERIOD_S):
+            self._nvp_t = now
+            self._nvp_thread = threading.Thread(target=self._nvp_run, name="status-nvpmodel", daemon=True)
+            self._nvp_thread.start()
+        return self._nvp_mode
+
+    def _nvp_run(self) -> None:
+        mode, err = read_nvpmodel(self.nvp_cmd)
+        self._nvp_mode = _text(mode, 64)
+        if err:
+            self._rlog.warning("nvpmodel", "power mode not known: %s", err)
+
     # ---- paired boards ---------------------------------------------------------------------------
     def boards(self, pub: dict, rk_stats: dict | None) -> dict:
         """{"allowed_sources", "result_subscribers", "board_sources"} (JSON keys). A failure gives None values and a
@@ -435,10 +539,14 @@ class StatusPublisher:
             **self.boards(pub, rk_stats),
         }
 
-    def build_capnp(self, models: list[dict], cams: list[dict], t_ns: int, control: dict | None = None) -> bytes:
+    def build_capnp(self, models: list[dict], cams: list[dict], t_ns: int, control: dict | None = None,
+                    version: int | None = None) -> bytes:
+        """version: the schemaVersion of the message (2 or 3; None = status_version()). Stamp the envelope with
+        status_hash(version)."""
         control = self.control(models) if control is None else control
+        version = self.status_version() if version is None else int(version)
         _mb, s = sch.new_builder(self.schema.mod.AgxInferStatus, 65536)
-        s.schemaVersion = self.schema.version
+        s.schemaVersion = self.schema.version if version >= 3 else 2
         s.hostname = self.node.hostname
         s.version = self.node.version
         s.nodeState = self.node.state
@@ -508,6 +616,31 @@ class StatusPublisher:
             s.changeInProgress = _text(control["change_in_progress"], 200)
         except Exception as e:  # noqa: BLE001
             self._rlog.warning("v2", "model control part of the status not complete: %s: %s", type(e).__name__, e)
+        if version >= 3:
+            # schema v3: power. "NO SENSOR" first, so that a failure never sends a value without its label.
+            s.powerTotalW = float("nan")
+            s.powerLabel = "NO SENSOR"
+            try:
+                r = self.power_reading()
+                if r is not None:
+                    w = _num(r.watts)
+                    sensor = r.label == "SENSOR" and w is not None
+                    rails = sorted((r.rails or {}).items()) if sensor else []
+                    lr = s.init("powerRails", len(rails))
+                    for i, (name, rw) in enumerate(rails):
+                        lr[i].name = _text(name, 64)
+                        lr[i].watts = _num(rw, float("nan"))
+                    s.powerWhat = _text(r.what, 300)
+                    if sensor:
+                        s.powerTotalW = w
+                        s.powerLabel = "SENSOR"
+            except Exception as e:  # noqa: BLE001
+                self._rlog.warning("v3", "power part of the status not complete: %s: %s", type(e).__name__, e)
+            try:
+                s.powerMode = self.power_mode()
+            except Exception as e:  # noqa: BLE001
+                self._rlog.warning("v3_mode", "power mode part of the status not complete: %s: %s",
+                                   type(e).__name__, e)
         return s.to_bytes()
 
     # ---- run -------------------------------------------------------------------------------------
@@ -523,13 +656,14 @@ class StatusPublisher:
         self._collect_errors(models, cams)
         t_ns = time.time_ns()
         control = self.control(models)
-        payload = self.build_capnp(models, cams, t_ns, control)
+        version = self.status_version()
+        payload = self.build_capnp(models, cams, t_ns, control, version)
         flags = env.FLAG_TIME_UNCERTAIN
         if self._simulated(cams):
             flags |= env.FLAG_SOURCE_IS_REPLAY
         if self.node.state == "DEGRADED":
             flags |= env.FLAG_DEGRADED
-        msg = env.pack(sch.TYPE_STATUS, flags, self.hash, self._seq.next(sch.TYPE_STATUS), t_ns,
+        msg = env.pack(sch.TYPE_STATUS, flags, self.status_hash(version), self._seq.next(sch.TYPE_STATUS), t_ns,
                        payload, src_board=env.SRC_AGX)
         try:
             self._sock.send(msg, zmq.NOBLOCK)

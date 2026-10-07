@@ -32,12 +32,13 @@ Errors are `{"ok": false, "reason": "<plain words>"}`. The pages show `reason` a
 No secret. The DA01 rk console uses it in its link test (check "api").
 ```json
 {"agx": true, "api": "agx-pair/1", "name": "agx02",
- "schema": {"status": ["0xef12fe49"], "result": "0xafcaff02"},
+ "schema": {"status": ["0x2c23c715", "0xef12fe49"], "result": "0xafcaff02"},
  "control_mode": "bench", "control_problem": null, "pairing_open": false,
  "ports": {"video": [6000, 6001, 6002, 6003, 6004, 6005], "video_base": 6000, "results": 5560, "status": 5561,
            "rkinfo": 5564, "api": 8700}}
 ```
-`schema`: the hashes that agx-infer sends (`infer/publish/schema.py`). `ports`: read only, from `config/infer.yaml`
+`schema`: the hashes that agx-infer sends (`infer/publish/schema.py`): status v3, and v2 (sent while
+`config/infer.yaml` `status.schema_version` is 2). `ports`: read only, from `config/infer.yaml`
 (`ports`) and `config/sources.yaml` (`cameras[].port`); `api` is the port of this request.
 
 ### 1.2 POST /api/pair/code
@@ -139,8 +140,8 @@ Errors: 400 `'x' is not an IPv4 address. Use an address like 10.0.0.208, or leav
 `"warning": "no paired board has the address 10.9.9.9: no board can control this AGX now"`.
 
 ## 2. Board tokens
-- `Authorization: Bearer <token>` is accepted on `/api/models/*` and on `GET /api/pair/boards` only. On other routes a
-  token gets 401.
+- `Authorization: Bearer <token>` is accepted on `/api/models/*`, on `GET /api/pair/boards` and on `GET /api/power/now`
+  (the power value of now, docs/DASHBOARD_PAGES.md section 5) only. On other routes a token gets 401.
 - The check: SHA-256 of the token, compared in constant time with each stored hash (no early stop).
 - The audit user of a model request: `<X-Actor>@<board name>` (source `rk-console`), or the board name.
 - Each accepted token request updates `last_seen_t` and `last_seen_addr` (in memory; in the file at most once in 60 s).

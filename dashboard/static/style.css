@@ -1227,6 +1227,11 @@ details summary {
 .chart {
   min-width: 0;
 }
+.pl-top {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--da-grid-min)), 1fr));
+}
 .chart h3 {
   margin-top: 4px;
   font-size: var(--da-fs-small);

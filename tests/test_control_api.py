@@ -53,6 +53,10 @@ def test_token_only_on_model_paths(client):
     tok = {"Authorization": "Bearer " + TOKEN}
     assert client.get("/api/models/catalog", headers=tok).status_code == 200
     assert client.get("/api/health", headers=tok).status_code == 401          # the token is for /api/models/ only
+    assert client.get("/api/power/now", headers=tok).status_code == 200       # + GET /api/power/now (power log)
+    assert client.get("/api/power", headers=tok).status_code == 401
+    assert client.get("/api/power/samples", headers=tok).status_code == 401
+    assert client.get("/api/power/now").status_code == 401
     assert client.get("/api/models/catalog", headers={"Authorization": "Bearer " + "x" * 43}).status_code == 401
     assert client.get("/api/models/catalog").status_code == 401
     assert client.get("/api/models/catalog", headers=basic(p="wrong")).status_code == 401

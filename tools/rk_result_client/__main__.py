@@ -14,7 +14,9 @@ Per message (results and status):
   1. dabus_envelope.unpack: length >= 32, magic 0xDA5E, version 1, len field, CRC-32C.
   2. src_board == 1 (AGX), type_id == the registered port of the channel (5560 / 5561; set by
      --result-type-id / --status-type-id, so a test on other ports still checks 5560 / 5561),
-     schema_hash == dabus_envelope.schema_hash(schema text, struct name).
+     schema_hash == dabus_envelope.schema_hash(schema text, struct name). The status port also takes the
+     AgxInferStatus v2 and v1 hashes (OLD_STATUS_HASHES: the v3 schema decodes them; the AGX sends v2 until
+     config/infer.yaml status.schema_version is 3).
   3. Cap'n Proto decode (AgxPerceptionResult / AgxInferStatus).
 A message that fails a step is a reject, counted by reason. It is not decoded.
 
@@ -57,6 +59,7 @@ DEFAULT_ENVELOPE_DIR = "/home/tonyho/driveragent-agx/common"
 RESULT_STRUCT = "AgxPerceptionResult"
 STATUS_STRUCT = "AgxInferStatus"
 SRC_AGX = 1
+OLD_STATUS_HASHES = (0xEF12FE49, 0x9086FA18)   # AgxInferStatus schema v2, v1 (additive: a newer schema decodes them)
 U32 = 1 << 32
 RESTART_JUMP = 300        # frameSeq back by more than this = stream restart (10 s at 30 fps)
 WRAP_ZONE = 1 << 16       # last seq in the top 64k and new seq in the bottom 64k = uint32 wrap
@@ -288,7 +291,8 @@ class Client:
         if e["type_id"] != self.type_id[kind]:
             self.rejects[kind]["type_id"] += 1
             return None
-        if e["schema_hash"] != self.want_hash[struct_name]:
+        if e["schema_hash"] != self.want_hash[struct_name] and not (
+                struct_name == STATUS_STRUCT and e["schema_hash"] in OLD_STATUS_HASHES):
             self.rejects[kind]["schema_hash"] += 1
             self.warn(f"hash{kind}", f"{kind}: schema hash 0x{e['schema_hash']:08x} != "
                       f"0x{self.want_hash[struct_name]:08x} of {self.a.schema}: schema files differ")

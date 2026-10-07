@@ -231,6 +231,7 @@ def server(creds, fake, engines_dir):
     cfg.update({"control_token_file": str(OUT / "v2_control.token"),
                 "paired_boards_file": str(OUT / "v2_paired_boards.json"),
                 "link_settings_file": str(OUT / "v2_link_settings.json")})
+    cfg["power_log"] = {"db": str(OUT / "v2_power.sqlite"), "enabled": True}   # never the real data/power.sqlite
     cfg_path = OUT / "v2_dashboard_test.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg))
     port = _free_port(avoid=(int(fake.endpoint.rsplit(":", 1)[1]),))

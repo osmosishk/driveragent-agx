@@ -1197,6 +1197,7 @@
     for (const p of Object.values(plots)) if (p) p.u.destroy();
     plots = {};
     if (lastHist && typeof uPlot === "function") for (const c of CHARTS) drawChart(c, lastHist);
+    resetPowerChart();
   }
   // a hidden plot has the width 0: give each plot the width of its box when the History page shows
   function resizeCharts() {
@@ -1206,6 +1207,7 @@
       const w = plotWidth(box);
       if (box.clientWidth > 0 && Math.abs(w - p.u.width) > 4) p.u.setSize({ width: w, height: 180 });
     }
+    resizePowerChart();
   }
   async function loadHistory() {
     const r = range;
@@ -1231,6 +1233,150 @@
     const ro = new ResizeObserver(resizeCharts);
     document.querySelectorAll(".chart").forEach((c) => ro.observe(c));
   }
+
+  /* ---------------- System: power log (/api/power..., dashboard/power_api.py) ---------------- */
+  // Read only while the System page shows (router.js POLLS.system.power, 5 s): the value of now and the events each
+  // poll, the chart each 10 s (1 h) or 60 s (24 h, 7 d, 30 d), the energy each 60 s. Labels (rule W2): SENSOR (a sensor
+  // reads the value now) or NO SENSOR. The page calculates no power value.
+  const PL_KIND = { models: "Model set", sender: "Sender", link: "Link", agx_unit: "Active unit", cameras: "Cameras",
+    recording: "Recording", power_mode: "Power mode", control_mode: "Control mode" };
+  const PL_RANGE_TEXT = { "1h": "1 h", "24h": "24 h", "7d": "7 d", "30d": "30 d" };
+  const PL_PERIODS = [["today", "Today (from 00:00)"], ["d7", "Last 7 days"], ["d30", "Last 30 days"]];
+  const PL_HEIGHT = 220;
+  let plRange = "1h", plPlot = null, plData = null, plChartT = 0, plEnergyT = 0, plBusy = false;
+  function plVal(v) {
+    if (v == null) return NA;
+    if (Array.isArray(v)) return v.length ? v.join(", ") : "(none)";
+    if (typeof v === "boolean") return v ? "on" : "off";
+    return String(v);
+  }
+  function plEventText(e) { return (PL_KIND[e.kind] || e.kind) + ": " + plVal(e.prev) + " to " + plVal(e.value); }
+  function plBucketText(s) { return s >= 3600 ? s / 3600 + " h" : s >= 60 ? s / 60 + " min" : s + " s"; }
+  // uPlot plugin: a dashed vertical line (token colour --da-amber) at the time of each event in the range
+  function plMarks() {
+    return { hooks: { draw: [(u) => {
+      const evs = (plData && plData.events) || [];
+      const x0 = u.scales.x.min, x1 = u.scales.x.max, px = window.devicePixelRatio || 1, ctx = u.ctx;
+      ctx.save();
+      ctx.strokeStyle = cssVar("--da-amber");
+      ctx.lineWidth = px;
+      ctx.setLineDash([4 * px, 3 * px]);
+      for (const e of evs) {
+        if (!(e.t >= x0 && e.t <= x1)) continue;
+        const x = Math.round(u.valToPos(e.t, "x", true));
+        ctx.beginPath(); ctx.moveTo(x, u.bbox.top); ctx.lineTo(x, u.bbox.top + u.bbox.height); ctx.stroke();
+      }
+      ctx.restore();
+    }] } };
+  }
+  function drawPowerChart(d) {
+    const box = document.querySelector("#ch-powerlog .plot");
+    const s = (d.series || {}).agx02 || [];
+    if (!s.some((v) => v != null)) {
+      if (plPlot) { plPlot.destroy(); plPlot = null; }
+      box.replaceChildren(el("div", { class: "empty", text: "No power samples in this time range." }));
+      return;
+    }
+    const arr = [d.t, s];
+    if (plPlot && plPlot.plRange === d.range) { plPlot.setData(arr); return; }
+    if (plPlot) plPlot.destroy();
+    box.replaceChildren();
+    const opts = {
+      width: plotWidth(box), height: PL_HEIGHT,
+      legend: { show: true, live: true },
+      cursor: { drag: { x: true, y: false } },
+      scales: { x: { time: true }, y: { auto: true } },
+      axes: axisOpts(),
+      plugins: [plMarks()],
+      series: [{ label: "Time" }, { label: "AGX02 W (SENSOR)", stroke: cssVar("--da-chart-1"), width: 2, spanGaps: false,
+        points: { show: false }, value: (u, v) => (v == null ? "-" : v.toFixed(2)) }],
+    };
+    plPlot = new uPlot(opts, arr, box);
+    plPlot.plRange = d.range;
+  }
+  function resetPowerChart() {
+    if (plPlot) { plPlot.destroy(); plPlot = null; }
+    if (plData && typeof uPlot === "function") drawPowerChart(plData);
+  }
+  function resizePowerChart() {
+    if (!plPlot) return;
+    const box = document.querySelector("#ch-powerlog .plot");
+    if (box.clientWidth > 0 && Math.abs(plotWidth(box) - plPlot.width) > 4) plPlot.setSize({ width: plotWidth(box), height: PL_HEIGHT });
+  }
+  async function loadPowerChart() {
+    const r = plRange;
+    try {
+      const d = await getJSON("/api/power/samples?range=" + r);
+      if (r !== plRange) return;  // the range changed while this request was open
+      plData = d; plChartT = Date.now();
+      if (typeof uPlot === "function") drawPowerChart(d);
+      const n = (d.events || []).length;
+      setText("pl-chart-note", "Mean power per " + plBucketText(d.bucket_s) + ". " + n + " event(s) in this range (dashed lines). " +
+        "A gap in the line is a time without samples." + (typeof uPlot === "function" ? "" : " Chart library not loaded."));
+    } catch (e) { if (r === plRange) setText("pl-chart-note", "Cannot read the power samples: " + e.message); }
+  }
+  function renderPowerNow(d) {
+    const n = d.now || {};
+    const sensor = n.label === "SENSOR" && num(n.watts);
+    setText("pl-now", sensor ? fmt(n.watts, 1, "W") : NA);
+    setBadge("pl-label", sensor ? "SENSOR" : "NO SENSOR", sensor ? "green" : "muted",
+      sensor ? "A sensor reads this value now" : "There is no sensor value now");
+    setText("pl-what", "It measures: " + (n.what || NA));
+    setText("pl-mode", d.power_mode || NA);
+    setText("pl-time", num(n.t) ? fmtTime(n.t) + (num(n.age_s) ? " (" + n.age_s.toFixed(1) + " s ago)" : "") : NA);
+    const rails = Object.entries(n.rails || {});
+    fill($("pl-rails").tBodies[0], rails.length ? rails.map(([k, w]) => el("tr", null, el("td", null, k), el("td", { class: "n" }, fmt(w, 2))))
+      : [emptyRow(2, "No rail value now")]);
+    const st = d.state || {};
+    const known = Object.keys(PL_KIND).filter((k) => st[k] != null);
+    setText("pl-state", known.length ? "Now: " + known.map((k) => PL_KIND[k] + " " + plVal(st[k])).join(" · ") : "");
+    const lg = d.log || {};
+    setText("pl-log", "Log file " + (lg.path || NA) + ": " + (num(lg.bytes) ? (lg.bytes / 1048576).toFixed(1) + " MB" : NA) +
+      (lg.limits ? ". Limits: " + lg.limits : "") + (lg.error ? ". Problem: " + lg.error : ""));
+  }
+  function renderPowerEvents(d) {
+    const rows = d.rows || [];
+    fill($("pl-events").tBodies[0], rows.length ? rows.map((r) => {
+      const p = (r.parts || {}).agx02 || {};
+      const notes = (r.notes || []).concat(p.reason ? [p.reason] : []);
+      return el("tr", null, td("Time", null, fmtDateTime(r.t)), td("Event", null, plEventText(r)),
+        td("Before W", { class: "n" }, fmt(p.before_w, 2)), td("After W", { class: "n" }, fmt(p.after_w, 2)),
+        td("Difference W", { class: "n" }, num(p.diff_w) ? (p.diff_w > 0 ? "+" : "") + p.diff_w.toFixed(2) : NA),
+        td("Notes", null, notes.join("; ")));
+    }) : [emptyRow(6, "No event yet.")]);
+  }
+  function renderPowerEnergy(d) {
+    fill($("pl-energy").tBodies[0], PL_PERIODS.map(([k, label]) => {
+      const e = (d[k] || {}).agx02 || {};
+      return el("tr", null, td("Period", null, label), td("Wh", { class: "n" }, fmt(e.wh, 1)),
+        td("Hours with data", { class: "n" }, num(e.hours) ? e.hours.toFixed(1) + " of " + fmt(e.span_h, 1) : NA),
+        td("Mean W", { class: "n" }, fmt(e.mean_w, 1)));
+    }));
+  }
+  async function loadPower() {
+    if (plBusy) return;   // the last poll is still open
+    plBusy = true;
+    try {
+      const now = Date.now();
+      const jobs = [getJSON("/api/power").then(renderPowerNow), getJSON("/api/power/events?limit=20").then(renderPowerEvents)];
+      if (now - plChartT >= (plRange === "1h" ? 10000 : 60000)) jobs.push(loadPowerChart());
+      if (now - plEnergyT >= 60000) jobs.push(getJSON("/api/power/energy").then((d) => { plEnergyT = Date.now(); renderPowerEnergy(d); }));
+      const res = await Promise.allSettled(jobs);
+      const bad = res.filter((x) => x.status === "rejected").map((x) => (x.reason && x.reason.message) || String(x.reason));
+      setText("pl-err", bad.length ? "Cannot read the power log: " + bad.join("; ") : "");
+    } finally { plBusy = false; }
+  }
+  function plLinks() {
+    setText("pl-csv-range", PL_RANGE_TEXT[plRange] || plRange);
+    $("pl-csv-samples").href = "/api/power/export?kind=samples&range=" + plRange;
+    $("pl-csv-events").href = "/api/power/export?kind=events&range=" + plRange;
+  }
+  document.querySelectorAll("#pl-seg button").forEach((b) => b.addEventListener("click", () => {
+    plRange = b.dataset.range;
+    document.querySelectorAll("#pl-seg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    plLinks();
+    loadPowerChart();
+  }));
 
   /* ---------------- Settings, RK link: pairing of RK boards (docs/PAIRING_API.md) ---------------- */
   // GET /api/pair/state while the Settings page shows. The pairing code is ONLY in the answer of this page's own POST
@@ -1433,7 +1579,8 @@
   });
 
   /* ---------------- pages (hash routing, router.js) ---------------- */
-  const POLLERS = { catalog: loadCatalog, models: loadModels, events: loadEvents, control: loadControl, services: loadServices };
+  const POLLERS = { catalog: loadCatalog, models: loadModels, events: loadEvents, control: loadControl, services: loadServices,
+    power: loadPower };
   let currentPage = null, pollTimers = [];
   function setPolls(page) {
     for (const t of pollTimers) clearInterval(t);
@@ -1473,7 +1620,7 @@
       setPairPoll(r.page === "settings");
       if (r.page === "models") renderModels();
       if (r.page === "overview") renderOverview();
-      if (r.page === "history") requestAnimationFrame(resizeCharts);
+      if (r.page === "history" || r.page === "system") requestAnimationFrame(resizeCharts);
       window.scrollTo(0, 0);
     } else if (r.page === "models") renderModels();
     syncLogs();
@@ -1488,9 +1635,11 @@
     const pollRows = [];
     for (const p of R.pages()) for (const [k, ms] of Object.entries(R.polls(p.id))) pollRows.push([k, ms, p.label]);
     const NAME = { catalog: "Model catalog", models: "Models (agx-infer, config/models.yaml)", events: "Model audit list",
-      control: "Model control (mode, last good set)", services: "Services" };
+      control: "Model control (mode, last good set)", services: "Services",
+      power: "Power log: now and events (chart: 10 s for 1 h, else 60 s; energy: 60 s)" };
     const SRC = { catalog: "/api/models/catalog", models: "/api/models", events: "/api/models/events?limit=50",
-      control: "/api/models/control", services: "/api/services" };
+      control: "/api/models/control", services: "/api/services",
+      power: "/api/power, /api/power/events, /api/power/samples, /api/power/energy" };
     const rows = [
       ["Live data (health, cameras, services summary)", "/api/stream (SSE)", "1 s, and at once for each agx-infer status", "always"],
       ["Camera tile state", "this page (tiles.js)", "250 ms", "always"],

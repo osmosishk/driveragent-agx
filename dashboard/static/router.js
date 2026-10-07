@@ -27,6 +27,8 @@
     models: { catalog: 2000, models: 2000, events: 5000, control: 5000 },
     services: { services: 5000 },
     settings: { control: 10000 },
+    // the power log card (dashboard/power_api.py): app.js loadPower; the chart and the energy have longer periods
+    system: { power: 5000 },
   };
   var LOGS_MS = 5000;
 

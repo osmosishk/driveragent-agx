@@ -84,8 +84,13 @@ def _msg(**kw) -> bytes:
 
 # ---- message check ---------------------------------------------------------------------------------------------
 def test_da01_golden_bytes_decode():
-    info, why = rki.check_message(DA01_GOLDEN, _rk_type(), sch.load().hash["RkCameraInfo"])
+    # schema v3: the calculated RkCameraInfo hash changed (hash rule note in proto/), the struct did not: DA01 keeps
+    # 0x743cffad on the wire and the receiver accepts both values
+    both = frozenset((sch.load().hash["RkCameraInfo"], sch.RKINFO_V2_HASH))
+    assert both == {0x506A649C, 0x743CFFAD}
+    info, why = rki.check_message(DA01_GOLDEN, _rk_type(), both)
     assert why == "" and info is not None
+    assert rki.check_message(_msg(schema_hash=0x506A649C), _rk_type(), both)[1] == ""
     assert info["hostname"] == "rk3588-da01" and info["t_ns"] == T_NS and info["schema_version"] == 2
     c = info["cameras"]
     assert sorted(c) == [0, 1, 2]

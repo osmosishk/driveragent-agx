@@ -15,7 +15,9 @@ This module BINDS a SUB (subscribe all) on tcp://<bind>:5564 (config/infer.yaml 
 - Source of the info: the peer address of each accepted message (stats "peers": {address: last wall time}) and the
   addresses that ZAP refused ("zap_refused").
 - Envelope check (common/envelope.py: magic, version, length, CRC-32C), then src_board RK, type_id 5564, schema hash
-  of RkCameraInfo; then the capnp decode. A refused message is counted by reason and dropped.
+  of RkCameraInfo (0x743cffad as DA01 sends it, or the calculated schema v3 value 0x506a649c; the struct is the
+  same, see infer/publish/schema.py RKINFO_V2_HASH); then the capnp decode. A refused message is counted by reason
+  and dropped.
 - Keeps the newest info per camId with the receive time. fresh = received in the last FRESH_S (3 s).
 - One daemon thread (poll 200 ms). It never touches frames or results: the status thread only reads a copy.
 
@@ -49,9 +51,10 @@ REJECT_WHY = {"short message": "envelope_short", "bad magic/version": "envelope_
               "length mismatch": "envelope_length", "crc mismatch": "envelope_crc"}
 
 
-def check_message(raw: bytes, rk_type, schema_hash: int, type_id: int = sch.TYPE_RKINFO) -> tuple[dict | None, str]:
-    """(info dict, "") or (None, reject reason). info = {"hostname", "t_ns", "schema_version", "cameras": {camId:
-    {cam, section, name, port, role, role_confirmed, sent}}} (plain Python values, copied out of the buffer)."""
+def check_message(raw: bytes, rk_type, schema_hash, type_id: int = sch.TYPE_RKINFO) -> tuple[dict | None, str]:
+    """(info dict, "") or (None, reject reason). schema_hash: one hash or a set of the accepted hashes.
+    info = {"hostname", "t_ns", "schema_version", "cameras": {camId: {cam, section, name, port, role, role_confirmed,
+    sent}}} (plain Python values, copied out of the buffer)."""
     try:
         m = env.unpack(raw)
     except ValueError as e:
@@ -60,7 +63,7 @@ def check_message(raw: bytes, rk_type, schema_hash: int, type_id: int = sch.TYPE
         return None, "src_board"
     if m["type_id"] != type_id:
         return None, "type_id"
-    if m["schema_hash"] != schema_hash:
+    if m["schema_hash"] not in (schema_hash if isinstance(schema_hash, (set, frozenset, tuple)) else (schema_hash,)):
         return None, "schema_hash"
     try:
         with rk_type.from_bytes(m["payload"]) as r:
@@ -140,6 +143,7 @@ class RkInfoReceiver:
         self.schema = sch.load(proto_path)
         self.rk_type = self.schema.mod.RkCameraInfo
         self.hash = self.schema.hash["RkCameraInfo"]
+        self.hashes = frozenset((self.hash, sch.RKINFO_V2_HASH))   # the struct is the same in v2 and v3
         self.fresh_s = float(fresh_s)
         self._extra = tuple(str(a) for a in extra_allowed)
         self.allowed: tuple[str, ...] = ()
@@ -228,7 +232,7 @@ class RkInfoReceiver:
             self.rejects[why] += 1
             self._rlog.warning("reject:" + why, "RkCameraInfo from %s refused: not a paired board address", peer)
             return why
-        info, why = check_message(raw, self.rk_type, self.hash)
+        info, why = check_message(raw, self.rk_type, self.hashes)
         if info is None:
             self.rejects[why] += 1
             self._rlog.warning("reject:" + why, "RkCameraInfo refused: %s", why)

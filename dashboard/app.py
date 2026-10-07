@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from common.env import PROJECT_ROOT, get, load_env
 from common.pairing_store import PairingStore
-from dashboard import control_api, pairing_api
+from dashboard import control_api, pairing_api, power_api
 from dashboard.auth import GuardMiddleware, LoginFails
 from dashboard.collectors.engines import EngineScanner
 from dashboard.collectors.health import HealthCollector, worst
@@ -27,6 +27,7 @@ from dashboard.config import resolve_path
 from dashboard.history import History
 from dashboard.infer_views import InferViews
 from dashboard.mqtt_pub import start_mqtt
+from dashboard.power_log import PowerLogger
 
 log = logging.getLogger("dashboard.app")
 
@@ -102,6 +103,8 @@ class Hub:
                                      ec.get("scan_interval_s", 1800), ec.get("inspect_timeout_s", 120))
         self.views.scanner = self.engines
         self.health.add_listener(self._on_sample)
+        self.pairing = None          # create_app sets it (the power log reads the link state of the paired board)
+        self.power = PowerLogger(cfg, self)   # opens data/power.sqlite in start(), not here
         self.mqtt = None
         self.controller = None
         self.controller_error = None
@@ -140,11 +143,16 @@ class Hub:
             except Exception as e:  # the dashboard must keep running
                 log.exception("model controller start failed")
                 self.controller_error = f"model controller start failed: {e}"
+        try:
+            self.power.start()
+        except Exception as e:  # the dashboard must keep running without the power log
+            log.exception("power log start failed")
+            self.power.error = f"power log start failed: {e}"
         self.mqtt = start_mqtt(env, self.health_doc, self.cfg.get("mqtt_interval_s", 5))
 
     def stop(self):
-        for c in (self.mqtt, self.controller, self.health, self.link, self.services, self.engines, self.infer,
-                  self.history):
+        for c in (self.mqtt, self.controller, self.health, self.power, self.link, self.services, self.engines,
+                  self.infer, self.history):
             if c is not None:
                 try:
                     c.stop()
@@ -368,7 +376,9 @@ def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True
                            resolve_path(cfg.get("link_settings_file") or "data/link_settings.json"))
     fails = LoginFails()   # shared: a wrong pairing code counts as a failed login of the address
     app.state.pairing = pairing
+    hub.pairing = pairing
     pairing_api.register(app, hub, pairing, fails, cfg)
+    power_api.register(app, hub)
     if start_collectors if migrate is None else migrate:
         pairing_api.migrate_at_start(pairing, cfg, app.state.pair_audit)
 

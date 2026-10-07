@@ -8,10 +8,10 @@ Interface: `docs/RK_AGX_INTERFACE.md`, sections 4 and 5.
 | Channel | Socket | Struct | Schema hash | Rate |
 |---|---|---|---|---|
 | Results | ZMQ PUB `tcp://<agx>:5560` (the AGX binds, the RK connects) | `AgxPerceptionResult` | `0xafcaff02` | One message for each (model, camera, frame) |
-| Status | ZMQ PUB `tcp://<agx>:5561` | `AgxInferStatus` | `0xef12fe49` (schema v2; v1 was `0x9086fa18`) | 1 Hz |
+| Status | ZMQ PUB `tcp://<agx>:5561` | `AgxInferStatus` | `0x2c23c715` (schema v3); `0xef12fe49` (v2) while `status.schema_version` is 2; v1 was `0x9086fa18` | 1 Hz |
 
 The client takes the expected hashes from the schema file that it loads (`--schema`): use the same
-`proto/agx_infer.capnp` as the AGX node (schema version 2 since 2026-10-07).
+`proto/agx_infer.capnp` as the AGX node (schema version 3 since 2026-10-08).
 
 One ZMQ frame = 32-byte dabus envelope + Cap'n Proto payload (unpacked, single segment).
 
@@ -22,7 +22,8 @@ For each message:
 1. `dabus_envelope.unpack()`: it checks the length (32 bytes or more), the magic `0xDA5E`, the
    version `1`, the `len` field and the CRC-32C.
 2. It checks `src_board == 1` (AGX), `type_id` (5560 for results, 5561 for status) and
-   `schema_hash == dabus_envelope.schema_hash(<schema text>, <struct name>)`.
+   `schema_hash == dabus_envelope.schema_hash(<schema text>, <struct name>)`. On the status port it
+   also accepts the `AgxInferStatus` v2 hash `0xef12fe49` and the v1 hash `0x9086fa18`.
 3. It decodes the Cap'n Proto payload.
 
 When a step fails, the client does not decode the message. It counts a reject with the reason:

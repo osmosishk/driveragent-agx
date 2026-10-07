@@ -16,7 +16,7 @@ now behind an information control: the "i" button next to a card title shows and
 | Cameras | `#/cameras` | Cameras (six tiles) |
 | Models | `#/models`, `#/models/<name>@<version>` | Models (catalog + details + actions), Engine files not in the configuration, Audit |
 | RK link | `#/rklink` | RK3588 link (with "From agx-infer") |
-| System | `#/system` | CPU, GPU and memory, Temperatures, Power, Disks, Network |
+| System | `#/system` | CPU, GPU and memory, Temperatures, Power, Power log, Disks, Network |
 | Services | `#/services` | Services, Logs |
 | History | `#/history` | History (six charts) |
 | Settings | `#/settings` | Theme, Control mode, Version, Refresh periods |
@@ -82,6 +82,7 @@ page), Services.
   The control mode, change and last change come from the newer of the catalog and the control document.
 - Settings: theme (system / light / dark, kept in this browser), control mode (read-only), page and agx-infer version,
   refresh periods.
+- System: the card "Power log" (`c-powerlog`, full width; the card Power `c-power` stays). See section 5.
 
 ## 4. Data flow
 
@@ -96,3 +97,49 @@ page), Services.
 | `/api/services` | 5 s | while Services shows (the Overview uses the SSE summary) |
 | `/api/services/logs` | 5 s | while Services shows and the logs are open |
 | `/api/history` | 10 s (1 h) or 60 s (24 h) | always; the charts get their width when History shows |
+| `/api/power`, `/api/power/events?limit=20` | 5 s | while System shows |
+| `/api/power/samples?range=` | 10 s (1 h) or 60 s (24 h, 7 d, 30 d), and at once for a new range | while System shows |
+| `/api/power/energy` | 60 s | while System shows |
+
+## 5. System > Power log
+
+Code: `dashboard/power_log.py` (the logger), `dashboard/power_api.py` (the routes), `common/powerlog.py` (the SQLite
+log, the same file as on DA01), `common/power_sources.py` (JetsonRails). File: `data/power.sqlite` (config
+`power_log: {db, enabled}` in `config/dashboard.yaml`).
+
+The logger reads no sensor itself. It is a listener of the health collector and uses the INA3221 rails of the 1 s
+health sample (the same values as the card Power). The health thread only puts the sample in a queue; the thread
+`power-log` writes the log (one SQLite transaction each 10 s) and prunes it once an hour. Measured on AGX02: 0.3 ms
+CPU per sample (0.03 % of one core).
+
+| Part | Element ids | Data |
+|---|---|---|
+| Value of now with its label (SENSOR or NO SENSOR), what it measures, power mode, sample time, state of now | `pl-now`, `pl-label`, `pl-what`, `pl-mode`, `pl-time`, `pl-state` | `/api/power` |
+| Rails (W, SENSOR) | `pl-rails` | `/api/power` |
+| Chart 1 h / 24 h / 7 d / 30 d, a dashed line (`--da-amber`) for each event | `pl-seg`, `ch-powerlog`, `pl-chart-note` | `/api/power/samples` |
+| Events: time, event, before W, after W, difference W, notes (last 20) | `pl-events` | `/api/power/events` |
+| Energy: today, 7 days, 30 days (Wh, hours with data, mean W) | `pl-energy` | `/api/power/energy` |
+| CSV files of the selected range (samples, events) | `pl-csv-samples`, `pl-csv-events` | `/api/power/export` |
+| Log file size, limits, problems | `pl-log`, `pl-err` | `/api/power` |
+
+Labels (rule W2): SENSOR = the INA3221 sensors read the value now (a value older than 3 s is NO SENSOR). NO SENSOR =
+there is no sensor value now (also when one rail does not read: the sum would be too low). The page calculates no
+power value from the load. The value is the sum of the module rails (VDD_GPU_SOC, VDD_CPU_CV, VIN_SYS_5V0,
+VDDQ_VDD2_1V8AO); the supply input of the carrier board has no sensor.
+
+Events: a change of the model set (`~/agx-models/_state/active.json`), the link state of the paired board with the
+newest last_seen (`UP`, `frames only`, `results only`, `DOWN`, `NO DATA`, `no paired board`), the number of cameras
+with frames (state not `NO SIGNAL`), the power mode (`nvpmodel -q`, read each 30 s: the event can be up to 30 s late)
+and the control mode (`config/control.yaml`). A new value must stay 3 s to make an event; the event time is its first
+second. A change while the log did not run gets the note "the time is not exact".
+
+Routes (all GET, HTTP Basic; a bad argument gives 400, a log that is not open gives 503):
+
+| Route | Arguments | Answer |
+|---|---|---|
+| `/api/power` | none | `{schema: "agx-power/1", now, power_mode, state, log, sources}` |
+| `/api/power/samples` | `range` = 1h, 24h, 7d, 30d; `rails` = 0, 1 | `{range, bucket_s, t, series, seconds, events}` |
+| `/api/power/events` | `limit` = 1..100 (20) | `{rows}`: each event with `parts.agx02` before_w, after_w, diff_w |
+| `/api/power/energy` | none | `{today, d7, d30}`: `agx02` wh, hours, mean_w, span_h |
+| `/api/power/export` | `kind` = samples, events; `range`; `rails` | a CSV file (attachment) |
+| `/api/power/now` | none | `{part, watts, label, t, rails, what, power_mode}`; also the token of a paired board |

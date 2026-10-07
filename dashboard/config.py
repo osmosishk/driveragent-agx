@@ -64,6 +64,11 @@ DEFAULTS: dict = {
         "db_keep_s": 86400,
         "cleanup_interval_s": 600,
     },
+    # power log (dashboard/power_log.py, common/powerlog.py): the 1 s rails of the health snapshot and the events
+    "power_log": {
+        "db": "data/power.sqlite",
+        "enabled": True,
+    },
     "limits": {
         "temp_c": {"warn": 70, "crit": 85},
         "ram_pct": {"warn": 80, "crit": 90},

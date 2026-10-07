@@ -232,6 +232,56 @@
             </table>
             <div class="row"><span class="k">Fan</span><span id="fan" class="v">-</span></div>
           </section>
+          <section class="card wide" id="c-powerlog">
+            <h2>Power log <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-powerlog" title="Information">i</button>
+              <span class="big" id="pl-now">-</span> <span class="da-badge da-badge--muted" id="pl-label">NO SENSOR</span></h2>
+            <div class="info-text" id="info-powerlog" hidden>
+              <p>SENSOR: the INA3221 sensors of the module read the value now. NO SENSOR: there is no sensor value now. The page does not calculate a power value from the load.</p>
+              <p>The value is the sum of the module rails. The supply input of the carrier board has no sensor, so a meter at the supply input shows more power.</p>
+              <p>The log keeps 1 s samples for 1 hour, 10 s means for 30 days and one row per day for one year (data/power.sqlite). An event is a change of the model set, the link, the number of cameras with frames, the power mode or the control mode. A change must stay for 3 s to make an event. The power mode is read each 30 s, so the time of a power mode event can be up to 30 s late.</p>
+              <p>Before and after: the mean power in the 60 s before and the 60 s after an event. A window with less than 30 s of samples gives no value.</p>
+              <p>Energy: the sum of the samples. A time without samples adds nothing: it is not zero power. "Hours with data" shows how much of the period has samples.</p>
+            </div>
+            <div class="pl-top">
+              <div>
+                <p class="note" id="pl-what"></p>
+                <div class="row"><span class="k">Power mode</span><span class="v" id="pl-mode">-</span></div>
+                <div class="row"><span class="k">Sample time</span><span class="v" id="pl-time">-</span></div>
+                <p class="note" id="pl-state"></p>
+              </div>
+              <table class="da-table da-table--compact" id="pl-rails">
+                <thead><tr><th>Rail</th><th class="n">W (SENSOR)</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <h3>Power over time
+              <span class="card__end"><span class="seg" role="group" aria-label="Power log time range" id="pl-seg">
+                <button type="button" data-range="1h" aria-pressed="true">1 h</button>
+                <button type="button" data-range="24h" aria-pressed="false">24 h</button>
+                <button type="button" data-range="7d" aria-pressed="false">7 d</button>
+                <button type="button" data-range="30d" aria-pressed="false">30 d</button>
+              </span></span>
+            </h3>
+            <div class="chart" id="ch-powerlog"><div class="plot"></div></div>
+            <p class="note" id="pl-chart-note"></p>
+            <h3>Events: power before and after (last 20)</h3>
+            <div class="da-table-wrap">
+              <table class="da-table da-table--stack" id="pl-events">
+                <thead><tr><th>Time</th><th>Event</th><th class="n">Before W</th><th class="n">After W</th><th class="n">Difference W</th><th>Notes</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <h3>Energy</h3>
+            <table class="da-table da-table--compact" id="pl-energy">
+              <thead><tr><th>Period</th><th class="n">Wh</th><th class="n">Hours with data</th><th class="n">Mean W</th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <p class="note">CSV files of the selected range (<span id="pl-csv-range">1 h</span>):
+              <a id="pl-csv-samples" href="/api/power/export?kind=samples&amp;range=1h" download>samples</a>,
+              <a id="pl-csv-events" href="/api/power/export?kind=events&amp;range=1h" download>events</a></p>
+            <p class="note" id="pl-log"></p>
+            <p class="note lv-crit" id="pl-err"></p>
+          </section>
           <section class="card" id="c-disk">
             <h2>Disks</h2>
             <div id="disks"></div>

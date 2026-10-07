@@ -39,7 +39,8 @@ subs res-total res-last c-infer infer-state infer-sim infer-reason infer-wait in
 docker-tbl oldp-sum oldp-note oldp-tbl old-det old-sum old-tbl svc-err c-logs logs-det logs-unit logs-t logs c-hist
 hist-src ch-load ch-ram ch-temp ch-power ch-fps ch-lat""".split()
 NEW_IDS = """shell nav side-host ov-tiles ov-banner mc-mode mc-change mc-rollback mc-notice mc-last mc-dlg mc-dlg-ok
-mc-dlg-cams models-events c-extra c-audit theme-seg set-mode set-page-ver refresh-tbl""".split()
+mc-dlg-cams models-events c-extra c-audit theme-seg set-mode set-page-ver refresh-tbl c-powerlog pl-now pl-label
+pl-rails pl-seg ch-powerlog pl-events pl-energy pl-csv-samples pl-csv-events""".split()
 
 
 def _section(page_id: str) -> str:
@@ -127,7 +128,7 @@ def test_inventory_ids_exist_once():
     # where the old cards are now
     where = {"models": ["c-models", "models-tbl", "extra-tbl", "scan-note", "models-events", "mc-rollback"],
              "cameras": ["c-cams", "cam-tiles", "cams-limits"], "rklink": ["c-link", "frame-age", "res-last"],
-             "system": ["c-cpu", "c-gpu", "c-temp", "c-power", "c-disk", "c-net"],
+             "system": ["c-cpu", "c-gpu", "c-temp", "c-power", "c-powerlog", "ch-powerlog", "c-disk", "c-net"],
              "services": ["c-svc", "c-logs", "oldp-note", "logs-unit"], "history": ["c-hist", "ch-lat"],
              "overview": ["c-infer", "ov-tiles"], "settings": ["theme-seg", "set-mode", "refresh-tbl"]}
     for pid, ids_ in where.items():
@@ -266,7 +267,8 @@ def test_router_quickjs():
     assert js('AGXRouter.polls("models")') == {"catalog": 2000, "models": 2000, "events": 5000, "control": 5000}
     assert js('AGXRouter.polls("services")') == {"services": 5000}
     assert js('AGXRouter.polls("overview")') == {"catalog": 10000}
-    for p in ("cameras", "rklink", "system", "history"):
+    assert js('AGXRouter.polls("system")') == {"power": 5000}           # the power log card
+    for p in ("cameras", "rklink", "history"):
         assert js(f'AGXRouter.polls("{p}")') == {}, p
     assert js('AGXRouter.polls("nothing")') == js('AGXRouter.polls("overview")')
     ctx.eval('var q = AGXRouter.polls("models"); q.catalog = 1;')

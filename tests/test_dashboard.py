@@ -72,7 +72,8 @@ def server(creds):
         cfg = yaml.safe_load(f)
     cfg.update({"control_token_file": str(OUT / "control_test.token"),
                 "paired_boards_file": str(OUT / "paired_boards_test.json"),
-                "link_settings_file": str(OUT / "link_settings_test.json")})
+                "link_settings_file": str(OUT / "link_settings_test.json"),
+                "power_log": {"db": str(OUT / "power_test.sqlite"), "enabled": True}})   # never the real power log
     cfg_path = OUT / "dashboard_test.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg))
     proc = subprocess.Popen(

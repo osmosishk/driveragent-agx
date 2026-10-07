@@ -3,7 +3,7 @@
 | Item | Value |
 |---|---|
 | Document | `docs/RK_AGX_INTERFACE.md` |
-| Date | 2026-10-05 (night run); schema version 2 on 2026-10-07 (model controller: Sections 4.3, 5.1, 5.3, 5.4, 8) |
+| Date | 2026-10-05 (night run); schema version 2 on 2026-10-07 (model controller: Sections 4.3, 5.1, 5.3, 5.4, 8); schema version 3 on 2026-10-08 (power log: Sections 4.2, 4.3, 5.1, 5.3, 5.4) |
 | AGX side | agx02, this repository (`/home/tonyho/driveragent-agx`) |
 | RK side | RK3588 board DA01 (`rk3588-da01`), repository `driveragent-hmi`, tag `rk-v0.4.0` (HEAD `258cf5922278e9e530d71277c2e94b7be5aaef3e`, `rk/proto` HEAD `6874e6127ba1b457f4ae110abfa4780c94cce044`) |
 | RK repository copy | `/home/tonyho/driveragent-agx/ref/driveragent-hmi` (read-only). RK paths below are relative to its root. |
@@ -245,7 +245,7 @@ The kick-off lists "Timeouts the AGX applies to you", for example "FrameLink 150
 | ZMQ frame | One ZMQ frame = 32-byte dabus envelope + Cap'n Proto payload. No topic frame. | RK repo (`rk/proto/envelope/SPEC.md:3-5`) |
 | Payload encoding | Cap'n Proto, unpacked, single segment, standard flat array with segment table (Python `to_bytes()`) | RK repo (`rk/proto/envelope/SPEC.md:3-5`; `rk/hmi/driveragent_hmi/bus.py:183`) |
 | Message rate | One message per (model, camera, frame) | Night-task Section 6 default |
-| Schema file | `/home/tonyho/driveragent-agx/proto/agx_infer.capnp`, file id `0xd30f559909e364de`, schema version 2 (since 2026-10-07; version 1 before) | AGX proposal |
+| Schema file | `/home/tonyho/driveragent-agx/proto/agx_infer.capnp`, file id `0xd30f559909e364de`, schema version 3 (since 2026-10-08; version 2 since 2026-10-07; version 1 before) | AGX proposal |
 
 ### 4.2 Envelope (32 bytes, little-endian)
 
@@ -265,7 +265,7 @@ Layout: RK repo (`rk/proto/envelope/SPEC.md:9-19`). Python: `struct.Struct("<HBB
 | 28 | 4 | crc32c | CRC-32C over bytes 0..27, then the payload | RK repo (`SPEC.md:18`) |
 | 32 | len | payload | Cap'n Proto `AgxPerceptionResult` | RK repo |
 
-Schema hash check (run for this document): `cd /home/tonyho/driveragent-agx && PYTHONPATH=. .venv/bin/python -c "from common import dabus_envelope as d; t=open('proto/agx_infer.capnp').read(); print(' '.join('%08x' % d.schema_hash(t, n) for n in ('AgxPerceptionResult', 'AgxInferStatus', 'RkCameraInfo')))"` prints `afcaff02 ef12fe49 743cffad` (schema version 2). `AgxPerceptionResult` = `0xafcaff02` (unchanged from v1). `AgxInferStatus` = `0xef12fe49` (v1: `0x9086fa18`). `RkCameraInfo` = `0x743cffad` (new in v2). The runtime check is `infer/publish/schema.py` `EXPECTED_HASH`. The code uses the RK reference canonical text rule (`rk/proto/envelope/SPEC.md:24-27`; `dabus_envelope.py:69-97`).
+Schema hash check (run for this document): `cd /home/tonyho/driveragent-agx && PYTHONPATH=. .venv/bin/python -c "from common import dabus_envelope as d; t=open('proto/agx_infer.capnp').read(); print(' '.join('%08x' % d.schema_hash(t, n) for n in ('AgxPerceptionResult', 'AgxInferStatus', 'RkCameraInfo')))"` prints `afcaff02 2c23c715 506a649c` (schema version 3). `AgxPerceptionResult` = `0xafcaff02` (unchanged from v1). `AgxInferStatus` = `0x2c23c715` (v2: `0xef12fe49`, v1: `0x9086fa18`). `RkCameraInfo` = `0x506a649c` as calculated, but both boards keep `0x743cffad` (the v2 value) on the wire: the struct did not change, and the rule takes the text from the first `struct RkCameraInfo` in the file (a header comment), so the `const schemaVersion` line and `AgxPerceptionResult` are in its text (hash note in Section 4.3). The runtime check is `infer/publish/schema.py` `EXPECTED_HASH`. The code uses the RK reference canonical text rule (`rk/proto/envelope/SPEC.md:24-27`; `dabus_envelope.py:69-97`).
 
 Receiver rule in the RK repo: drop a frame with a wrong magic, version, length or CRC. Treat a different schema_hash for the type_id as a schema mismatch and do not decode it (`rk/proto/envelope/SPEC.md:21-22`). The RK HMI also drops a message with a wrong `src_board` or `type_id` (`rk/hmi/driveragent_hmi/bus.py:146-170`).
 
@@ -273,7 +273,9 @@ Receiver rule in the RK repo: drop a frame with a wrong magic, version, length o
 
 ```capnp
 @0xd30f559909e364de;
-# driveragent-agx: AGX inference node <-> RK3588. Schema version 2 (2026-10-07, model controller).
+# driveragent-agx: AGX inference node <-> RK3588. Schema version 3 (2026-10-08, power log).
+# Version 3 (additive): AgxInferStatus powerTotalW, powerRails, powerLabel, powerWhat, powerMode and the nested
+# PowerRail. The AGX sends status v3 only when status.schema_version is 3 (config/infer.yaml); else it sends v2.
 # Version 2 (additive): AgxInferStatus catalog, activeSet, controlMode, lastGoodSet, changeInProgress;
 # Camera name / roleConfirmed / infoSource; Model version; new struct RkCameraInfo (RK -> AGX).
 #
@@ -292,10 +294,10 @@ Receiver rule in the RK repo: drop a frame with a wrong magic, version, length o
 # schema hash: bump schemaVersion and tell the RK side.
 # Times: *Ns fields are CLOCK_REALTIME nanoseconds unless the comment says otherwise.
 
-const schemaVersion :UInt16 = 2;
+const schemaVersion :UInt16 = 3;
 
 struct AgxPerceptionResult {
-  schemaVersion @0 :UInt16;       # = const schemaVersion (2 since 2026-10-07)
+  schemaVersion @0 :UInt16;       # = const schemaVersion (3 since 2026-10-08)
   model @1 :Text;                 # model name from config/models.yaml, e.g. "driverguard_yolopx"
   modelVersion @2 :Text;          # engine file name + ":" + sha256[:16] of the engine file
   camId @3 :UInt8;                # 0..5 (FrameLink cam = UDP port 6000 + camId)
@@ -354,7 +356,7 @@ struct AgxPerceptionResult {
 }
 
 struct AgxInferStatus {
-  schemaVersion @0 :UInt16;       # = const schemaVersion (2 since 2026-10-07)
+  schemaVersion @0 :UInt16;       # = const schemaVersion (3 since 2026-10-08); 2 when the AGX sends status v2
   hostname @1 :Text;
   version @2 :Text;               # git describe of driveragent-agx
   nodeState @3 :Text;             # "STARTING" | "RUNNING" | "DEGRADED" | "ERROR"
@@ -375,6 +377,11 @@ struct AgxInferStatus {
   lastGoodSet @18 :List(ActiveModel); # v2: the rollback target (loaded after an agx-infer restart)
   changeInProgress @19 :Text;        # v2: "" = none, else "<action> <name>@<version>", or "rollback"; "" when
                                      # the controller snapshot is older than 30 s
+  powerTotalW @20 :Float32;          # v3: sum of the sensor rails, W; NaN = no sensor value now
+  powerRails @21 :List(PowerRail);   # v3: the sensor rails of the total (empty = no sensor value now)
+  powerLabel @22 :Text;              # v3: "SENSOR" | "NO SENSOR" (one label for each value)
+  powerWhat @23 :Text;               # v3: what the value measures, in plain words
+  powerMode @24 :Text;               # v3: nvpmodel mode name, for example "MAXN"; "" = not known
 
   struct Camera {
     camId @0 :UInt8;
@@ -421,12 +428,21 @@ struct AgxInferStatus {
     zone @0 :Text;
     celsius @1 :Float32;
   }
+
+  struct PowerRail {
+    name @0 :Text;                # rail label of the sensor, for example "VDD_GPU_SOC"
+    watts @1 :Float32;            # NaN = the rail did not read
+  }
 }
 
 # v2: RK3588 -> AGX, 1 Hz on port 5564 (src_board 2 = RK, type_id 5564). The RK is the only source of the camera
 # names and roles: the AGX shows them for each camera, and "role unconfirmed" only when the RK has no role.
+# Hash note: the RK reference rule starts the text of this struct at the first "struct RkCameraInfo" in the file
+# (a header comment above), so the const schemaVersion line and AgxPerceptionResult are in its text. Version 3
+# calculates 0x506a649c, but this struct did not change: both boards keep 0x743cffad (the v2 value) on the wire,
+# and the AGX accepts both values.
 struct RkCameraInfo {
-  schemaVersion @0 :UInt16;       # = 2
+  schemaVersion @0 :UInt16;       # = the const schemaVersion of the sender (2 or 3)
   hostname @1 :Text;              # the RK board host name
   tNs @2 :UInt64;                 # RK CLOCK_REALTIME when sent
   cameras @3 :List(Cam);
@@ -462,7 +478,7 @@ struct RkCameraInfo {
 
 | Section 6 field | `AgxPerceptionResult` field | Source |
 |---|---|---|
-| schema version | `schemaVersion` = 2 (the schema file version; the `AgxPerceptionResult` struct and its hash are the same as in v1) | Night-task Section 6 default; v2: owner Section 4.7 |
+| schema version | `schemaVersion` = 3 (the schema file version; the `AgxPerceptionResult` struct and its hash are the same as in v1) | Night-task Section 6 default; v2: owner Section 4.7; v3: power log task |
 | model name | `model`, `modelVersion` | Night-task Section 6 default; `modelVersion` = AGX proposal |
 | camera number | `camId` | Night-task Section 6 default |
 | RTP timestamp | Replaced by `frameSeq` + `tCaptureNs` (FrameLink identity) | RK repo (`RK3588_AGENT_KICKOFF.md:86`) |
@@ -489,9 +505,10 @@ struct RkCameraInfo {
 |---|---|---|
 | Socket | ZMQ PUB, AGX binds `tcp://0.0.0.0:5561`, the RK connects | Night-task Section 6 default; direction: RK repo (`rk/proto/bus_registry.yaml:3`) |
 | Rate | 1 Hz | Night-task Section 6 default |
-| Payload | Cap'n Proto `AgxInferStatus` v2 (Section 4.3; the v2 fields: Section 5.3) | AGX proposal; v2: owner Section 4.7 |
-| Envelope | As 4.2, with type_id `5561`, schema_hash `0xef12fe49` (v2; v1 was `0x9086fa18`) | RK repo (envelope layout); type_id: Section 6 port; hash: Check |
+| Payload | Cap'n Proto `AgxInferStatus` v2 or v3 (Section 4.3; the v2 and v3 fields: Section 5.3). `config/infer.yaml` `status.schema_version` (2 or 3, default 2) selects it; agx-infer reads the value again when the file changes (no restart). | AGX proposal; v2: owner Section 4.7; v3: power log task |
+| Envelope | As 4.2, with type_id `5561`, schema_hash `0x2c23c715` (v3) or `0xef12fe49` (v2; v1 was `0x9086fa18`). The hash always agrees with `schemaVersion` in the payload: a v2 status has no power fields. | RK repo (envelope layout); type_id: Section 6 port; hash: Check; `infer/publish/status.py` `status_hash()` |
 | Change v1 -> v2 | DA01 (rk-agxlink) accepts BOTH status hashes `0xef12fe49` and `0x9086fa18` during the change and decodes both with the v2 schema (a v1 status gives empty lists, `""` texts and `false` flags for the v2 fields). Order: DA01 first (it then accepts v2), then ONE agx-infer restart (it then sends v2). | Owner Section 5 item 4; DA01 `rk/agxlink/agxlink_core.py` `STATUS_V1_HASH`, `check_envelope()` |
+| Change v2 -> v3 | 1. Update agx-infer (proto v3, `status.schema_version: 2`) and restart it once: it sends v2 as before. 2. Update DA01 rk-agxlink (schema copy v3; it accepts `0x2c23c715`, `0xef12fe49` and `0x9086fa18` and decodes all with the v3 schema) and restart it (the owner). 3. Set `status.schema_version: 3` in `config/infer.yaml` on the AGX: the next status is v3, with no restart. To go back, set 2. Do not set 3 while the DA01 rk-agxlink accepts only v1 and v2: it then refuses every status (`status_schema_hash`) and the link goes DOWN. | Power log task; AGX `infer/publish/schema.py` `STATUS_V2_HASH`; DA01 `rk/agxlink/agxlink_core.py` `STATUS_V2_HASH` |
 | Envelope t_ptp_ns | `tStatusNs` | AGX proposal |
 | Content | Node state, models, fps per camera, temperatures, errors | Night-task Section 6 default |
 
@@ -505,7 +522,7 @@ struct RkCameraInfo {
 | Methods | GET only (POST gives 405) | Check `tests/test_dashboard.py` `test_read_only_and_logs_whitelist()` |
 | RK client | None. The RK repo has no HTTP client for this. The RK reads nothing from the AGX over HTTP. | RK repo (`T1_rk-repo.md` section 4; the only HTTP use is the rk-updater download, `rk/updater/rk_updater.py:53-54`, `:126`) |
 
-### 5.3 Status fields of schema version 2
+### 5.3 Status fields of schema versions 2 and 3
 
 All are additive (new ordinals). A text is never null (`""` = none). Source on the AGX: `infer/publish/status.py`.
 
@@ -519,6 +536,16 @@ All are additive (new ordinals). A text is never null (`""` = none). Source on t
 | `Camera.name @9`, `Camera.roleConfirmed @10`, `Camera.infoSource @11` | Section 8 rule: `infoSource` `rk` (DA01 `RkCameraInfo` of the last 3 s) or `config` | `infer/rkinfo.py` `apply_names()` |
 | `Model.version @8` | The store version, `""` = a `config/models.yaml` entry | agx-infer ModelManager |
 
+Schema version 3 (power log). A v3 status has these fields; a v2 status does not set them (`schemaVersion` 2: a reader shows no power value). Each value has one label: `SENSOR` or `NO SENSOR`. agx-infer never calculates a power value from CPU load or other signs.
+
+| Field | Value | Source on the AGX |
+|---|---|---|
+| `powerTotalW @20` | Sum of the sensor rails, W. NaN = no sensor value now. | `common/power_sources.py` `JetsonRails` (INA3221 sysfs, one read per status, about 1 ms CPU) |
+| `powerRails @21` (`PowerRail` name, watts) | The rails of the total, for example `VDD_GPU_SOC`. Empty when `powerLabel` is `NO SENSOR`. | `JetsonRails` |
+| `powerLabel @22` | `SENSOR` (all rails read) or `NO SENSOR` (no rail, or a rail did not read: the sum would be too low) | `JetsonRails`; a read error gives `NO SENSOR` |
+| `powerWhat @23` | What the value measures, in plain words. On AGX02: the module rails only; the supply input of the carrier board is not measured. | `JetsonRails.what()` |
+| `powerMode @24` | nvpmodel mode name, for example `MAXN`; `""` = not known | `nvpmodel -q` line `NV Power Mode: <name>`, at most once per 30 s (timeout 5 s) in a helper thread |
+
 The internal JSON status for the dashboard (127.0.0.1:5562) stays `agx-infer-status/1` and has the same data under the new keys `catalog`, `active_set`, `control_mode`, `last_good_set`, `change_in_progress`, `rk_info` (receiver counters) and `cameras[].name`, `role_confirmed`, `info_source`.
 
 ### 5.4 `RkCameraInfo` (RK -> AGX, port 5564, schema version 2)
@@ -529,7 +556,7 @@ The internal JSON status for the dashboard (127.0.0.1:5562) stays `agx-infer-sta
 | Peers | ZAP IP allowlist (own ZAP handler thread, NULL mechanism, `zap_domain` set) = the paired board addresses (`data/paired_boards.json`, Section 5.5). It changes at run time, with no restart: a new connection from another address is refused; a message from a connected peer whose address left the list is refused (`rk_info.rejects.peer_not_allowed`; the frame property `Peer-Address`). No paired board: any address is accepted. The receiver has its own ZMQ context, so the allowlist does not apply to the other AGX sockets. | AGX `infer/rkinfo.py` |
 | Rate | 1 Hz | DA01 rk-agxlink |
 | ZMQ frame | One frame = 32-byte dabus envelope + unpacked single-segment Cap'n Proto `RkCameraInfo` | RK repo envelope rule |
-| Envelope | `src_board` 2 (RK), `type_id` 5564, flags bit1 `time_uncertain`, `schema_hash` `0x743cffad`, `t_ptp_ns` = `tNs` | DA01 `agxlink_core.rkcam_message()` |
+| Envelope | `src_board` 2 (RK), `type_id` 5564, flags bit1 `time_uncertain`, `schema_hash` `0x743cffad`, `t_ptp_ns` = `tNs`. In schema version 3 the struct is the same: DA01 keeps `0x743cffad` (`RKCAM_HASH`), and the AGX accepts `0x743cffad` and the calculated v3 value `0x506a649c` (Section 4.2). | DA01 `agxlink_core.rkcam_message()`; AGX `infer/publish/schema.py` `RKINFO_V2_HASH` |
 | Receiver checks | magic, version, length, CRC-32C, then `src_board` 2, `type_id` 5564, schema hash; then the decode. A refused message is counted by reason (status JSON `rk_info.rejects`) and dropped. | AGX `infer/rkinfo.py` `check_message()` |
 | Content | Per FrameLink camera: `camId`, `section` (rk-camd stream section), `name` (camera_map label), `port` (connector CAM1..CAM6), `role` (`""` = DA01 has no role), `roleConfirmed`, `sent` | Schema Section 4.3 |
 | Fresh | The newest info per `camId` with its receive time; fresh = received in the last 3 s. Older: the camera falls back to the config (Section 8). | AGX `infer/rkinfo.py` `FRESH_S` |

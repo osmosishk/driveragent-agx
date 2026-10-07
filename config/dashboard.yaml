@@ -100,6 +100,13 @@ history:
   db_keep_s: 86400
   cleanup_interval_s: 600
 
+# Power log (dashboard/power_log.py, docs/DASHBOARD_PAGES.md): the INA3221 rails of the 1 s health sample (no second
+# read of the sensors) and the events (model set, link, cameras, power mode, control mode) go to one SQLite file.
+# 1 s rows for 1 h, 10 s rows for 30 days, day rows for one year. The System page shows it (card "Power log").
+power_log:
+  db: data/power.sqlite
+  enabled: true
+
 limits:
   temp_c: {warn: 70, crit: 85}
   ram_pct: {warn: 80, crit: 90}

@@ -41,8 +41,9 @@ ACCEPTED_LINE = ("Empty: each paired board can control this AGX. "
 def schema_hashes() -> dict:
     """The hashes that agx-infer sends (infer/publish/schema.py constants; no capnp load here)."""
     try:
-        from infer.publish.schema import EXPECTED_HASH
-        return {"status": ["0x%08x" % EXPECTED_HASH["AgxInferStatus"]],
+        from infer.publish.schema import EXPECTED_HASH, STATUS_V2_HASH
+        # v3, and v2 (sent while config/infer.yaml status.schema_version is 2)
+        return {"status": ["0x%08x" % EXPECTED_HASH["AgxInferStatus"], "0x%08x" % STATUS_V2_HASH],
                 "result": "0x%08x" % EXPECTED_HASH["AgxPerceptionResult"]}
     except Exception as e:   # the dashboard must answer also without pycapnp
         log.warning("schema hashes not known: %s", e)

@@ -6,6 +6,7 @@ Ports 15560-15563 only. Run:
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 
@@ -99,19 +100,45 @@ def sub_socket(ctx, port, topics=(b"",)):
     return s
 
 
+def v2_schema_text(txt: str) -> str:
+    """Schema version 2 rebuilt from the v3 file: without the "# v3:" fields and the nested PowerRail struct, and
+    with the v2 const line."""
+    import re
+    t = "\n".join(ln for ln in txt.splitlines() if "# v3:" not in ln)
+    t = re.sub(r"\n *struct PowerRail \{[^}]*\}", "", t)
+    return t.replace("const schemaVersion :UInt16 = 3;", "const schemaVersion :UInt16 = 2;", 1)
+
+
 def test_runtime_schema_hashes():
     s = sch.load()
     assert s.hash["AgxPerceptionResult"] == 0xAFCAFF02
-    assert s.hash["AgxInferStatus"] == 0xEF12FE49          # schema v2 (v1 was 0x9086fa18)
-    assert s.hash["RkCameraInfo"] == 0x743CFFAD
-    assert s.version == 2 and sch.STATUS_V1_HASH == 0x9086FA18
-    assert sch.EXPECTED_HASH == {"AgxPerceptionResult": 0xAFCAFF02, "AgxInferStatus": 0xEF12FE49,
-                                 "RkCameraInfo": 0x743CFFAD}
+    assert s.hash["AgxInferStatus"] == 0x2C23C715          # schema v3 (v2 0xef12fe49, v1 0x9086fa18)
+    assert s.hash["RkCameraInfo"] == 0x506A649C            # calculated; the struct is the same (proto hash note)
+    assert s.version == 3 and sch.STATUS_V1_HASH == 0x9086FA18
+    assert sch.STATUS_V2_HASH == 0xEF12FE49 and sch.RKINFO_V2_HASH == 0x743CFFAD
+    assert sch.EXPECTED_HASH == {"AgxPerceptionResult": 0xAFCAFF02, "AgxInferStatus": 0x2C23C715,
+                                 "RkCameraInfo": 0x506A649C}
     with open(sch.DEFAULT_PROTO) as f:
         txt = f.read()
     assert ref.schema_hash(txt, "AgxPerceptionResult") == 0xAFCAFF02
-    assert ref.schema_hash(txt, "AgxInferStatus") == 0xEF12FE49
-    assert ref.schema_hash(txt, "RkCameraInfo") == 0x743CFFAD
+    assert ref.schema_hash(txt, "AgxInferStatus") == 0x2C23C715
+    assert ref.schema_hash(txt, "RkCameraInfo") == 0x506A649C
+    # the v3 fields are the only change: without them the file gives the v2 hashes again
+    v2 = v2_schema_text(txt)
+    assert ref.schema_hash(v2, "AgxInferStatus") == sch.STATUS_V2_HASH
+    assert ref.schema_hash(v2, "RkCameraInfo") == sch.RKINFO_V2_HASH
+    assert ref.schema_hash(v2, "AgxPerceptionResult") == 0xAFCAFF02
+
+
+def test_interface_doc_schema_copy():
+    """docs/RK_AGX_INTERFACE.md Section 4.3 is a verbatim copy of proto/agx_infer.capnp."""
+    import re
+    with open(os.path.join(os.path.dirname(sch.DEFAULT_PROTO), "..", "docs", "RK_AGX_INTERFACE.md"),
+              encoding="utf-8") as f:
+        doc = f.read()
+    m = re.search(r"### 4\.3 Schema \(verbatim copy of `proto/agx_infer.capnp`\)\n\n```capnp\n(.*?)```\n", doc, re.S)
+    with open(sch.DEFAULT_PROTO, encoding="utf-8") as f:
+        assert m is not None and m.group(1) == f.read()
 
 
 def test_result_publisher(ctx):
@@ -140,7 +167,7 @@ def test_result_publisher(ctx):
         got_seq = e["seq"]
         with sch.load().mod.AgxPerceptionResult.from_bytes(e["payload"]) as m:
             want = make_result(seq=m.frameSeq, masks=True)
-            assert m.schemaVersion == 2        # the schema file version (v2); the result struct is unchanged
+            assert m.schemaVersion == 3        # the schema file version (v3); the result struct is unchanged
             assert m.model == want["model"] and m.modelVersion == want["model_version"]
             assert m.camId == 0 and m.frameSeq > 100
             assert (m.tCaptureNs, m.tAgxRecvNs, m.tAgxReadyNs, m.tAgxResultNs) == (
@@ -249,7 +276,8 @@ def test_status_publisher(ctx):
     ing.put(make_frame(cam=0, seq=1))
     rp = ResultPublisher("127.0.0.1", P_RES, ctx=ctx)
     ip = InternalPub("127.0.0.1", P_INT, ctx=ctx)
-    sp = StatusPublisher(node, ing, FakeManager(), rp, ip, "127.0.0.1", P_STAT, ctx=ctx)
+    sp = StatusPublisher(node, ing, FakeManager(), rp, ip, "127.0.0.1", P_STAT, ctx=ctx,
+                         settings_file=None)        # None: always status v2
     s_stat = sub_socket(ctx, P_STAT)
     s_int = sub_socket(ctx, P_INT, (b"status",))
     try:
@@ -264,10 +292,11 @@ def test_status_publisher(ctx):
         assert got_s is not None and got_j is not None
         e = ref.unpack(got_s)
         assert e["src_board"] == 1 and e["type_id"] == 5561
-        assert e["schema_hash"] == sp.hash == 0xEF12FE49
+        assert e["schema_hash"] == sch.STATUS_V2_HASH == 0xEF12FE49 and sp.hash == 0x2C23C715
         assert e["flags"] & 0b011 == 0b011          # simulated (sim mode) + time uncertain
         with sch.load().mod.AgxInferStatus.from_bytes(e["payload"]) as m:
             assert m.schemaVersion == 2 and m.version == "test" and m.sourceMode == "sim"
+            assert not m._has("powerRails") and m.powerLabel == "" and m.powerMode == ""   # v2: no power fields
             assert m.simulated is True and m.resultsPort == P_RES
             assert len(m.cameras) == 6 and m.cameras[0].state == "SIMULATED"
             assert m.cameras[0].lastFrameSeq == 1
@@ -317,6 +346,124 @@ def test_status_publisher(ctx):
         sp.stop()
         ip.close()
         rp.close()
+
+
+class FakePower:
+    """A power source with fixed readings (common.powerlog.Reading)."""
+    def __init__(self, readings):
+        self.readings = readings
+        self.reads = 0
+
+    def read(self, now=None):
+        self.reads += 1
+        return list(self.readings)
+
+
+def _v3_publisher(ctx, settings, power, nvp=("nvpmodel", "-q")):
+    from infer.publish.status import StatusPublisher
+    from infer.status import NodeState
+    node = NodeState(version="test")
+    node.started = True
+    return StatusPublisher(node, FakeIngest(), FakeManager(), None, None, "127.0.0.1", 0, ctx=ctx,
+                           settings_file=str(settings), power_source=power, nvp_cmd=nvp)
+
+
+def _decode(sp, version=None):
+    buf = sp.build_capnp(sp._models(), sp._cameras(), time.time_ns(), version=version)
+    assert sch.segment_count(buf) == 1
+    with sch.load().mod.AgxInferStatus.from_bytes(buf) as m:
+        return {"v": m.schemaVersion, "has_rails": m._has("powerRails"), "total": m.powerTotalW,
+                "rails": [(r.name, r.watts) for r in m.powerRails], "label": m.powerLabel, "what": m.powerWhat,
+                "mode": m.powerMode, "nodeState": m.nodeState}
+
+
+def test_status_v3_power_and_setting(ctx, tmp_path):
+    """Schema v3: status.schema_version 2 sends no power fields and the v2 hash; 3 sends the power fields and the v3
+    hash; the value is read again when the file changes; a bad value gives v2."""
+    import sys
+    from common.powerlog import NO_SENSOR, SENSOR, Reading
+    from infer.publish import status as stm
+    settings = tmp_path / "infer.yaml"
+    settings.write_text("status_period_s: 1.0\nstatus:\n  schema_version: 2\n")
+    rails = {"VDD_GPU_SOC": 6.5, "VDD_CPU_CV": 2.25, "VIN_SYS_5V0": 4.0, "VDDQ_VDD2_1V8AO": 0.75}
+    power = FakePower([Reading("agx02", 13.5, SENSOR, time.time(), "jetson_rails", "sum of the module rails", rails)])
+    nvp = (sys.executable, "-c", "print('NVPM VERB: Current mode: NV Power Mode: MAXN\\n0')")
+    sp = _v3_publisher(ctx, settings, power, nvp)
+    sub = ctx.socket(zmq.SUB)
+    try:
+        # v2: no power fields, no sensor read, no nvpmodel
+        assert sp.status_version() == 2
+        d = _decode(sp)
+        assert (d["v"], d["has_rails"], d["label"], d["what"], d["mode"]) == (2, False, "", "", "")
+        assert power.reads == 0 and sp._nvp_thread is None
+        assert sp.status_hash(2) == sch.STATUS_V2_HASH and sp.status_hash(3) == sp.hash == 0x2C23C715
+        # 3: the power fields (new mtime: the file is read again)
+        settings.write_text("status_period_s: 1.0\nstatus:\n  schema_version: 3   # v3\n")
+        os.utime(settings, ns=(time.time_ns(), time.time_ns() + 5_000_000))
+        assert sp.status_version() == 3
+        d = _decode(sp)
+        sp._nvp_thread.join(10)
+        d2 = _decode(sp)
+        assert d["v"] == d2["v"] == 3 and d2["label"] == "SENSOR" and d2["total"] == pytest.approx(13.5)
+        assert sorted(d2["rails"]) == sorted((k, pytest.approx(v)) for k, v in rails.items())
+        assert d2["what"] == "sum of the module rails" and d2["mode"] == "MAXN"
+        assert power.reads == 2
+        # the envelope on the PUB has the v3 hash and a v3 payload
+        sub.setsockopt(zmq.LINGER, 0)
+        sub.setsockopt(zmq.SUBSCRIBE, b"")
+        sub.connect(sp._sock.getsockopt(zmq.LAST_ENDPOINT).decode())
+        got = None
+        t_end = time.monotonic() + 5
+        while got is None and time.monotonic() < t_end:
+            sp.tick()
+            if sub.poll(100):
+                got = sub.recv()
+        assert got is not None
+        e = ref.unpack(got)
+        assert e["schema_hash"] == ref.schema_hash(open(sch.DEFAULT_PROTO).read(), "AgxInferStatus") == 0x2C23C715
+        with sch.load().mod.AgxInferStatus.from_bytes(e["payload"]) as m:
+            assert m.schemaVersion == 3 and m.powerLabel == "SENSOR" and len(m.powerRails) == 4
+        # no sensor value now: NaN, no rails, NO SENSOR (never a number without its label)
+        power.readings = [Reading("agx02", None, NO_SENSOR, time.time(), "jetson_rails", "1 rail(s) did not read",
+                                  {"VDD_GPU_SOC": 6.5})]
+        d = _decode(sp)
+        assert math.isnan(d["total"]) and d["rails"] == [] and d["label"] == "NO SENSOR"
+        assert d["what"] == "1 rail(s) did not read"
+        # a source that fails: still a status, with NO SENSOR
+        power.readings = None
+        d = _decode(sp)
+        assert math.isnan(d["total"]) and d["label"] == "NO SENSOR" and d["nodeState"] == "RUNNING"
+        # a bad value: v2 (safe), with the error kept
+        settings.write_text("status:\n  schema_version: 4\n")
+        os.utime(settings, ns=(time.time_ns(), time.time_ns() + 10_000_000))
+        assert sp.status_version() == 2 and "schema_version 4" in sp._settings.error
+        settings.write_text("status: [3]\n")
+        os.utime(settings, ns=(time.time_ns(), time.time_ns() + 15_000_000))
+        assert sp.status_version() == 2 and sp._settings.error
+        # no file, or no status key: v2
+        settings.write_text("status_period_s: 1.0\n")
+        os.utime(settings, ns=(time.time_ns(), time.time_ns() + 20_000_000))
+        assert sp.status_version() == 2 and sp._settings.error is None
+        settings.unlink()
+        assert sp.status_version() == 2
+    finally:
+        sub.close(0)
+        sp.stop()
+    # the repository default is 2 (DA01 rk-agxlink must accept v3 first)
+    assert stm.parse_status_settings(os.path.join(os.path.dirname(sch.DEFAULT_PROTO), "..", "config",
+                                                  "infer.yaml")) == 2
+
+
+def test_read_nvpmodel():
+    import sys
+    from infer.publish.status import read_nvpmodel
+    assert read_nvpmodel((sys.executable, "-c", "print('NV Power Mode: 30W')\nprint(2)")) == ("30W", None)
+    mode, err = read_nvpmodel((sys.executable, "-c", "print('nothing')"))
+    assert mode == "" and "no 'NV Power Mode' line" in err
+    mode, err = read_nvpmodel(("/nonexistent/nvpmodel", "-q"))
+    assert mode == "" and err.startswith("FileNotFoundError")
+    mode, err = read_nvpmodel((sys.executable, "-c", "import time; time.sleep(5)"), timeout=0.2)
+    assert mode == "" and err.startswith("TimeoutExpired")
 
 
 def test_node_state_rules():

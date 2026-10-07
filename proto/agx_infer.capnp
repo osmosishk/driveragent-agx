@@ -1,5 +1,7 @@
 @0xd30f559909e364de;
-# driveragent-agx: AGX inference node <-> RK3588. Schema version 2 (2026-10-07, model controller).
+# driveragent-agx: AGX inference node <-> RK3588. Schema version 3 (2026-10-08, power log).
+# Version 3 (additive): AgxInferStatus powerTotalW, powerRails, powerLabel, powerWhat, powerMode and the nested
+# PowerRail. The AGX sends status v3 only when status.schema_version is 3 (config/infer.yaml); else it sends v2.
 # Version 2 (additive): AgxInferStatus catalog, activeSet, controlMode, lastGoodSet, changeInProgress;
 # Camera name / roleConfirmed / infoSource; Model version; new struct RkCameraInfo (RK -> AGX).
 #
@@ -18,10 +20,10 @@
 # schema hash: bump schemaVersion and tell the RK side.
 # Times: *Ns fields are CLOCK_REALTIME nanoseconds unless the comment says otherwise.
 
-const schemaVersion :UInt16 = 2;
+const schemaVersion :UInt16 = 3;
 
 struct AgxPerceptionResult {
-  schemaVersion @0 :UInt16;       # = const schemaVersion (2 since 2026-10-07)
+  schemaVersion @0 :UInt16;       # = const schemaVersion (3 since 2026-10-08)
   model @1 :Text;                 # model name from config/models.yaml, e.g. "driverguard_yolopx"
   modelVersion @2 :Text;          # engine file name + ":" + sha256[:16] of the engine file
   camId @3 :UInt8;                # 0..5 (FrameLink cam = UDP port 6000 + camId)
@@ -80,7 +82,7 @@ struct AgxPerceptionResult {
 }
 
 struct AgxInferStatus {
-  schemaVersion @0 :UInt16;       # = const schemaVersion (2 since 2026-10-07)
+  schemaVersion @0 :UInt16;       # = const schemaVersion (3 since 2026-10-08); 2 when the AGX sends status v2
   hostname @1 :Text;
   version @2 :Text;               # git describe of driveragent-agx
   nodeState @3 :Text;             # "STARTING" | "RUNNING" | "DEGRADED" | "ERROR"
@@ -101,6 +103,11 @@ struct AgxInferStatus {
   lastGoodSet @18 :List(ActiveModel); # v2: the rollback target (loaded after an agx-infer restart)
   changeInProgress @19 :Text;        # v2: "" = none, else "<action> <name>@<version>", or "rollback"; "" when
                                      # the controller snapshot is older than 30 s
+  powerTotalW @20 :Float32;          # v3: sum of the sensor rails, W; NaN = no sensor value now
+  powerRails @21 :List(PowerRail);   # v3: the sensor rails of the total (empty = no sensor value now)
+  powerLabel @22 :Text;              # v3: "SENSOR" | "NO SENSOR" (one label for each value)
+  powerWhat @23 :Text;               # v3: what the value measures, in plain words
+  powerMode @24 :Text;               # v3: nvpmodel mode name, for example "MAXN"; "" = not known
 
   struct Camera {
     camId @0 :UInt8;
@@ -147,12 +154,21 @@ struct AgxInferStatus {
     zone @0 :Text;
     celsius @1 :Float32;
   }
+
+  struct PowerRail {
+    name @0 :Text;                # rail label of the sensor, for example "VDD_GPU_SOC"
+    watts @1 :Float32;            # NaN = the rail did not read
+  }
 }
 
 # v2: RK3588 -> AGX, 1 Hz on port 5564 (src_board 2 = RK, type_id 5564). The RK is the only source of the camera
 # names and roles: the AGX shows them for each camera, and "role unconfirmed" only when the RK has no role.
+# Hash note: the RK reference rule starts the text of this struct at the first "struct RkCameraInfo" in the file
+# (a header comment above), so the const schemaVersion line and AgxPerceptionResult are in its text. Version 3
+# calculates 0x506a649c, but this struct did not change: both boards keep 0x743cffad (the v2 value) on the wire,
+# and the AGX accepts both values.
 struct RkCameraInfo {
-  schemaVersion @0 :UInt16;       # = 2
+  schemaVersion @0 :UInt16;       # = the const schemaVersion of the sender (2 or 3)
   hostname @1 :Text;              # the RK board host name
   tNs @2 :UInt64;                 # RK CLOCK_REALTIME when sent
   cameras @3 :List(Cam);
