@@ -3,6 +3,8 @@
 mode sim  FrameLink UDP from tools.rk_sim on this AGX (bind 127.0.0.1). All frames are simulated.
 mode rk   FrameLink UDP from the RK3588 (bind 0.0.0.0). Frames with source byte LIVE are "live".
 mode file decode local recordings directly (no network). All frames are simulated ("file").
+mode local frames from the rk-camd frame socket on this machine (infer/ingest/local_source.py): one camera,
+          NV12, no network, no decode. Frames are "live".
 
 rk mode source filter: config key rk_allowed_sources (list of IP addresses). Not empty = the
 receivers drop datagrams from other addresses (counter foreign_source_drops in the camera
@@ -23,7 +25,7 @@ from infer.ingest.metrics import CameraMetrics
 
 DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "..", "..", "config", "sources.yaml")
 ROLES = {0: "front", 1: "right", 2: "left", 3: "right-back", 4: "left-back", 5: "back"}
-MODES = ("sim", "rk", "file")
+MODES = ("sim", "rk", "file", "local")
 
 log = logging.getLogger("infer.ingest")
 
@@ -71,20 +73,34 @@ class Ingest:
         self.cams = list(range(6))  # always six cameras, even without config / signal
         self.store = FrameStore(self.cams, stale_s=float(self.cfg.get("stale_s", 0.5)),
                                 no_signal_s=float(self.cfg.get("no_signal_s", 1.0)))
-        expect_sim = self.mode != "rk"
+        expect_sim = self.mode not in ("rk", "local")
+        local = self.cfg.get("local") or {}
         self.metrics: dict[int, CameraMetrics] = {}
         self.sources = []
+        # local mode: the cameras that this unit does not have. They stay NO SIGNAL in the status, but they are
+        # not a reason for the node state DEGRADED (infer/publish/status.py). Empty in the other modes.
+        self.no_source: set[int] = ({c for c in self.cams if c != int(local.get("cam", 0))}
+                                    if self.mode == "local" else set())
         for cam in self.cams:
             c = cams_cfg.get(cam, {})
             # rk mode: the DA01 rk-camd camera name (role_rk) when present; else the old-stack role
             role = (c.get("role_rk") if self.mode == "rk" else None) or c.get("role", ROLES[cam])
             port = int(c.get("port", fl.BASE_PORT + cam))
-            m = CameraMetrics(cam, role, port if self.mode != "file" else None, self.mode,
+            m = CameraMetrics(cam, role, port if self.mode not in ("file", "local") else None, self.mode,
                               self.store, expect_simulated=expect_sim)
             self.metrics[cam] = m
             if c.get("enabled", True) is False:
                 continue
-            if self.mode == "file":
+            if self.mode == "local":
+                # one camera only: the rk-camd stream local.rk_cam becomes camera local.cam (default 0)
+                if cam == int(local.get("cam", 0)):
+                    from infer.ingest.local_source import LocalSource
+                    self.sources.append(LocalSource(
+                        cam, self.store, m,
+                        os.environ.get("AGX_LOCAL_FRAME_SOCKET") or str(local.get("socket", "")),
+                        notify_socket=os.environ.get("AGX_LOCAL_NOTIFY_SOCKET", str(local.get("notify_socket", ""))),
+                        rk_cam=int(local.get("rk_cam", 0))))
+            elif self.mode == "file":
                 from infer.ingest.file_source import FileSource
                 self.sources.append(FileSource(cam, c.get("files", []), self.store, m,
                                                fps=float(self.cfg.get("file_fps", 30))))
@@ -114,7 +130,7 @@ class Ingest:
                             "source address are accepted on %s (set it in config/sources.yaml)",
                             self.bind_host)
         si = self.cfg.get("gil_switch_interval_s", 0)
-        if si and self.mode != "file":
+        if si and self.mode not in ("file", "local"):
             sys.setswitchinterval(float(si))
         started = []
         try:

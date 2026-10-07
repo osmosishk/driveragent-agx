@@ -1,0 +1,31 @@
+# Models of the Orin NX single-camera unit: DriverGuard on the front camera only.
+# The engines are the files of the model registry version driverguard@1.0.1 (built on this unit for
+# TensorRT 8.6.2). They are read at that place and never changed.
+models:
+  - name: driverguard_yolopx
+    group: driverguard
+    enabled: true
+    engine: /opt/driveragent/models/driverguard/1.0.1/engines/orinnx16-jp6.0-trt8.6.2-fp16/yolopx_v2.engine
+    onnx: /opt/driveragent/models/driverguard/1.0.1/yolopx_v2.onnx
+    adapter: yolopx_v2
+    cameras: [0]
+    workers: 1
+    max_fps_per_camera: 15      # measured alone on this unit: 64 ms per frame
+    options:
+      conf_thres: 0.30
+      iou_thres: 0.45
+      max_det: 300
+      masks_cameras: [0]
+  - name: driverguard_dtcp
+    group: driverguard
+    enabled: true
+    engine: /opt/driveragent/models/driverguard/1.0.1/engines/orinnx16-jp6.0-trt8.6.2-fp32/dtcp_v1_main.engine
+    onnx: /opt/driveragent/models/driverguard/1.0.1/dtcp_v1_main.onnx
+    adapter: dtcp_v1
+    cameras: [0]
+    workers: 1
+    max_fps_per_camera: 10
+    options:
+      command: 2                # STRAIGHT (assumed)
+      target: [0.0, 20.0]       # [lateral right m, forward m] (assumed)
+      ego_speed_mps: null       # 0 m/s is used and inputsValid = false

@@ -263,7 +263,7 @@ class StatusPublisher:
             c["last_frame_t"] = (f.t_ready_ns / 1e9) if f is not None else c.get("last_frame_t")
         # DA01 is the only source of the names: only its cameras (rk mode) take the RK names and roles
         info = None
-        if self.rkinfo is not None and getattr(self.ingest, "mode", "") == "rk":
+        if self.rkinfo is not None and getattr(self.ingest, "mode", "") in ("rk", "local"):
             try:
                 info = self.rkinfo.fresh()
             except Exception:  # noqa: BLE001
@@ -326,7 +326,7 @@ class StatusPublisher:
 
     def _simulated(self, cams: list[dict]) -> bool:
         mode = getattr(self.ingest, "mode", "sim")
-        return mode != "rk" or any(c.get("simulated") and c.get("frame_age_ms") is not None
+        return mode not in ("rk", "local") or any(c.get("simulated") and c.get("frame_age_ms") is not None
                                    for c in cams)
 
     # ---- build -----------------------------------------------------------------------------------
@@ -436,7 +436,8 @@ class StatusPublisher:
     def tick(self) -> dict:
         models = self._models()
         cams = self._cameras()
-        self.node.evaluate(models, {int(c["cam"]): c["state"] for c in cams})
+        no_source = getattr(self.ingest, "no_source", ())   # local mode: cameras this unit does not have
+        self.node.evaluate(models, {int(c["cam"]): c["state"] for c in cams if int(c["cam"]) not in no_source})
         self._collect_errors(models, cams)
         t_ns = time.time_ns()
         control = self.control(models)

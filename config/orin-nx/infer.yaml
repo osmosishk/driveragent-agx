@@ -1,0 +1,39 @@
+# agx-infer on the Jetson Orin NX single-camera unit (host orin-nx): the same service as on the AGX, with the
+# local frame source (infer/ingest/local_source.py) in place of FrameLink. Start by hand:
+#   AGX_LOCAL_FRAME_SOCKET=<frames.sock> AGX_LOCAL_NOTIFY_SOCKET=<agx-link.sock> \
+#   python3 -m infer.main --config config/orin-nx/infer.yaml
+# Differences from config/infer.yaml: local sources, the model list of this unit, every socket on 127.0.0.1.
+sources_config: config/orin-nx/sources.yaml
+models_config: config/orin-nx/models.yaml
+model_store: ~/da-bench/agx-models      # not used for the start set below; kept out of ~/agx-models
+start_set: models_yaml                  # this unit has no model controller: the list in models_config runs
+engines_dir: engines
+proto: proto/agx_infer.capnp
+control_config: config/control.yaml
+ports:
+  results: 5560      # ZMQ PUB AgxPerceptionResult (rk_agxlink.py on this unit connects)
+  status: 5561       # ZMQ PUB AgxInferStatus, 1 Hz
+  internal: 5562
+  admin: 5563
+  rkinfo: 5564       # ZMQ SUB RkCameraInfo from rk_agxlink.py on this unit
+bind:
+  results: "127.0.0.1"   # one board: nothing listens on the network
+  status: "127.0.0.1"
+  internal: "127.0.0.1"
+  admin: "127.0.0.1"
+  rkinfo: "127.0.0.1"
+results:
+  sndhwm: 100
+  queue_max: 1000
+  rate_window_s: 5.0
+status_period_s: 1.0
+snapshot:
+  width: 320
+  period_s: 1.0
+  jpeg_quality: 80
+admin:
+  frame_jpeg_quality: 90
+node:
+  no_signal_degraded_s: 10.0
+  stop_timeout_s: 5.0
+log_level: INFO

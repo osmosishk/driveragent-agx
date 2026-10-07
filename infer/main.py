@@ -1,6 +1,6 @@
 """AGX inference node.
 
-  python -m infer.main --config config/infer.yaml [--mode sim|rk|file] [--seconds N]
+  python -m infer.main --config config/infer.yaml [--mode sim|rk|file|local] [--seconds N]
 
 Parts: Ingest (six cameras -> FrameStore), ModelManager (TensorRT models; on_result ->
 ResultPublisher 5560 + result cache), StatusPublisher (5561 AgxInferStatus + 127.0.0.1:5562 JSON),
@@ -296,7 +296,7 @@ class Node:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="driveragent-agx inference node")
     ap.add_argument("--config", default=os.path.join(ROOT, "config", "infer.yaml"))
-    ap.add_argument("--mode", choices=("sim", "rk", "file"), default=None,
+    ap.add_argument("--mode", choices=("sim", "rk", "file", "local"), default=None,
                     help="ingest mode (default: config/sources.yaml or AGX_INGEST_MODE)")
     ap.add_argument("--seconds", type=float, default=None, help="stop after N seconds")
     a = ap.parse_args(argv)

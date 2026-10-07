@@ -1,0 +1,18 @@
+# Sources of the Orin NX single-camera unit: one camera from the rk-camd frame socket on this board.
+mode: local
+local:
+  socket: ""            # the rk-camd frame socket; the environment variable AGX_LOCAL_FRAME_SOCKET wins
+  notify_socket: ""     # rk_agxlink.py notify socket ([agx_link] notify_socket); AGX_LOCAL_NOTIFY_SOCKET wins
+  cam: 0                # camera id of the results (FrameLink cam 0 = front)
+  rk_cam: 0             # rk-camd cam_id of the RAW stream that is used
+# RkCameraInfo peers (port 5564): only this board.
+rk_allowed_sources: ["127.0.0.1"]
+stale_s: 0.5
+no_signal_s: 1.0
+cameras:
+  - {cam: 0, role: front}
+  - {cam: 1, enabled: false}
+  - {cam: 2, enabled: false}
+  - {cam: 3, enabled: false}
+  - {cam: 4, enabled: false}
+  - {cam: 5, enabled: false}
