@@ -11,7 +11,8 @@ import subprocess
 import threading
 import time
 
-from dashboard.collectors.old_procs import NOTE as OLD_NOTE, find_old_processes
+from dashboard.collectors.old_procs import NOTE as OLD_NOTE, NOTE_OFF, find_old_processes
+from dashboard.config import service_units
 
 log = logging.getLogger("dashboard.services")
 
@@ -73,9 +74,11 @@ def _clean(d: dict, installed_word: str) -> dict:
 
 class ServicesCollector:
     def __init__(self, cfg: dict):
-        sc = cfg["services"]
-        self.agx_units = [u for u in sc["agx_units"] if UNIT_RE.match(u)]
-        self.log_units = [u for u in sc["log_units"] if UNIT_RE.match(u)]
+        sc = cfg.get("services") or {}
+        agx_units, log_units = service_units(cfg)   # null lists: made from unit_prefix (dashboard/config.py)
+        self.agx_units = [u for u in agx_units if UNIT_RE.match(str(u))]
+        self.log_units = [u for u in log_units if UNIT_RE.match(str(u))]
+        self.old_root = cfg.get("old_stack_root") or None   # null: no old stack on this machine
         self.old_units = [u for u in cfg.get("old_units", []) if UNIT_RE.match(str(u))]
         self.docker_enabled = bool(cfg.get("docker", True))
         self.unit_refresh = float(sc.get("unit_refresh_s", 5))
@@ -87,7 +90,8 @@ class ServicesCollector:
                               "error": None if self.docker_enabled else "docker disabled in config"}
         self._inspect: dict[str, dict] = {}
         self._inspect_t = 0.0
-        self._old_procs: dict = {"t": None, "processes": [], "error": "not measured yet", "note": OLD_NOTE}
+        self._old_procs: dict = {"t": None, "processes": [], "error": "not measured yet",
+                                 "note": OLD_NOTE if self.old_root else NOTE_OFF}
         self._stop = threading.Event()
 
     def start(self):
@@ -105,11 +109,11 @@ class ServicesCollector:
             except Exception:
                 log.exception("unit refresh failed")
             try:
-                op = find_old_processes()
+                op = find_old_processes(self.old_root)
             except Exception as e:  # noqa: BLE001
                 log.exception("old process scan failed")
                 op = {"t": time.time(), "processes": [], "error": f"old process scan failed: {e}",
-                      "note": OLD_NOTE}
+                      "note": OLD_NOTE if self.old_root else NOTE_OFF}
             with self._lock:
                 self._old_procs = op
             if self.docker_enabled and time.monotonic() - last_docker >= self.docker_refresh:
@@ -223,8 +227,8 @@ class ServicesCollector:
 
     def logs(self, unit: str, lines: int = 100) -> dict:
         """Last journal lines of a whitelisted unit. When the system unit of this name is active
-        (installed by systemd/install_units.sh), read it with `journalctl -u`; else read the user
-        unit (transient units of tools/svc.sh) with `journalctl --user-unit`."""
+        (a system unit made by the owner), read it with `journalctl -u`; else read the user unit (the units of
+        ops/install.sh, docs/INSTALL_AGX.md, or the transient units of tools/svc.sh) with `journalctl --user-unit`."""
         if unit not in self.log_units or not UNIT_RE.match(unit):
             raise ValueError("unit not allowed")
         if self.system_unit_active(unit):

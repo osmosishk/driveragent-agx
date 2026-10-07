@@ -1,4 +1,4 @@
-/* Hash router of the agx02 dashboard: pure functions, no DOM. Loaded before app.js; also used by the QuickJS test
+/* Hash router of the AGX dashboard: pure functions, no DOM. Loaded before app.js; also used by the QuickJS test
    (tests/test_dashboard_pages.py).
 
    A hash is "#/<page>" or "#/<page>/<argument>". Example: "#/models/driverguard_yolopx%401" opens the Models page

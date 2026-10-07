@@ -24,7 +24,7 @@ def client(tmp_path):
     tok = tmp_path / "control.token"
     tok.write_text(TOKEN + "\n")
     os.chmod(tok, 0o600)
-    cfg = load_config("config/dashboard.yaml")
+    cfg = load_config("config/templates/dashboard.yaml")
     cfg.update({"model_store": str(tmp_path / "store"), "control_token_file": str(tok),
                 "control_config": str(tmp_path / "control.yaml"),
                 "paired_boards_file": str(tmp_path / "paired_boards.json"),

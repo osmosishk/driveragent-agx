@@ -1,0 +1,99 @@
+# AGX ingest sources (infer/ingest/ingest.py). Paths are absolute or relative to the project root.
+# Template: ops/install.sh copies this file to config/sources.yaml (only when that file is missing).
+# config/sources.yaml is machine data and is not in git.
+#
+# mode:
+#   sim   FrameLink over UDP from the simulator tools.rk_sim on this AGX.
+#         All frames are SIMULATED (R13), also when the source byte says LIVE.
+#   rk    FrameLink over UDP from the RK3588. Only frames with source byte LIVE are "live".
+#   file  Decode the local recordings of the "files" lists below directly. No network. All frames are SIMULATED.
+# The environment variable AGX_INGEST_MODE overrides this value.
+mode: rk
+
+# UDP port of camera N = base_port + N (RK design: 6000..6005). A camera with its own "port" uses that port.
+base_port: 6000
+
+# Bind address of the six UDP sockets.
+#   sim: 127.0.0.1 (loopback only).
+#   rk:  0.0.0.0. In the RK design the RK3588 sends to the AGX Link C address 10.42.0.1.
+bind_host:
+  sim: "127.0.0.1"
+  rk: "0.0.0.0"
+
+# rk mode source filter: the board addresses are NOT in this file. They come from data/paired_boards.json
+# (the union of the "addresses" of the paired boards; the AGX dashboard writes it at pairing). agx-infer
+# reads that file again when it changes (no restart). Datagrams from other addresses are dropped and
+# counted (camera counter foreign_source_drops). No file or no board = accept all source addresses
+# (one WARNING line). A problem never opens the filter: a bad file at start (not JSON, not mode 600)
+# or boards with no usable address = refuse all sources. The same set is the peer allowlist of the RkCameraInfo SUB on port 5564
+# (infer/rkinfo.py, ZAP; all modes). The old key rk_allowed_sources is not used any more.
+
+# Camera state (FrameStore): STALE after stale_s without a new frame, NO SIGNAL after no_signal_s.
+stale_s: 0.5
+no_signal_s: 1.0
+
+# Socket receive buffer in bytes. 0 = the maximum allowed (net.core.rmem_max = 212992; the kernel
+# doubles the request). Do not change rmem_max.
+rcvbuf_bytes: 0
+
+# rx_process: true = one receive process per camera (socket + reassembly), frames go to this
+# process through a shared-memory ring (ring_slots x max_frame_bytes per camera, in /dev/shm:
+# 8 x 2 MiB = 16 MiB per camera). A frame larger than max_frame_bytes is rejected (bad).
+# The ring holds ring_slots frames (8 = 0.27 s at 30 fps) when this process is late.
+# Reason: with rmem_max 212992 B a socket holds only about 25 jumbo datagrams (a few ms of cam0
+# NV12). Six receive threads in one Python process share the GIL and the sockets overflow
+# (measured: NV12 at 30 fps, cam0 6 fps, UDP RcvbufErrors up). Keep true.
+# rx_process: false = one receive thread per camera in this process (only for H.265 or tests).
+rx_process: true
+ring_slots: 8
+max_frame_bytes: 2097152
+
+# Create the H.265 decoders at start (about 0.15 s each). Without this, the first IDR frames can
+# be lost while the decoder starts.
+decoder_prestart: true
+
+# Python GIL switch interval in s, only for rx_process: false (Python default 0.005; 0.0005
+# helps a little). 0 = do not change. Process-wide setting.
+gil_switch_interval_s: 0
+
+# A partial frame that gets no fragment for this time WHILE other datagrams arrive is abandoned
+# (counted in lost_fragments). A quiet socket (sender pause) does not abandon it.
+# A datagram after a quiet socket of this time, or a seq jump back of more than 8 frames, starts a
+# new stream (sender restart): it is accepted at once (counter new_streams).
+reassembly_timeout_s: 0.2
+
+# H.265: after a lost frame, drop frames until the next IDR or CRA (no corrupted pictures to the
+# models). After a sender restart (seq goes back), wait for an IDR with VPS/SPS/PPS.
+h265_resync_on_loss: true
+
+# File mode: nominal frame rate. Real pacing follows the file timestamps.
+file_fps: 30
+
+# Six cameras.
+# role:    the camera role (shown when the RK board sends no camera info).
+# role_rk: optional, used only in rk mode: the name of this FrameLink camera on the RK board (rk-camd section).
+#          Schema v2: the RK board sends the camera names and roles (RkCameraInfo, port 5564). While that info is
+#          fresh (last 3 s) the status uses the board name and role (infoSource "rk"); role_rk is only the
+#          fallback when no board info came (infoSource "config").
+# port:    optional: the UDP port of this camera (default base_port + cam).
+# files:   used only in file mode. Each entry is a path or a glob pattern. The list loops. Example:
+#          files: [/data/video/session1/front/cam0_*.mp4]
+cameras:
+  - cam: 0
+    role: front
+    files: []
+  - cam: 1
+    role: right
+    files: []
+  - cam: 2
+    role: left
+    files: []
+  - cam: 3
+    role: right-back
+    files: []
+  - cam: 4
+    role: left-back
+    files: []
+  - cam: 5
+    role: back
+    files: []

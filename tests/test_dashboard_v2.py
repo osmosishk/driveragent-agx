@@ -43,6 +43,21 @@ PORT_MIN = int(os.environ.get("AGX_DASH_TEST_PORT_MIN") or 18800)
 PORT_MAX = int(os.environ.get("AGX_DASH_TEST_PORT_MAX") or 18899)
 FAKE_PORT = PORT_MIN + 62 if PORT_MIN + 62 <= PORT_MAX else PORT_MIN
 NOW_LOG: list[str] = []
+# The model list of the test (the four models of the fake status; the engine paths are the old engines of AGX02).
+# The engine facts (size, sha256) are checked only when the old engine file is on this machine.
+OLD_YOLOPX = "/home/tonyho/model/jetson_bundle/engines/yolopx_v2_fp16.engine"
+HAVE_OLD_ENGINES = os.path.isfile(OLD_YOLOPX)
+TEST_MODELS = {"models": [
+    {"name": "driverguard_yolopx", "group": "driverguard", "enabled": True, "engine": OLD_YOLOPX,
+     "adapter": "yolopx_v2", "cameras": [0, 1, 2, 3, 4, 5]},
+    {"name": "driverguard_dtcp", "group": "driverguard", "enabled": True,
+     "engine": "/home/tonyho/model/jetson_bundle/engines/dtcp_v1_fp16.engine", "adapter": "dtcp_v1", "cameras": [0]},
+    {"name": "system1", "enabled": False, "engine": None, "adapter": "none", "cameras": [0, 1, 2, 3, 4, 5],
+     "reason": "Not a TensorRT model: PyTorch only (system1_deploy.pth). See docs/MODELS.md."},
+    {"name": "sparsedrive_convnext_orin", "enabled": False,
+     "engine": "/home/tonyho/model/sparsedrive/run/convnext_backbone_fp16_orin.trt", "adapter": "none",
+     "cameras": [0, 1, 2, 3, 4, 5], "reason": "Backbone engine only; output is wrong (cosine 0.39 against its ONNX)."},
+]}
 
 
 def _free_port(start=PORT_MIN, end=PORT_MAX, avoid=()) -> int:
@@ -190,7 +205,7 @@ def _port_free(p: int) -> bool:
 
 @pytest.fixture(scope="module")
 def engines_dir():
-    """Scan dir with two engine files that are NOT in config/models.yaml:
+    """Scan dir with two engine files that are NOT in the models config of the test (TEST_MODELS):
     injected_old.engine (its facts are INJECTED in the cache: not inspected again) and
     bogus_test.plan (not in the cache: inspected for real, load FAILED)."""
     d = OUT / "v2_engines_scan"
@@ -215,15 +230,19 @@ def engines_dir():
 def server(creds, fake, engines_dir):
     OUT.mkdir(parents=True, exist_ok=True)
     scan_dir, cache = engines_dir
-    with open(ROOT / "config" / "dashboard.yaml", encoding="utf-8") as f:
+    # the template config (a fresh clone has no config/*.yaml) and the models of the test
+    with open(ROOT / "config" / "templates" / "dashboard.yaml", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+    models_path = OUT / "v2_models.yaml"
+    models_path.write_text(yaml.safe_dump(TEST_MODELS, sort_keys=False))
     cfg.update({
         "infer_status_endpoint": fake.endpoint,
         "port_file": str(OUT / "v2_dashboard_port"),
         "engines": {"cache": str(cache), "scan_dirs": [str(scan_dir)], "scan_interval_s": 1800,
                     "inspect_timeout_s": 120},
-        "models_config": "config/models.yaml",
-        "sources_config": "config/sources.yaml",
+        "models_config": str(models_path),
+        "sources_config": "config/templates/sources.yaml",
+        "old_stack_root": str(OUT / "v2_old_stack"),   # an old stack folder: the old-process view is on
     })
     cfg["history"]["db"] = str(OUT / "v2_history.sqlite")
     cfg["model_store"] = str(OUT / "v2_model_store")   # never the real ~/agx-models
@@ -301,7 +320,7 @@ def test_01_models(server, creds, engines_dir):
     assert d, "models not available or engine scan not done in 180 s"
     _save("v2_api_models_live.json", d)
     rows = {r["name"]: r for r in d["models"]}
-    cfg = yaml.safe_load((ROOT / "config" / "models.yaml").read_text())["models"]
+    cfg = TEST_MODELS["models"]
     assert [r["name"] for r in d["models"]][:len(cfg)] == [m["name"] for m in cfg]  # one row per config model
     assert rows["driverguard_yolopx"]["state"] == "RUNNING" and rows["driverguard_dtcp"]["state"] == "RUNNING"
     assert rows["system1"]["state"] == "OFF" and rows["system1"]["reason"]
@@ -311,10 +330,12 @@ def test_01_models(server, creds, engines_dir):
     assert y["fps"] == 180.0 and y["lat_ms"]["total"] == {"p50": 12.0, "p95": 18.0, "p99": 24.0}
     assert y["lat_ms"]["pre"]["p50"] == 2.0 and y["lat_ms"]["infer"]["p50"] == 9.0
     assert y["gpu_mem_mb"] == 410.0 and "estimate" in y["gpu_mem_note"]
-    # engine facts from tools/inspect_engines.py (real engine on disk)
-    assert y["engine_file"] == "yolopx_v2_fp16.engine" and y["size_bytes"] > 1_000_000
-    assert y["mtime"] and len(y["sha256_16"]) == 16 and isinstance(y["trt_match"], bool)
-    assert y["inputs"] and y["outputs"], "I/O shapes from the engine inspection"
+    # engine facts from tools/inspect_engines.py (real engine on disk: only where the old engines are)
+    assert y["engine_file"] == "yolopx_v2_fp16.engine"
+    if HAVE_OLD_ENGINES:
+        assert y["size_bytes"] > 1_000_000
+        assert y["mtime"] and len(y["sha256_16"]) == 16 and isinstance(y["trt_match"], bool)
+        assert y["inputs"] and y["outputs"], "I/O shapes from the engine inspection"
     assert isinstance(y["load_warnings"], list)
     # R13
     assert d["simulated"] is True and d["label"] == "SIMULATED"
@@ -469,7 +490,8 @@ def test_05_no_data_after_3s(server, creds, fake):
     rows = {r["name"]: r for r in m["models"]}
     assert m["available"] is False
     assert rows["driverguard_yolopx"]["state"] == "NO DATA" and rows["driverguard_yolopx"]["reason"] == "agx-infer not running"
-    assert rows["driverguard_yolopx"]["size_bytes"] > 0 and rows["driverguard_yolopx"]["sha256_16"]  # facts from the cache
+    if HAVE_OLD_ENGINES:   # facts from the cache
+        assert rows["driverguard_yolopx"]["size_bytes"] > 0 and rows["driverguard_yolopx"]["sha256_16"]
     assert rows["system1"]["state"] == "OFF" and "TensorRT" in rows["system1"]["reason"]
     assert rows["sparsedrive_convnext_orin"]["state"] == "OFF" and "cosine" in rows["sparsedrive_convnext_orin"]["reason"]
     assert m["engines_not_in_config"], "engine list stays without agx-infer"
@@ -525,18 +547,23 @@ def test_08_services_old_processes(server, creds):
 def test_old_process_match():
     from dashboard.collectors.old_procs import find_old_processes, match
 
-    assert match(["python3", "/home/tonyho/driveragent/start.py"], "/") == "start.py"
-    assert match(["python3", "start.py"], "/home/tonyho/driveragent") == "start.py"
-    assert match(["python3", "/home/tonyho/driveragent-agx/start.py"], "/") is None
-    assert match(["python3", "start.py"], "/home/tonyho/driveragent-agx") is None
-    assert match(["python3", "-m", "ui.ui"], "/") == "ui.ui"
-    assert match(["python3", "/home/tonyho/driveragent/model/system1/run.py"], "/") == "model/system1/run.py"
-    assert match(["python3", "-m", "dashboard.main"], "/") is None
+    old = "/home/u/driveragent"     # config old_stack_root (example)
+    assert match(["python3", "/home/u/driveragent/start.py"], "/", old) == "start.py"
+    assert match(["python3", "start.py"], "/home/u/driveragent", old) == "start.py"
+    assert match(["python3", "/home/u/driveragent-agx/start.py"], "/", old) is None
+    assert match(["python3", "start.py"], "/home/u/driveragent-agx", old) is None
+    assert match(["python3", "/home/u/driveragent/start.py"], "/", None) is None    # no old stack configured
+    assert match(["python3", "-m", "ui.ui"], "/", old) == "ui.ui"
+    assert match(["python3", "/home/u/driveragent/model/system1/run.py"], "/", old) == "model/system1/run.py"
+    assert match(["python3", "-m", "dashboard.main"], "/", old) is None
+    # old_stack_root null: the view is empty with the reason "not configured"
+    off = find_old_processes(None)
+    assert off["processes"] == [] and off["error"] == "not configured" and "old_stack_root" in off["note"]
     # a harmless process with "camtest" in its command line is found (read-only scan)
     p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", "camtest-dashboard-test"])
     try:
         time.sleep(0.3)
-        found = find_old_processes()
+        found = find_old_processes(old)
         assert any(x["pid"] == p.pid and x["match"] == "camtest" for x in found["processes"]), found
     finally:
         p.kill()

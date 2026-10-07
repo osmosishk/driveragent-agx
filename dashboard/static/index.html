@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>agx02 dashboard</title>
+<title>agx dashboard</title>
 <link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="/static/vendor/uPlot.min.css">
 <link rel="stylesheet" href="/static/style.css">
@@ -17,7 +17,7 @@
         <rect x="6" y="6" width="16" height="16" rx="3"/><rect x="10.5" y="10.5" width="7" height="7" rx="1.2"/>
         <path d="M10 2.5v3.5M18 2.5v3.5M10 22v3.5M18 22v3.5M2.5 10h3.5M2.5 18h3.5M22 10h3.5M22 18h3.5"/>
       </svg>
-      <span><span class="brand__name">agx dashboard</span><span class="brand__board" id="side-host">agx02</span></span>
+      <span><span class="brand__name">agx dashboard</span><span class="brand__board" id="side-host">agx</span></span>
     </a>
     <nav class="nav" id="nav">
       <a href="#/overview" data-page="overview"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg><span>Overview</span></a>
@@ -38,7 +38,7 @@
   <div class="content">
     <header class="topbar">
       <div class="topbar__left">
-        <h1 id="host" class="topbar__host">agx02</h1>
+        <h1 id="host" class="topbar__host">agx</h1>
         <span id="node-state" class="da-badge" title="Node state">NO DATA</span>
         <span id="sim-badge" class="da-badge da-badge--info" hidden>SIMULATED</span>
       </div>
@@ -101,7 +101,7 @@
       <!-- ======================================== Models ======================================== -->
       <section class="page" data-page="models" id="page-models" hidden aria-labelledby="h-models">
         <div class="page-head">
-          <div><h1 id="h-models">Models</h1><p>The model store of AGX02 and its control.</p></div>
+          <div><h1 id="h-models">Models</h1><p>The model store of this AGX and its control.</p></div>
           <div class="page-head__tools">
             <span class="muted small">Control mode</span>
             <span id="mc-mode" class="da-badge da-badge--muted">Not known</span>
@@ -124,8 +124,8 @@
               <li>Deactivate: stops an ACTIVE version. The other models continue.</li>
               <li>Rollback: puts the last good set of models back.</li>
             </ul>
-            <p>Each action has a confirmation step. AGX02 can refuse an action (for example in vehicle mode). The page then shows the reason. No action deletes a model version.</p>
-            <p>Results/s and latency: from agx-infer on AGX02 (latency = total time of the model). Open a row to see all its values.</p>
+            <p>Each action has a confirmation step. This AGX can refuse an action (for example in vehicle mode). The page then shows the reason. No action deletes a model version.</p>
+            <p>Results/s and latency: from agx-infer on this AGX (latency = total time of the model). Open a row to see all its values.</p>
             <p id="models-gpu-note">GPU memory values are an estimate (engine file + activation + I/O).</p>
           </div>
           <p class="note" id="models-reason"></p>
@@ -160,7 +160,7 @@
             <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-audit" title="Information">i</button></h2>
           <div class="info-text" id="info-audit" hidden>
             <p>Each request to the model controller is one line: from this page (agx-dashboard), from the DA01 rk console (rk-console), from the command line or from the controller itself.</p>
-            <p>Result: started, ok, refused or failed. The reason is the text of AGX02.</p>
+            <p>Result: started, ok, refused or failed. The reason is the text of this AGX.</p>
           </div>
           <p class="note" id="mc-events-note"></p>
           <div class="da-table-wrap">
@@ -390,9 +390,9 @@
               <button type="button" class="info-btn" aria-expanded="false" aria-controls="info-pair" title="Information">i</button></h2>
             <div class="info-text" id="info-pair" hidden>
               <p>An RK board (for example DA01) pairs with this AGX one time. Make a pairing code here. Then type the code on the AGX link page of the rk console of the board.</p>
-              <p>A pairing gives the board a control token. AGX02 keeps only a hash of the token. Only paired boards can control the models of this AGX. agx-infer accepts video and camera names only from the addresses of the paired boards.</p>
+              <p>A pairing gives the board a control token. This AGX keeps only a hash of the token. Only paired boards can control the models of this AGX. agx-infer accepts video and camera names only from the addresses of the paired boards.</p>
               <p>A code works one time and stops after 10 minutes. A new code cancels the old code. After 5 wrong codes, the code is cancelled.</p>
-              <p>In vehicle mode (config/control.yaml), AGX02 refuses pairing, removal and changes of these settings. The page then shows the reason.</p>
+              <p>In vehicle mode (config/control.yaml), this AGX refuses pairing, removal and changes of these settings. The page then shows the reason.</p>
             </div>
             <div id="pr-problem" class="callout callout--amber" hidden></div>
             <div id="pr-error" class="callout callout--red" role="alert" hidden></div>
@@ -408,7 +408,7 @@
               <div class="da-kv__row"><dt>Camera names (RkCameraInfo, TCP)</dt><dd id="pr-p-rkinfo" class="mono">-</dd></div>
               <div class="da-kv__row"><dt>Control (this dashboard, TCP)</dt><dd id="pr-p-api" class="mono">-</dd></div>
             </dl>
-            <p class="note">These values are read-only. The owner changes the network configuration of AGX02.</p>
+            <p class="note">These values are read-only. The owner changes the network configuration of this AGX.</p>
 
             <h3>Pairing code</h3>
             <div class="row row--wrap pair-code">
@@ -432,7 +432,7 @@
             <h3>Accepted board address</h3>
             <form class="row row--wrap pair-acc" id="pr-acc-form" autocomplete="off">
               <label class="da-visually-hidden" for="pr-acc">Accepted board address (optional)</label>
-              <input type="text" id="pr-acc" class="da-input mono" inputmode="decimal" placeholder="optional, for example 10.0.0.208" maxlength="15" spellcheck="false">
+              <input type="text" id="pr-acc" class="da-input mono" inputmode="decimal" placeholder="optional, for example 10.42.0.2" maxlength="15" spellcheck="false">
               <button type="submit" class="da-btn" id="pr-acc-save">Save</button>
             </form>
             <p class="note" id="pr-acc-line">Empty: each paired board can control this AGX. With an address: only that address can control this AGX.</p>

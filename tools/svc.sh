@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # Start / stop / show the driveragent-agx services as TRANSIENT systemd USER units.
 #
-# Why transient user units: sudo needs a password tonight, so the night agent cannot install
-# /etc/systemd/system/agx-*.service. A transient user unit writes no unit file on disk and does
-# not start at boot. The real unit files for the owner are in systemd/ (install needs sudo).
+# A transient user unit writes no unit file on disk and does not start at boot (the installed
+# units come from ops/install.sh). Unit name: <prefix>-<name>. The prefix is the environment variable
+# AGX_UNIT_PREFIX (default "agx": agx-dashboard, agx-infer, agx-sim; the same as config/dashboard.yaml
+# unit_prefix).
 #
-# Usage: tools/svc.sh start|stop|restart|status|logs  dashboard|infer|sim [extra args for the program]
+# Usage: [AGX_UNIT_PREFIX=agx] tools/svc.sh start|stop|restart|status|logs  dashboard|infer|sim [extra args]
 set -u
 P="$(cd "$(dirname "$0")/.." && pwd)"
 PY="$P/.venv/bin/python"
+PREFIX="${AGX_UNIT_PREFIX:-agx}"
 cmd="${1:-status}"; name="${2:-}"; shift 2 2>/dev/null || true
 
-unit_of() { echo "agx-$1"; }
+unit_of() { echo "$PREFIX-$1"; }
 exec_of() {
   case "$1" in
     dashboard) echo "$PY -m dashboard.main --config $P/config/dashboard.yaml" ;;
@@ -43,7 +45,7 @@ case "$cmd" in
   restart) "$0" stop "$name"; sleep 1; "$0" start "$name" "$@" ;;
   status)
     if [ -n "$name" ]; then systemctl --user status "$(unit_of "$name")" --no-pager -n 0
-    else systemctl --user list-units 'agx-*' --all --no-pager --no-legend; fi ;;
+    else systemctl --user list-units "$PREFIX-*" --all --no-pager --no-legend; fi ;;
   logs)    journalctl --user-unit "$(unit_of "$name")" --no-pager -n "${1:-100}" -o short-iso ;;
   *) echo "usage: $0 start|stop|restart|status|logs dashboard|infer|sim"; exit 2 ;;
 esac

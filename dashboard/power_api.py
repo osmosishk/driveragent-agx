@@ -1,4 +1,4 @@
-"""Power log HTTP API of the AGX02 dashboard (all GET; data: dashboard/power_log.py, common/powerlog.py).
+"""Power log HTTP API of the AGX dashboard (all GET; data: dashboard/power_log.py, common/powerlog.py).
 
   GET /api/power                         Basic        now value, power mode, event state, log size, sources
   GET /api/power/samples?range=&rails=   Basic        chart data (range 1h, 24h, 7d, 30d; rails 0 or 1) + events
@@ -8,9 +8,12 @@
   GET /api/power/now                     Basic or the token of a paired board (dashboard/auth.py TOKEN_ROUTES)
 Labels (rule W2): SENSOR (the INA3221 rails read it now) or NO SENSOR. No value is calculated from the load.
 A bad argument gives 400 {"error": ...}. When the log is not open the routes that read it give 503 {"error": ...}.
+The power part of this unit is the node name (config node_name, common/machine.py; dashboard/power_log.py part).
+The samples, events and energy documents give it as "part".
 """
 from __future__ import annotations
 
+import re
 import time
 
 from fastapi import Query
@@ -19,7 +22,6 @@ from fastapi.responses import JSONResponse, Response
 from common.powerlog import RANGES
 
 SCHEMA = "agx-power/1"
-PART = "agx02"
 MAX_EVENTS_IN_RANGE = 500
 
 
@@ -37,6 +39,9 @@ def _day_start(now: float) -> float:
 
 
 def register(app, hub) -> None:
+    p0 = getattr(hub, "power", None)
+    part = getattr(p0, "part", None) or getattr(hub, "node", None) or "agx"
+
     def pw():
         return getattr(hub, "power", None)
 
@@ -51,8 +56,8 @@ def register(app, hub) -> None:
 
     def keys(lg, rails: bool) -> list[str]:
         if not rails:
-            return [PART]
-        return [PART] + [k for k in lg.series_keys() if k.startswith(PART + ":")]
+            return [part]
+        return [part] + [k for k in lg.series_keys() if k.startswith(part + ":")]
 
     def check_range(r: str):
         return None if r in RANGES else _bad("range must be one of " + ", ".join(RANGES))
@@ -85,7 +90,8 @@ def register(app, hub) -> None:
         since, until = now - span, now + 1
         d = lg.samples(since, until, bucket, keys(lg, rails == "1"))
         evs = lg.events(since, until, limit=MAX_EVENTS_IN_RANGE)
-        d.update(range=range, events=[{k: e[k] for k in ("t", "kind", "value", "prev", "exact")} for e in evs])
+        d.update(part=part, range=range,
+                 events=[{k: e[k] for k in ("t", "kind", "value", "prev", "exact")} for e in evs])
         return _json(d)
 
     @app.get("/api/power/events")
@@ -99,7 +105,7 @@ def register(app, hub) -> None:
         lg = plog()
         if lg is None:
             return closed()
-        return _json({"rows": lg.before_after([PART], n, factors=lg.factors())})
+        return _json({"part": part, "rows": lg.before_after([part], n, factors=lg.factors())})
 
     @app.get("/api/power/energy")
     def api_power_energy():
@@ -107,9 +113,9 @@ def register(app, hub) -> None:
         if lg is None:
             return closed()
         now = time.time()
-        return _json({"today": lg.energy(_day_start(now), now, [PART]),
-                      "d7": lg.energy(now - 7 * 86400, now, [PART]),
-                      "d30": lg.energy(now - 30 * 86400, now, [PART])})
+        return _json({"part": part, "today": lg.energy(_day_start(now), now, [part]),
+                      "d7": lg.energy(now - 7 * 86400, now, [part]),
+                      "d30": lg.energy(now - 30 * 86400, now, [part])})
 
     @app.get("/api/power/export")
     def api_power_export(kind: str = Query("samples"), range: str = Query("24h"), rails: str = Query("0")):
@@ -125,6 +131,7 @@ def register(app, hub) -> None:
         since, until = now - RANGES[range][0], now + 1
         text = (lg.csv_samples(since, until, keys(lg, rails == "1")) if kind == "samples"
                 else lg.csv_events(since, until))
-        name = f"agx02-power-{kind}-{range}-{time.strftime('%Y%m%d-%H%M%S', time.localtime(now))}.csv"
+        stamp = time.strftime('%Y%m%d-%H%M%S', time.localtime(now))
+        name = f"{re.sub(r'[^A-Za-z0-9._-]', '_', part)}-power-{kind}-{range}-{stamp}.csv"
         return Response(text, media_type="text/csv; charset=utf-8",
                         headers={"cache-control": "no-store", "content-disposition": f'attachment; filename="{name}"'})

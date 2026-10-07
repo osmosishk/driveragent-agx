@@ -15,3 +15,5 @@ tests/out/
 # test logs larger than 1 MB (commit only the summary: docs/test_results/RAW_LOGS.md)
 test_logs/
 .pytest_cache/
+# machine configuration (made by ops/install.sh from config/templates/; not in git)
+/config/*.yaml

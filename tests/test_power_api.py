@@ -1,4 +1,4 @@
-"""Power log of the AGX02 dashboard: the routes (dashboard/power_api.py) and the logger (dashboard/power_log.py).
+"""Power log of the AGX dashboard: the routes (dashboard/power_api.py) and the logger (dashboard/power_log.py).
 
 In-process app (start_collectors=False: no thread, no sensor read), a PowerLog in tmp_path with stored samples, a fake
 health snapshot for the logger. Never the real data/power.sqlite.
@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from common.powerlog import NO_SENSOR, SENSOR, PowerLog, Reading
 
 PW = "power-test-pw-0001"
+NODE = "unit7"      # config node_name of the test app: the power part of the unit
 TOKEN = "p" * 43
 RAILS = {"VDD_GPU_SOC": {"v": 19.1, "a": 0.6, "w": 11.5}, "VDD_CPU_CV": {"v": 19.1, "a": 0.15, "w": 2.8},
          "VIN_SYS_5V0": {"v": 5.0, "a": 1.4, "w": 7.2}, "VDDQ_VDD2_1V8AO": {"v": 1.8, "a": 0.5, "w": 0.9}}
@@ -39,8 +40,8 @@ def client(tmp_path):
     tok = tmp_path / "control.token"
     tok.write_text(TOKEN + "\n")
     os.chmod(tok, 0o600)
-    cfg = load_config("config/dashboard.yaml")
-    cfg.update({"model_store": str(tmp_path / "store"), "control_token_file": str(tok),
+    cfg = load_config("config/templates/dashboard.yaml")
+    cfg.update({"node_name": NODE, "model_store": str(tmp_path / "store"), "control_token_file": str(tok),
                 "control_config": str(tmp_path / "control.yaml"),
                 "paired_boards_file": str(tmp_path / "paired_boards.json"),
                 "link_settings_file": str(tmp_path / "link_settings.json")})
@@ -56,7 +57,7 @@ def client(tmp_path):
     t0 = int(now) - 300
     for i in range(240):                     # 240 s of samples: 20 W, then 30 W after the event at t0 + 120
         w = 20.0 if i < 120 else 30.0
-        lg.add([Reading("agx02", w, SENSOR, t0 + i, "jetson_rails", "test rails", {"VDD_GPU_SOC": w / 2})])
+        lg.add([Reading(NODE, w, SENSOR, t0 + i, "jetson_rails", "test rails", {"VDD_GPU_SOC": w / 2})])
     lg.flush()
     lg.note_state({"models": ["a@1"], "power_mode": "MAXN"}, t0 - 10)
     lg.note_state({"models": ["a@1", "b@1"]}, t0 + 120)
@@ -72,7 +73,7 @@ def test_power_doc(client):
     d = r.json()
     assert d["schema"] == "agx-power/1" and d["power_mode"] == "MAXN"
     n = d["now"]
-    assert n["part"] == "agx02" and n["label"] == SENSOR and n["watts"] == pytest.approx(22.4)
+    assert n["part"] == NODE and n["label"] == SENSOR and n["watts"] == pytest.approx(22.4)
     assert set(n["rails"]) == set(RAILS) and "supply input is not measured" in n["what"] and n["age_s"] < 3
     assert set(d["state"]) >= {"models", "link", "cameras", "power_mode", "control_mode", "sender", "agx_unit",
                                "recording"}
@@ -101,15 +102,15 @@ def test_now_is_no_sensor_when_old(client):
 
 def test_samples_and_events_in_range(client):
     d = client.get("/api/power/samples?range=1h", headers=basic()).json()
-    assert d["range"] == "1h" and d["bucket_s"] == 1 and list(d["series"]) == ["agx02"]
-    vals = [v for v in d["series"]["agx02"] if v is not None]
-    assert 20.0 in vals and 30.0 in vals and len(d["t"]) == len(d["series"]["agx02"]) == len(d["seconds"]["agx02"])
+    assert d["range"] == "1h" and d["bucket_s"] == 1 and list(d["series"]) == [NODE] and d["part"] == NODE
+    vals = [v for v in d["series"][NODE] if v is not None]
+    assert 20.0 in vals and 30.0 in vals and len(d["t"]) == len(d["series"][NODE]) == len(d["seconds"][NODE])
     kinds = [(e["kind"], e["value"]) for e in d["events"]]
     assert ("models", ["a@1", "b@1"]) in kinds
     assert set(d["events"][0]) == {"t", "kind", "value", "prev", "exact"}
     d = client.get("/api/power/samples?range=24h&rails=1", headers=basic()).json()
-    assert d["bucket_s"] == 60 and {"agx02", "agx02:VDD_GPU_SOC"} <= set(d["series"])
-    assert all(k == "agx02" or k.startswith("agx02:") for k in d["series"])
+    assert d["bucket_s"] == 60 and {NODE, NODE + ":VDD_GPU_SOC"} <= set(d["series"])
+    assert all(k == NODE or k.startswith(NODE + ":") for k in d["series"])
     for rg, b in (("7d", 600), ("30d", 3600)):
         assert client.get(f"/api/power/samples?range={rg}", headers=basic()).json()["bucket_s"] == b
 
@@ -123,7 +124,7 @@ def test_samples_bad_args(client, q):
 def test_events_before_after(client):
     rows = client.get("/api/power/events", headers=basic()).json()["rows"]
     ev = [r for r in rows if r["kind"] == "models"][0]
-    p = ev["parts"]["agx02"]
+    p = ev["parts"][NODE]
     assert p["before_w"] == pytest.approx(20.0) and p["after_w"] == pytest.approx(30.0)
     assert p["diff_w"] == pytest.approx(10.0)
     assert len(client.get("/api/power/events?limit=1", headers=basic()).json()["rows"]) == 1
@@ -134,20 +135,20 @@ def test_events_before_after(client):
 
 def test_energy(client):
     d = client.get("/api/power/energy", headers=basic()).json()
-    assert set(d) == {"today", "d7", "d30"}
-    e = d["d7"]["agx02"]
+    assert set(d) == {"part", "today", "d7", "d30"} and d["part"] == NODE
+    e = d["d7"][NODE]
     # 120 s at 20 W + 120 s at 30 W (+ the one sample of now) = 6000 Ws = 1.667 Wh
     assert e["wh"] == pytest.approx(6022.4 / 3600, abs=0.01) and e["hours"] == pytest.approx(241 / 3600, abs=1e-3)
-    assert d["d30"]["agx02"]["wh"] == pytest.approx(e["wh"])
+    assert d["d30"][NODE]["wh"] == pytest.approx(e["wh"])
 
 
 def test_export_csv(client):
     r = client.get("/api/power/export?kind=samples&range=1h", headers=basic())
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
-    assert r.headers["content-disposition"].startswith('attachment; filename="agx02-power-samples-1h-')
+    assert r.headers["content-disposition"].startswith(f'attachment; filename="{NODE}-power-samples-1h-')
     rows = list(csv.reader(io.StringIO(r.text)))
     assert rows[0][:4] == ["time_utc", "unix_s", "series", "watts_sensor"] and len(rows) > 200
-    assert {x[2] for x in rows[1:]} == {"agx02"} and all(x[5] == SENSOR for x in rows[1:])
+    assert {x[2] for x in rows[1:]} == {NODE} and all(x[5] == SENSOR for x in rows[1:])
     r = client.get("/api/power/export?kind=events&range=24h", headers=basic())
     rows = list(csv.reader(io.StringIO(r.text)))
     assert rows[0][2] == "kind" and any(x[2] == "models" for x in rows[1:])
@@ -228,7 +229,7 @@ def test_fallback_when_snapshot_has_no_power(tmp_path):
 
         def read(self, t):
             self.n += 1
-            return [Reading("agx02", 5.0, SENSOR, t, "jetson_rails", "fallback", {"X": 5.0})]
+            return [Reading(NODE, 5.0, SENSOR, t, "jetson_rails", "fallback", {"X": 5.0})]
 
     pl._rails = _Rails()
     assert pl.reading(power(), 1.0).watts == pytest.approx(22.4) and pl._rails.n == 0   # no second sensor read

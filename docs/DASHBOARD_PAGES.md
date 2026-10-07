@@ -138,8 +138,8 @@ Routes (all GET, HTTP Basic; a bad argument gives 400, a log that is not open gi
 | Route | Arguments | Answer |
 |---|---|---|
 | `/api/power` | none | `{schema: "agx-power/1", now, power_mode, state, log, sources}` |
-| `/api/power/samples` | `range` = 1h, 24h, 7d, 30d; `rails` = 0, 1 | `{range, bucket_s, t, series, seconds, events}` |
-| `/api/power/events` | `limit` = 1..100 (20) | `{rows}`: each event with `parts.agx02` before_w, after_w, diff_w |
-| `/api/power/energy` | none | `{today, d7, d30}`: `agx02` wh, hours, mean_w, span_h |
+| `/api/power/samples` | `range` = 1h, 24h, 7d, 30d; `rails` = 0, 1 | `{part, range, bucket_s, t, series, seconds, events}` |
+| `/api/power/events` | `limit` = 1..100 (20) | `{part, rows}`: each event with `parts.<part>` before_w, after_w, diff_w |
+| `/api/power/energy` | none | `{part, today, d7, d30}`: `<part>` wh, hours, mean_w, span_h. `part` = config `node_name` (AGX02: `agx02`) |
 | `/api/power/export` | `kind` = samples, events; `range`; `rails` | a CSV file (attachment) |
 | `/api/power/now` | none | `{part, watts, label, t, rails, what, power_mode}`; also the token of a paired board |

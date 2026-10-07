@@ -1,4 +1,4 @@
-/* agx02 dashboard: the rk console look (rk/console/ui/src/styles/layout.css + components/components.css), as plain CSS.
+/* AGX dashboard: the rk console look (rk/console/ui/src/styles/layout.css + components/components.css), as plain CSS.
    Every colour, corner radius, shadow and font value comes from tokens.css (var(--da-...)): do not write a literal
    value of these kinds here (tests/test_dashboard_pages.py checks it). Spacing values are the ones of the rk console. */
 

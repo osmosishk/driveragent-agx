@@ -644,7 +644,7 @@ Optional: HTTP `GET http://<agx>:8700/api/health` (`dashboard/app.py` `create_ap
 
 | Item | Value | Source |
 |---|---|---|
-| Auth | HTTP Basic, realm `agx02-dashboard` | `dashboard/auth.py` `REALM` |
+| Auth | HTTP Basic, realm `<node_name>-dashboard` (AGX02: `agx02-dashboard`) | `config/dashboard.yaml` `node_name` (default: the short host name) |
 | User | `AGX_DASH_USER` (default `agx`) from the AGX `.env` | `dashboard/app.py` `create_app()` (`AGX_DASH_USER`) |
 | Password | `AGX_DASH_PASSWORD` from the AGX `.env`. The owner gives it to the RK. | `dashboard/app.py` `create_app()` (`AGX_DASH_PASSWORD`) |
 | Storage on the RK | `/etc/driveragent/agx-dashboard.netrc`, mode 600, owner = the HMI user. Never in git. | `RK3588_AGENT_KICKOFF.md:117` (credentials from `/etc/driveragent/` only) |

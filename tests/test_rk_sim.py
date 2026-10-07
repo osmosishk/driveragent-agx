@@ -19,7 +19,25 @@ from tools.rk_sim.idr import nal_types
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE_PORT = 16000
-REC = "/home/tonyho/driveragent/logger/video/8003-20260510_151220/front/cam0_20260510_151220.mp4"
+# Old recordings of AGX02 (read-only input). The tests that need them are skipped when they are not there.
+VIDEO_ROOT = os.environ.get("AGX_TEST_VIDEO_ROOT", "/home/tonyho/driveragent/logger/video")
+REC = os.path.join(VIDEO_ROOT, "8003-20260510_151220/front/cam0_20260510_151220.mp4")
+TEMPLATE = "config/templates/sim.yaml"     # a fresh clone has no config/sim.yaml
+BENCH = ["8003-20260510_151020", "8003-20260510_151120", "8003-20260510_151220"]
+ROAD = ["8003-20251109_105508", "8003-20251109_105608", "8003-20251109_105708"]
+ROLES = ["front", "right", "left", "right-back", "left-back", "back"]
+
+
+def rec_config() -> str:
+    """A sim config with the old recordings (as the AGX02 config/sim.yaml): the file tests use it."""
+    import yaml
+    cams = [{"cam": n, "role": r, "source": "file", "width": 1280 if n == 0 else 704, "height": 720 if n == 0 else 396,
+             "files": [f"{s}/{r}/cam{n}_{s.split('-', 1)[1]}.mp4" for s in BENCH]} for n, r in enumerate(ROLES)]
+    os.makedirs(os.path.join(ROOT, "tests", "out"), exist_ok=True)
+    path = os.path.join(ROOT, "tests", "out", "sim_recordings.yaml")
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump({"video_root": VIDEO_ROOT, "session_sets": {"bench": BENCH, "road": ROAD}, "cameras": cams}, f)
+    return path
 
 
 class Rx(threading.Thread):
@@ -54,7 +72,7 @@ class Rx(threading.Thread):
         self.sock.close()
 
 
-def run_sim(cam: int, *args, seconds: float = 3.0, config: str = "config/sim.yaml") -> tuple[Rx, str]:
+def run_sim(cam: int, *args, seconds: float = 3.0, config: str = TEMPLATE) -> tuple[Rx, str]:
     rx = Rx(cam)
     rx.start()
     env = dict(os.environ, PYTHONPATH=ROOT)
@@ -110,7 +128,7 @@ def check_h265_start(rx: Rx):
 
 @pytest.mark.skipif(not os.path.isfile(REC), reason="recordings not found")
 def test_file_h265_passthrough_cam0():
-    rx, out = run_sim(0, "--fmt", "h265")
+    rx, out = run_sim(0, "--fmt", "h265", config=rec_config())
     check_stream(rx, 0, fl.FMT_H265, fl.SOURCE_REPLAY, 1280, 720)
     check_h265_start(rx)
     assert all(h.stride == 0 for h, _ in rx.frames)
@@ -119,7 +137,7 @@ def test_file_h265_passthrough_cam0():
 
 @pytest.mark.skipif(not os.path.isfile(REC), reason="recordings not found")
 def test_file_nv12_cam1():
-    rx, _ = run_sim(1, "--fmt", "nv12")
+    rx, _ = run_sim(1, "--fmt", "nv12", config=rec_config())
     check_stream(rx, 1, fl.FMT_NV12, fl.SOURCE_REPLAY, 704, 396)
     for h, p in rx.frames:
         assert h.stride == 704 and len(p) == 704 * 396 * 3 // 2
@@ -151,13 +169,14 @@ def test_nal_types():
 
 @pytest.mark.skipif(not os.path.isfile(REC), reason="recordings not found")
 def test_road_sessions_cam0():
-    """--sessions road: the file list comes from the road session set of config/sim.yaml."""
-    c = simcfg.load("config/sim.yaml")
+    """--sessions road: the file list comes from the road session set of the sim config."""
+    cfg = rec_config()
+    c = simcfg.load(cfg)
     simcfg.apply_sessions(c, "road")
     files = {cc.cam: cc.files for cc in c.cameras}
     assert all(len(f) == 3 for f in files.values()), files
     assert all("/8003-20251109_1055" in f[0] for f in files.values())
-    rx, _ = run_sim(0, "--fmt", "h265", "--sessions", "road", "--no-measure-idr")
+    rx, _ = run_sim(0, "--fmt", "h265", "--sessions", "road", "--no-measure-idr", config=cfg)
     check_stream(rx, 0, fl.FMT_H265, fl.SOURCE_REPLAY, 1280, 720)
     check_h265_start(rx)
 

@@ -1,4 +1,6 @@
 # Control mode of the model controller (docs/MODEL_CONTROL_API.md, owner rule M7).
+# Template: ops/install.sh copies this file to config/control.yaml (only when that file is missing).
+# config/control.yaml is machine data and is not in git.
 # ONLY THE OWNER CHANGES THIS FILE. No API and no page changes it.
 #   bench    the controller accepts build, activate, deactivate and rollback requests
 #   vehicle  the controller refuses each of them, with the reason; the active models stay as they are

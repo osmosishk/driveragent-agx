@@ -252,7 +252,8 @@ class Node:
         engines_dir = _path(self.cfg.get("engines_dir", "engines"))
         try:
             from infer.models.manager import ModelManager
-            return ModelManager(self.models_cfg, self.ingest.store, self.on_result, engines_dir)
+            return ModelManager(self.models_cfg, self.ingest.store, self.on_result, engines_dir,
+                                protected_dirs=self.cfg.get("protected_dirs") or [])
         except Exception as e:  # noqa: BLE001
             msg = f"ModelManager not available: {type(e).__name__}: {e}"
             log.exception(msg)

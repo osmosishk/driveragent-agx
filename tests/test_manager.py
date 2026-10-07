@@ -263,5 +263,7 @@ def test_rebuild_fallback_with_fake_trtexec(bad_engine, scratch):
 
 
 def test_engines_dir_under_model_folder_is_refused():
+    # config/infer.yaml protected_dirs (AGX02: [/home/tonyho/model]): engines_dir must not be inside
     with pytest.raises(ValueError):
-        ModelManager([], FrameStore(range(6)), lambda r: None, engines_dir="/home/tonyho/model/jetson_bundle/engines")
+        ModelManager([], FrameStore(range(6)), lambda r: None, engines_dir="/home/tonyho/model/jetson_bundle/engines",
+                     protected_dirs=["/home/tonyho/model"])

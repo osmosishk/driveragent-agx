@@ -32,14 +32,16 @@ from typing import Iterable
 
 log = logging.getLogger("dashboard.auth")
 
-REALM = "agx02-dashboard"
+# The realm is "<node_name>-dashboard" (dashboard/app.py gives it; common/machine.py node_name). This is the
+# value when no realm is given.
+REALM = "agx-dashboard"
 
-# IPv4 only (the socket is IPv4: config bind 0.0.0.0). Same list as config/dashboard.yaml and
+# IPv4 only (the socket is IPv4: config bind 0.0.0.0). Same list as config/templates/dashboard.yaml and
 # dashboard/config.py. Docker bridges (172.16.0.0/12), 192.168.0.0/16 and link-local are NOT allowed.
+# ops/install.sh adds the private IPv4 subnets of the unit (for example its LAN) to config/dashboard.yaml.
 DEFAULT_ALLOW = (
     "127.0.0.0/8",     # loopback
-    "10.0.0.0/24",     # eno1 LAN
-    "10.42.0.0/30",    # future Link C (direct cable to the RK3588)
+    "10.42.0.0/30",    # Link C (direct cable to the RK3588)
     "100.64.0.0/10",   # tailscale tailnet: the RK3588 and the operator devices
 )
 
@@ -156,8 +158,9 @@ def check_basic(header_value: bytes | None, user: str, password: str) -> bool:
 
 class GuardMiddleware:
     def __init__(self, app, user: str, password: str, allow_cidrs: Iterable[str], pairing=None,
-                 fails: LoginFails | None = None, audit=None, vehicle=None):
+                 fails: LoginFails | None = None, audit=None, vehicle=None, realm: str = REALM):
         self.app = app
+        self.realm = _CTRL_RE.sub("", str(realm or REALM)).replace('"', "").replace("\\", "")[:64] or REALM
         self.user = user
         self.password = password
         self.networks = parse_networks(allow_cidrs)
@@ -259,7 +262,7 @@ class GuardMiddleware:
                     if scope["type"] == "http":
                         return await self._send_json(
                             send, 401, {"ok": False, "reason": self.pairing.token_refusal(auth[7:].strip())},
-                            [(b"www-authenticate", f'Bearer realm="{REALM}"'.encode())])
+                            [(b"www-authenticate", f'Bearer realm="{self.realm}"'.encode())])
                     return
         elif check_basic(auth, self.user, self.password):
             kind = "basic"
@@ -271,7 +274,7 @@ class GuardMiddleware:
             if scope["type"] == "http":
                 return await self._send_plain(
                     send, 401, b"Unauthorized\n",
-                    [(b"www-authenticate", f'Basic realm="{REALM}"'.encode())])
+                    [(b"www-authenticate", f'Basic realm="{self.realm}"'.encode())])
             return
         self.fails.ok(str(ip))
         st = scope.setdefault("state", {})

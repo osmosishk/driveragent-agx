@@ -449,8 +449,8 @@ def test_status_v3_power_and_setting(ctx, tmp_path):
     finally:
         sub.close(0)
         sp.stop()
-    # the repository default is 2 (DA01 rk-agxlink must accept v3 first)
-    assert stm.parse_status_settings(os.path.join(os.path.dirname(sch.DEFAULT_PROTO), "..", "config",
+    # the repository default (config template) is 2 (DA01 rk-agxlink must accept v3 first)
+    assert stm.parse_status_settings(os.path.join(os.path.dirname(sch.DEFAULT_PROTO), "..", "config", "templates",
                                                   "infer.yaml")) == 2
 
 

@@ -1,17 +1,20 @@
 """Running processes of the OLD DriverAgent stack (read-only, psutil). Nothing is stopped.
 
-No systemd unit exists for the old stack: it starts by hand (~/s.sh -> start.py).
+The folder of the old stack is the config key old_stack_root (config/dashboard.yaml). null = no old stack on this
+machine: the view is empty with the reason "not configured". Example: /home/<user>/driveragent; there the old stack
+has no systemd unit and starts by hand (~/s.sh -> start.py).
 """
 from __future__ import annotations
 
 import os
 import time
 
-OLD_ROOT = "/home/tonyho/driveragent"
 # a process matches when its command line contains one of these texts
 PATTERNS = ("camtest", "ui.ui", "control.py", "control-ami", "carstate.readami", "logger.encoder_265",
             "model/driverguard/run.py", "model/system1/run.py")
 NOTE = "No systemd unit exists for the old DriverAgent stack; it starts by hand (~/s.sh)."
+NOT_CONFIGURED = "not configured"
+NOTE_OFF = "No old DriverAgent stack is configured on this machine (config/dashboard.yaml old_stack_root)."
 # Legacy reference copies of the old DriverGuard code in this project (infer/models/legacy/driverguard/).
 # They contain old control code: they must never run. A process matches when one of these files is
 # run as a script (absolute path, or relative to the process cwd) or as a module (python -m).
@@ -21,18 +24,20 @@ LEGACY_MODULES = tuple("infer.models.legacy.driverguard." + n[:-3] for n in LEGA
 _CWD_NEEDED = ("start.py",) + LEGACY_SCRIPTS
 
 
-def _in_old_root(p: str) -> bool:
-    # "/home/tonyho/driveragent-agx" is NOT the old root
-    return p == OLD_ROOT or p.startswith(OLD_ROOT + "/")
+def _in_old_root(p: str, old_root: str) -> bool:
+    # "<old root>-agx" (for example this project next to the old one) is NOT the old root
+    root = os.path.normpath(old_root)
+    return p == root or p.startswith(root.rstrip("/") + "/")
 
 
-def match(cmdline: list[str], cwd: str | None) -> str | None:
-    """Return the matched pattern or None."""
+def match(cmdline: list[str], cwd: str | None, old_root: str | None = None) -> str | None:
+    """Return the matched pattern or None. old_root: the folder of the old stack (config old_stack_root); None =
+    start.py is not matched."""
     joined = " ".join(cmdline)
     for a in cmdline:
-        if os.path.basename(a) == "start.py":
+        if old_root and os.path.basename(a) == "start.py":
             full = a if os.path.isabs(a) else os.path.join(cwd or "", a)
-            if _in_old_root(os.path.normpath(full)):
+            if _in_old_root(os.path.normpath(full), old_root):
                 return "start.py"
     for a in cmdline:
         if a in LEGACY_MODULES:
@@ -47,8 +52,12 @@ def match(cmdline: list[str], cwd: str | None) -> str | None:
     return None
 
 
-def find_old_processes() -> dict:
+def find_old_processes(old_root: str | None) -> dict:
+    """The processes of the old stack in old_root. old_root None or "": empty, error "not configured"."""
     t = time.time()
+    if not old_root:
+        return {"t": t, "processes": [], "error": NOT_CONFIGURED, "note": NOTE_OFF}
+    old_root = os.path.expanduser(str(old_root))
     try:
         import psutil
     except ImportError as e:
@@ -67,7 +76,7 @@ def find_old_processes() -> dict:
                     cwd = pr.cwd()
                 except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
                     cwd = None
-            m = match(cmd, cwd)
+            m = match(cmd, cwd, old_root)
             if m is None:
                 continue
             out.append({"pid": info["pid"], "user": info.get("username"), "match": m,

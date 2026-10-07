@@ -1,10 +1,11 @@
 """Register the four models of config/models.yaml as the first model store entries (version "1").
 
-  python -m tools.register_existing_models [--store ~/agx-models] [--force] [--dry-run]
+  python -m tools.register_existing_models --root OLD_MODEL_DIR [--store ~/agx-models] [--force] [--dry-run]
 
 Writes MODEL_STORE/<name>/1/manifest.yaml (schema agx-model-manifest/1, controller/manifest.py) for
-driverguard_yolopx, driverguard_dtcp, system1 and sparsedrive_convnext_orin. The old files stay at their place
-under /home/tonyho/model: the manifests name them by absolute path and this tool only reads them (sha256).
+driverguard_yolopx, driverguard_dtcp, system1 and sparsedrive_convnext_orin. --root is the old model folder (on
+AGX02: /home/tonyho/model); the files are below it (jetson_bundle/, sparsedrive/run/, system1/). The old files stay
+at their place: the manifests name them by absolute path and this tool only reads them (sha256).
 Facts (tensors, preprocessing, dates, notes) come from docs/MODELS.md, config/models.yaml and
 infer/models/legacy/driverguard/preprocess.py; the engine I/O was checked with tools.inspect_engines.
 
@@ -27,9 +28,10 @@ from controller import manifest as mf
 VERSION = "1"
 BLOCK = 1 << 20  # sha256 read size: 1 MiB
 
-JB = "/home/tonyho/model/jetson_bundle"
-SD = "/home/tonyho/model/sparsedrive/run"
-S1 = "/home/tonyho/model/system1"
+# folders below --root (the old model folder)
+JB = "jetson_bundle"
+SD = "sparsedrive/run"
+S1 = "system1"
 
 # Legacy YOLOPX class list (infer/models/legacy/driverguard/yolopx_postprocess.py:14, docs/MODELS.md 3.6).
 YOLOPX_CLASSES = ["person", "rider", "car", "bus", "truck", "bike", "motor", "traffic light", "traffic sign",
@@ -47,8 +49,18 @@ def _mtime_date(path: str) -> str:
     return datetime.date.fromtimestamp(os.stat(path).st_mtime).isoformat()
 
 
-def specs() -> list[dict]:
-    """Manifest dicts without sha256 values. A "date" of None is filled from the first file's mtime."""
+def specs(root: str) -> list[dict]:
+    """Manifest dicts without sha256 values. A "date" of None is filled from the first file's mtime.
+    root: the old model folder; the file paths are absolute paths below it."""
+    out = _specs()
+    for spec in out:
+        for f in spec["files"]:
+            f["path"] = os.path.join(os.path.abspath(os.path.expanduser(root)), f["path"])
+    return out
+
+
+def _specs() -> list[dict]:
+    """The specs with file paths relative to the old model folder."""
     return [
         {
             "name": "driverguard_yolopx",
@@ -232,13 +244,16 @@ def register(store: str, spec: dict, force: bool, dry_run: bool) -> tuple[int, s
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--root", required=True,
+                    help="the old model folder with jetson_bundle/, sparsedrive/run/ and system1/ "
+                         "(for example /home/<user>/model)")
     ap.add_argument("--store", default="~/agx-models", help="model store folder (default ~/agx-models)")
     ap.add_argument("--force", action="store_true", help="overwrite existing manifests")
     ap.add_argument("--dry-run", action="store_true", help="check and print, write nothing")
     a = ap.parse_args(argv)
     store = os.path.abspath(os.path.expanduser(a.store))
     rc = 0
-    for spec in specs():
+    for spec in specs(a.root):
         code, line = register(store, spec, a.force, a.dry_run)
         print(line, flush=True)
         rc = max(rc, code)

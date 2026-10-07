@@ -103,7 +103,10 @@ def test_light_default_dark_by_theme_and_saved_choice():
 
 # ---------------------------------------------------------------- shell, pages, inventory
 def test_title_no_external_url():
-    assert "<title>agx02 dashboard</title>" in PAGE
+    # a neutral title: the page sets "<page> · <node name> dashboard" from /api/health node_name
+    assert "<title>agx dashboard</title>" in PAGE
+    assert "agx02" not in PAGE.lower() and "agx02" not in APP.lower()
+    assert "h.node_name || h.hostname" in APP and "function powerPart(d)" in APP
     for name, text in (("index.html", PAGE), ("app.js", APP), ("router.js", ROUTER), ("style.css", STYLE),
                        ("tokens.css", TOKENS), ("tiles.js", (STATIC / "tiles.js").read_text())):
         assert "http://" not in text and "https://" not in text, name

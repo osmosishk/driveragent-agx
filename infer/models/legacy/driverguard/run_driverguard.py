@@ -1,5 +1,10 @@
 """DriverGuard entry point.
 
+REFERENCE CODE ONLY (copy of the old DriverGuard code, docs/MODELS.md): this project never runs it, and the
+dashboard reports it as an old process when it runs. The text below is the old text (paths of AGX02). The
+default folders come from the environment: DRIVERGUARD_DRIVERAGENT_ROOT (old stack) and DRIVERGUARD_BUNDLE_ROOT
+(old jetson_bundle); no machine path is in the code.
+
 YOLOPX (drivable area + lane mask + 10-class detection) + DTCP (4-waypoint
 trajectory + throttle/steer/brake) running off a single front camera at
 /tmp/cam0. Engines are the FP16 TRT engines already shipped in
@@ -16,8 +21,8 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_DRIVERAGENT_ROOT = "/home/tonyho/driveragent"
-DEFAULT_BUNDLE_ROOT = "/home/tonyho/model/jetson_bundle"
+DEFAULT_DRIVERAGENT_ROOT = os.environ.get("DRIVERGUARD_DRIVERAGENT_ROOT", "")
+DEFAULT_BUNDLE_ROOT = os.environ.get("DRIVERGUARD_BUNDLE_ROOT", "")
 DEFAULT_YOLOPX_ENGINE = os.path.join(ROOT, "engines", "yolopx_v2_fp16.engine")
 DEFAULT_DTCP_ENGINE = os.path.join(ROOT, "engines", "dtcp_v1_fp16.engine")
 DEFAULT_SCHEMA = os.path.join(DEFAULT_DRIVERAGENT_ROOT, "message", "message.capnp")

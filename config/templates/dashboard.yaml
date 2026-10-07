@@ -1,10 +1,17 @@
-# agx02 dashboard (read-only). Paths are relative to the project root.
+# AGX dashboard (read-only). Paths are relative to the project root.
+# Template: ops/install.sh copies this file to config/dashboard.yaml (only when that file is missing).
+# config/dashboard.yaml is machine data and is not in git.
+
+# Name of this unit: the page title, the auth realm "<node_name>-dashboard", the MQTT topic and the power
+# log part. null = the short host name of this machine.
+node_name: null
+
 port: 8700                 # if in use, the next free port is used (8701, ...)
 port_file: data/dashboard_port
 bind: "0.0.0.0"            # IPv4, all interfaces. Access is limited by allow_cidrs and HTTP Basic auth.
 env_file: .env             # AGX_DASH_USER / AGX_DASH_PASSWORD / AGX_MQTT_*
 # Plain HTTP + Basic auth: the password crosses the network on every request (also on SSE
-# reconnects). Use the page through tailscale (100.64.0.0/10) or loopback. Optional TLS: set both
+# reconnects). Use the page through a VPN (for example tailscale 100.64.0.0/10) or loopback. Optional TLS: set both
 # files (PEM) and the page is served as https.
 tls_certfile: null
 tls_keyfile: null
@@ -12,14 +19,14 @@ tls_keyfile: null
 # IP allowlist. The password is still needed from every address. IPv4 only: the socket is IPv4
 # (bind 0.0.0.0), so IPv6 entries have no effect. Not allowed: docker bridges (172.16.0.0/12,
 # includes docker0), 192.168.0.0/16 and link-local 169.254.0.0/16.
+# ops/install.sh adds the private IPv4 subnets of this unit (for example the LAN subnet).
 allow_cidrs:
   - 127.0.0.0/8            # loopback
-  - 10.0.0.0/24            # eno1 LAN
-  - 10.42.0.0/30           # future Link C (direct cable to the RK3588)
+  - 10.42.0.0/30           # Link C (direct cable to the RK3588)
   - 100.64.0.0/10          # tailscale tailnet: the RK3588 and the operator devices
 
 # The "RK link" card pings the paired board with the newest last_seen (its last_seen_addr) from
-# data/paired_boards.json, the one source of the board addresses on AGX02. The old key rk_ip is not used.
+# data/paired_boards.json, the one source of the board addresses on this AGX. The old key rk_ip is not used.
 
 link:
   ping_interval_s: 2
@@ -29,15 +36,19 @@ link:
   clock_http_ports_auto: [80, 8080, 8000]
   clock_interval_s: 30
 
-infer_status_endpoint: tcp://127.0.0.1:5562
+# The ports of agx-infer come from infer_config (below): null = tcp://127.0.0.1:<ports.internal> (status) and
+# tcp://127.0.0.1:<ports.admin> (admin socket of the model controller); 5562 / 5563 when the file has no port.
+infer_status_endpoint: null
+infer_admin_endpoint: null
 
 # Model controller (controller/, docs/MODEL_CONTROL_API.md). The store is not in git. The control token file
-# (mode 600, not in git) lets the DA01 rk console server call /api/models/* with "Authorization: Bearer".
+# (mode 600, not in git) is read only by the start-up migration of the old single board token.
 # control_mode is in control_config: only the owner changes that file.
 model_control: true
 model_store: ~/agx-models
 control_config: config/control.yaml
 control_token_file: data/control.token
+infer_config: config/infer.yaml   # ports of agx-infer (pairing info, status and admin endpoints)
 model_check_timeout_s: 180
 infer_stale_s: 3           # no agx-infer status for this time -> NO DATA (models and cameras)
 
@@ -45,6 +56,9 @@ infer_stale_s: 3           # no agx-infer status for this time -> NO DATA (model
 # and camera roles come from sources_config when the agx-infer status does not give them.
 models_config: config/models.yaml
 sources_config: config/sources.yaml
+# Folders that no part of this software writes (old engines, old models). The model controller refuses to build
+# into them and the model store must not be inside them. Example: [/home/<user>/model].
+protected_dirs: []
 # Camera tiles: frames that came after the last status message are not known. A camera with no
 # new frame shows NO SIGNAL when the status says so (age >= no_signal_s), or when the newest known
 # frame is older than max(no_signal_s, min(status interval + this jitter, no_signal_s + 0.5)).
@@ -57,40 +71,34 @@ camera_status_jitter_s: 0.3
 # (for example a timeout) is done again at the next periodic scan.
 engines:
   cache: data/engines_cache.json
-  scan_dirs: [/home/tonyho/model]   # also the engines of models_config are always read
+  scan_dirs: []           # more folders to scan, for example [/home/<user>/model]. The engines of
+                          # models_config are always read.
   scan_interval_s: 1800
   inspect_timeout_s: 120
 
 docker: true
 
+# Unit names: <unit_prefix>-dashboard, <unit_prefix>-infer, <unit_prefix>-sim (ops/install.sh --instance).
+unit_prefix: agx
 services:
-  agx_units: [agx-dashboard, agx-infer, agx-sim]
-  log_units: [agx-infer, agx-dashboard, agx-sim]   # whitelist for /api/services/logs. The system
-                                                  # unit is read when it is active, else the user unit.
+  # null = made from unit_prefix: agx_units [<p>-dashboard, <p>-infer, <p>-sim],
+  # log_units [<p>-infer, <p>-dashboard, <p>-sim]. log_units is the whitelist for /api/services/logs. The
+  # system unit is read when it is active, else the user unit.
+  agx_units: null
+  log_units: null
   unit_refresh_s: 5
   docker_refresh_s: 10
   docker_inspect_cache_s: 30
 
-# Units from the audit (docs/audit/agx_audit_agx02_20261005_210334/raw/
-# Custom_systemd_units__created_by_hand_.txt) plus docker.service. The coordinator may edit this list.
+# System units that the Services page shows (read-only). Add the units that matter on this machine.
 old_units:
-  # No systemd unit exists for the OLD DriverAgent stack: it starts by hand (~/s.sh -> start.py).
-  # Its only autostart item is the Docker container driveragent-valhalla (see "Docker containers").
-  # This list shows the units that matter for this inference node and for docs/CLEANUP_PROPOSAL.md.
-  - docker.service                       # runs driveragent-valhalla (old map service, MOVE TO RK3588)
-  - jtop.service                         # jetson-stats (health data source; KEEP)
-  - nvpmodel.service                     # power mode (KEEP)
-  - nvfancontrol.service                 # fan (KEEP)
-  - nvargus-daemon.service               # CSI camera daemon of JetPack (not used by FrameLink ingest)
-  - tailscaled.service                   # path to the RK3588 tonight (KEEP)
-  - ssh.service                          # remote access (KEEP)
-  - systemd-timesyncd.service            # clock (NTP); no PTP yet
-  - gdm.service                          # desktop (proposal: DISABLE)
-  - nxserver.service                     # NoMachine remote desktop (proposal: owner decides)
-  - openvpn@uk-ovpn-agent-20.service     # VPN; fails TLS handshake now (proposal: owner decides)
-  - snap.cups.cupsd.service              # printing (proposal: DISABLE)
-  - snapd.service                        # snap daemon (proposal: DISABLE last)
-  - packagekit.service                   # package updates (proposal: DISABLE)
+  - docker.service
+  - nvpmodel.service                     # power mode
+  - ssh.service                          # remote access
+
+# Processes of an OLD DriverAgent stack on this machine (Services page, read-only; nothing is stopped).
+# null = no old stack: the view is empty with the reason "not configured". Example: /home/<user>/driveragent.
+old_stack_root: null
 
 history:
   db: data/history.sqlite

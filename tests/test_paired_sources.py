@@ -645,5 +645,6 @@ def test_rk_ip_and_rk_allowed_sources_removed_from_config():
     from dashboard.config import DEFAULTS
     root = os.path.join(os.path.dirname(__file__), "..")
     assert "rk_ip" not in DEFAULTS
-    assert "rk_ip" not in (yaml.safe_load(open(os.path.join(root, "config", "dashboard.yaml"))) or {})
-    assert "rk_allowed_sources" not in (yaml.safe_load(open(os.path.join(root, "config", "sources.yaml"))) or {})
+    assert "rk_ip" not in (yaml.safe_load(open(os.path.join(root, "config", "templates", "dashboard.yaml"))) or {})
+    src = os.path.join(root, "config", "templates", "sources.yaml")
+    assert "rk_allowed_sources" not in (yaml.safe_load(open(src)) or {})

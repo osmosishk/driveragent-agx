@@ -213,9 +213,9 @@ def test_ingest_allowed_sources_config(caplog):
         parse_allowed_sources(["10.42.0.300"])
     with pytest.raises(ValueError):
         parse_allowed_sources(["::1"])
-    # the project config does not have the old key any more
+    # the config template does not have the old key any more
     import yaml
-    cfg = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), "..", "config", "sources.yaml")))
+    cfg = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), "..", "config", "templates", "sources.yaml")))
     assert "rk_allowed_sources" not in cfg
 
 

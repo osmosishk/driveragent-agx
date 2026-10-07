@@ -24,6 +24,7 @@ restarted.
 
 Engine rule: the configured engine is never written. When it does not load and an ONNX file exists,
 a new engine is built with trtexec into engines_dir (<name>_fp16.engine) and that engine is loaded.
+engines_dir must not be inside a protected folder (config/infer.yaml protected_dirs, for example the old engines).
 """
 from __future__ import annotations
 
@@ -35,6 +36,7 @@ import threading
 import time
 import traceback
 
+from common.machine import inside_protected
 from infer.models.adapters import get_adapter_class
 from infer.runner import FrameScheduler, ModelMetrics, ModelWorker
 
@@ -43,7 +45,6 @@ log = logging.getLogger("agx.infer.manager")
 PROJECT_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DEFAULT_ENGINES_DIR = os.path.join(PROJECT_DIR, "engines")
 TRTEXEC = "/usr/src/tensorrt/bin/trtexec"
-READ_ONLY_ROOTS = ("/home/tonyho/model",)
 GPU_MEM_NOTE = "estimate: engine file + activation + I/O"
 
 OFF, LOADED, RUNNING, FAILED, LOADING = "OFF", "LOADED", "RUNNING", "FAILED", "LOADING"
@@ -167,15 +168,15 @@ class ModelManager:
     def __init__(self, models_cfg, store, on_result, engines_dir: str = DEFAULT_ENGINES_DIR,
                  trtexec: str = TRTEXEC, build_timeout_s: float = 3600.0, fail_after_errors: int = 3,
                  warmup: bool = True, restart_backoff_s: float = 30.0,
-                 restart_backoff_max_s: float = 600.0):
+                 restart_backoff_max_s: float = 600.0, protected_dirs=()):
         if isinstance(models_cfg, dict):
             models_cfg = models_cfg.get("models") or []
         self.store = store
         self.on_result = on_result
         self.engines_dir = os.path.realpath(engines_dir)
-        for root in READ_ONLY_ROOTS:
-            if self.engines_dir == root or self.engines_dir.startswith(root + os.sep):
-                raise ValueError(f"engines_dir {engines_dir} is under the read-only folder {root}")
+        root = inside_protected(self.engines_dir, protected_dirs)   # config/infer.yaml protected_dirs
+        if root:
+            raise ValueError(f"engines_dir {engines_dir} is under the read-only folder {root}")
         self.trtexec = trtexec
         self.build_timeout_s = float(build_timeout_s)
         self.fail_after_errors = max(1, int(fail_after_errors))

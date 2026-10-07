@@ -422,7 +422,7 @@ def test_status_tick_with_real_receiver(ctx, tmp_path):
 def test_config_ports():
     import yaml
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    with open(os.path.join(root, "config", "infer.yaml")) as f:
+    with open(os.path.join(root, "config", "templates", "infer.yaml")) as f:
         cfg = yaml.safe_load(f)
     assert cfg["ports"]["rkinfo"] == 5564 and cfg["bind"]["rkinfo"] == "0.0.0.0"
     assert cfg["control_config"] == "config/control.yaml"

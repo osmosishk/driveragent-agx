@@ -25,6 +25,8 @@ from pathlib import Path
 
 import yaml
 
+from common.machine import inside_protected
+from common.machine import protected_dirs as protected_dirs_of
 from controller import audit, catalog
 from controller import manifest as mf
 from controller.admin_client import AdminClient
@@ -77,7 +79,13 @@ def _hms(t: float) -> str:
 
 class Controller:
     def __init__(self, store_root: str, repo_root: str, control_file: str, infer_client=None, check_runner=None,
-                 admin: AdminClient | None = None, trtexec: str = DEFAULT_TRTEXEC, watchdog_s: float = WATCHDOG_S):
+                 admin: AdminClient | None = None, trtexec: str = DEFAULT_TRTEXEC, watchdog_s: float = WATCHDOG_S,
+                 protected_dirs=()):
+        self.protected_dirs = protected_dirs_of(protected_dirs)   # never written (config protected_dirs)
+        bad = inside_protected(store_root, self.protected_dirs)
+        if bad:
+            raise ValueError(f"the model store {store_root} is inside the protected folder {bad} "
+                             "(config protected_dirs): choose another model_store")
         self.store = Store(store_root)
         self.repo_root = str(repo_root)
         self.control_file = str(control_file)
@@ -431,7 +439,7 @@ class Controller:
 
     def _do_build(self, change: dict, plan: dict) -> tuple[str, str | None]:
         m = plan["m"]
-        job = BuildJob(m, self.trtexec)
+        job = BuildJob(m, self.trtexec, protected_dirs=self.protected_dirs)
         self.jobs[m.key] = job
         job.start()
         job._thread.join()
@@ -454,8 +462,12 @@ def from_config(cfg: dict, project_root: Path, infer_client=None) -> Controller:
     store_root = os.path.expanduser(cfg.get("model_store") or "~/agx-models")
     cf = Path(cfg.get("control_config") or "config/control.yaml")
     control_file = cf if cf.is_absolute() else project_root / cf
+    # the test frame of the configured store (<model_store>/_testframes/front_1280x720.jpg, tools/model_check.py)
     runner = CheckRunner(store_root, str(project_root), sys.executable,
-                         timeout_s=float(cfg.get("model_check_timeout_s", 180)))
-    admin = AdminClient(cfg.get("infer_admin_endpoint") or "tcp://127.0.0.1:5563")
+                         timeout_s=float(cfg.get("model_check_timeout_s", 180)),
+                         frame=os.path.join(store_root, "_testframes", "front_1280x720.jpg"))
+    from dashboard.config import infer_admin_endpoint
+    # the config value, else tcp://127.0.0.1:<ports.admin of infer_config> (5563 when not given)
+    admin = AdminClient(infer_admin_endpoint(cfg))
     return Controller(store_root, str(project_root), str(control_file), infer_client, runner, admin,
-                      cfg.get("trtexec") or DEFAULT_TRTEXEC)
+                      cfg.get("trtexec") or DEFAULT_TRTEXEC, protected_dirs=cfg.get("protected_dirs") or [])

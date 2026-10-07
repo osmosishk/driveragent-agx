@@ -4,7 +4,7 @@ Files (data/ is git-ignored; each file mode 600, owned by this user; written onl
 directory + fsync + os.replace, while holding fcntl.flock on <file>.lock):
   data/paired_boards.json  {"schema": "agx-paired-boards/1", "seq": N, "boards": [{id, name, addresses, token_sha256,
                             paired_t, last_seen_t, last_seen_addr, source}]}
-                           THE ONE SOURCE OF THE BOARD ADDRESSES ON AGX02 (agx-infer: FrameLink source filter and the
+                           THE ONE SOURCE OF THE BOARD ADDRESSES ON THIS AGX (agx-infer: FrameLink source filter and the
                            RkCameraInfo allowlist = the union of all "addresses"; board_addresses() below).
                            Only the SHA-256 of a token is stored. seq +1 when a board is added or removed or when its
                            addresses or token change; a last_seen update alone does not change seq.
@@ -318,7 +318,7 @@ class PairingStore:
         if isinstance(token, bytes):
             token = token.decode("ascii", "replace")
         token = str(token or "").strip()
-        again = "pair the board again with a new code (AGX02 dashboard: Settings, RK link)"
+        again = "pair the board again with a new code (AGX dashboard: Settings, RK link)"
         if self.problem:
             return f"this AGX accepts no board token now: the paired boards file has a problem ({self.problem})"
         if len(token) >= TOKEN_MIN_LEN:
@@ -438,7 +438,7 @@ class PairingStore:
     def set_accepted(self, address: str) -> dict:
         address = (address or "").strip()
         if address and ipv4(address) != address:
-            raise PairingError(400, f"{address!r} is not an IPv4 address. Use an address like 10.0.0.208, "
+            raise PairingError(400, f"{address!r} is not an IPv4 address. Use an address like 10.42.0.2, "
                                     "or leave the field empty")
         with self._lock, locked(self.settings_path):
             atomic_write_json(self.settings_path, {"accepted_board_address": address})
@@ -494,7 +494,7 @@ class PairingStore:
             self._expire()
             c = self._code
             if c is None:
-                raise PairingError(403, "no pairing code is open on this AGX: make a code on the AGX02 dashboard "
+                raise PairingError(403, "no pairing code is open on this AGX: make a code on the AGX dashboard "
                                         "(Settings, RK link)")
             match = secrets.compare_digest(given, c["hash"].encode())
             if match:
@@ -504,7 +504,7 @@ class PairingStore:
                 why = {"used": "this pairing code was used already",
                        "expired": f"this pairing code expired (it works for {self._ttl_text(c['ttl_s'])})",
                        "cancelled": "this pairing code was cancelled after too many wrong codes"}.get(c["state"], "this code stopped")
-                raise PairingError(403, why + ": make a new code on the AGX02 dashboard (Settings, RK link)")
+                raise PairingError(403, why + ": make a new code on the AGX dashboard (Settings, RK link)")
             if c["state"] == "open":
                 c["wrong"] += 1
                 if c["wrong"] >= CODE_MAX_WRONG:

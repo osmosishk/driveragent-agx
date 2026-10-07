@@ -1,4 +1,4 @@
-"""FastAPI app factory for the agx02 dashboard. Read routes, the model controller (dashboard/control_api.py) and the
+"""FastAPI app factory for the AGX dashboard. Read routes, the model controller (dashboard/control_api.py) and the
 pairing of RK boards (dashboard/pairing_api.py, docs/PAIRING_API.md) are the only write routes."""
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 
 from common.env import PROJECT_ROOT, get, load_env
+from common.machine import node_name
 from common.pairing_store import PairingStore
 from dashboard import control_api, pairing_api, power_api
 from dashboard.auth import GuardMiddleware, LoginFails
@@ -23,7 +24,7 @@ from dashboard.collectors.health import HealthCollector, worst
 from dashboard.collectors.infer_status import InferStatusClient
 from dashboard.collectors.link import LinkMonitor
 from dashboard.collectors.services import ServicesCollector
-from dashboard.config import resolve_path
+from dashboard.config import infer_status_endpoint, resolve_path
 from dashboard.history import History
 from dashboard.infer_views import InferViews
 from dashboard.mqtt_pub import start_mqtt
@@ -86,15 +87,13 @@ class Hub:
         self.health = HealthCollector(cfg)
         self.link = LinkMonitor(cfg)
         self.services = ServicesCollector(cfg)
-        self.infer = InferStatusClient(cfg["infer_status_endpoint"], cfg.get("infer_stale_s", 3))
+        self.node = node_name(cfg)   # page title, auth realm, MQTT topic, power log part
+        self.infer = InferStatusClient(infer_status_endpoint(cfg), cfg.get("infer_stale_s", 3))
         h = cfg["history"]
         self.history = History(resolve_path(h["db"]), h["max_mb"], h["memory_s"], h["db_step_s"],
                                h["db_keep_s"], h["cleanup_interval_s"])
         ec = cfg.get("engines") or {}
-        scan_dirs = ec.get("scan_dirs")
-        if scan_dirs is None:
-            from tools.inspect_engines import DEFAULT_SCAN
-            scan_dirs = list(DEFAULT_SCAN)
+        scan_dirs = ec.get("scan_dirs") or []   # null = no folder: only the engines of models_config
         self.views = InferViews(self.infer, None, resolve_path(cfg.get("models_config")),
                                 resolve_path(cfg.get("sources_config")), cfg.get("infer_stale_s", 3),
                                 cfg.get("camera_status_jitter_s", 0.3))
@@ -148,7 +147,7 @@ class Hub:
         except Exception as e:  # the dashboard must keep running without the power log
             log.exception("power log start failed")
             self.power.error = f"power log start failed: {e}"
-        self.mqtt = start_mqtt(env, self.health_doc, self.cfg.get("mqtt_interval_s", 5))
+        self.mqtt = start_mqtt(env, self.health_doc, self.cfg.get("mqtt_interval_s", 5), node=self.node)
 
     def stop(self):
         for c in (self.mqtt, self.controller, self.health, self.power, self.link, self.services, self.engines,
@@ -211,6 +210,7 @@ class Hub:
         doc = {
             "schema": HEALTH_SCHEMA,
             "hostname": s["hostname"],
+            "node_name": self.node,
             "time": round(s["t"], 3),
             "time_iso": s["time_iso"],
             "age_s": age,
@@ -265,7 +265,7 @@ def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True
         yield
         hub.stop()
 
-    app = FastAPI(title="agx02 dashboard", docs_url=None, redoc_url=None, openapi_url=None,
+    app = FastAPI(title=f"{hub.node} dashboard", docs_url=None, redoc_url=None, openapi_url=None,
                   lifespan=lifespan)
     app.state.hub = hub
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -386,7 +386,7 @@ def create_app(cfg: dict, env: dict | None = None, start_collectors: bool = True
     # add_middleware puts the newest one outside: SecurityHeaders is outermost, so the
     # 401/403 replies of GuardMiddleware also get the security headers.
     app.add_middleware(GuardMiddleware, user=user, password=password, allow_cidrs=allow,
-                       pairing=pairing, fails=fails, audit=app.state.pair_audit,
+                       realm=f"{hub.node}-dashboard", pairing=pairing, fails=fails, audit=app.state.pair_audit,
                        vehicle=app.state.pair_vehicle_refusal)
     app.add_middleware(SecurityHeaders)
     return app

@@ -10,6 +10,9 @@ A model is READY only when, in this order (the first failure stops the check, la
 
   python -m tools.model_check <version folder> [--frame <jpg>] [--json]
 
+Test frame: --frame, else <store>/_testframes/front_1280x720.jpg of the store of the version folder
+(<store>/<name>/<version>); the controller gives the frame of its configured model store.
+
 Output: the last stdout line is "CHECK:" + JSON (see run_check). Exit code 0 = ok, 1 = a check failed,
 2 = usage error. Without --json, a readable list of the checks is printed before that line.
 Nothing is written anywhere (the old engine folders are only read).
@@ -27,8 +30,20 @@ import time
 import numpy as np
 
 from controller import manifest as mf
+from controller.store import DEFAULT_ROOT
 
-DEFAULT_FRAME = os.path.expanduser("~/agx-models/_testframes/front_1280x720.jpg")
+TEST_FRAME = os.path.join("_testframes", "front_1280x720.jpg")     # below the model store
+DEFAULT_FRAME = os.path.join(os.path.expanduser(DEFAULT_ROOT), TEST_FRAME)   # the frame of the default store
+
+
+def store_frame(store_root: str) -> str:
+    """The test frame of a model store: <store>/_testframes/front_1280x720.jpg."""
+    return os.path.join(os.path.expanduser(str(store_root)), TEST_FRAME)
+
+
+def default_frame(folder: str) -> str:
+    """The test frame of the store that holds this version folder (<store>/<name>/<version>)."""
+    return store_frame(os.path.dirname(os.path.dirname(os.path.abspath(folder))))
 CHECKS = ("sha256", "engine_load", "io_match", "adapter", "gpu_memory", "inference")
 GPU_RESERVE_MB = 512
 MB = 1 << 20
@@ -305,8 +320,10 @@ class _Run:
                 pass
 
 
-def run_check(folder: str, frame_path: str = DEFAULT_FRAME) -> dict:
-    """Run all checks of one version folder. Returns the CHECK dict (never raises for a model problem)."""
+def run_check(folder: str, frame_path: str | None = None) -> dict:
+    """Run all checks of one version folder. Returns the CHECK dict (never raises for a model problem).
+    frame_path None: the test frame of the store of the folder (default_frame)."""
+    frame_path = frame_path or default_frame(folder)
     t0 = time.monotonic()
     m = mf.load(folder)
     if m.errors:
@@ -334,13 +351,14 @@ def run_check(folder: str, frame_path: str = DEFAULT_FRAME) -> dict:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m tools.model_check", description=__doc__.splitlines()[0])
     ap.add_argument("folder", help="model version folder (with manifest.yaml)")
-    ap.add_argument("--frame", default=DEFAULT_FRAME, help=f"test frame JPEG (default {DEFAULT_FRAME})")
+    ap.add_argument("--frame", default=None,
+                    help=f"test frame JPEG (default <store>/{TEST_FRAME} of the store of the folder)")
     ap.add_argument("--json", action="store_true", help="print only the CHECK: line")
     a = ap.parse_args(argv)
     if not os.path.isdir(a.folder):
         print(f"model_check: {a.folder} is not a folder", file=sys.stderr)
         return 2
-    out = run_check(a.folder, os.path.expanduser(a.frame))
+    out = run_check(a.folder, os.path.expanduser(a.frame) if a.frame else None)
     if not a.json:
         for c in out["checks"]:
             mark = {True: "OK  ", False: "FAIL", None: "--  "}[c["ok"]]

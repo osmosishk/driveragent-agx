@@ -1,10 +1,10 @@
-"""Power sources of AGX02 (plug-in parts of the power log, interface: common/powerlog.py PowerSource).
+"""Power sources of the AGX (plug-in parts of the power log, interface: common/powerlog.py PowerSource).
 
 jetson_rails: the on-board INA3221 sensors of the Jetson AGX Orin module, read from sysfs (no tegrastats process).
-On AGX02 the rails are VDD_GPU_SOC, VDD_CPU_CV, VIN_SYS_5V0 (1-0040) and VDDQ_VDD2_1V8AO (1-0041). There is no
-VDD_IN rail, so the supply input of the carrier board is NOT measured: the total is the sum of the module rails and
-reads less than a meter at the supply input (the owner can set a correction factor on the pages). The same rail
-values are in tegrastats (tegrastats shows 3 of the 4 rails).
+On the AGX Orin module (example: agx02) the rails are VDD_GPU_SOC, VDD_CPU_CV, VIN_SYS_5V0 (1-0040) and
+VDDQ_VDD2_1V8AO (1-0041). There is no VDD_IN rail, so the supply input of the carrier board is NOT measured: the
+total is the sum of the module rails and reads less than a meter at the supply input (the owner can set a correction
+factor on the pages). The same rail values are in tegrastats (tegrastats shows 3 of the 4 rails).
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import glob
 import os
 import time
 
+from common.machine import short_hostname
 from common.powerlog import NO_SENSOR, SENSOR, PowerSource, Reading
 
 INA_GLOBS = ("/sys/bus/i2c/drivers/ina3221/*/hwmon/hwmon*",)
@@ -30,7 +31,8 @@ class JetsonRails(PowerSource):
     the module has none). Channel list found once (labels do not change while the machine runs)."""
     name = "jetson_rails"
 
-    def __init__(self, part: str = "agx02", globs: tuple[str, ...] = INA_GLOBS) -> None:
+    def __init__(self, part: str | None = None, globs: tuple[str, ...] = INA_GLOBS) -> None:
+        part = part or short_hostname()   # default: the node name = the short host name
         self.part, self.globs = part, globs
         self.channels: list[tuple[str, str, str]] = []      # (rail name, in path, curr path)
         self.found = False

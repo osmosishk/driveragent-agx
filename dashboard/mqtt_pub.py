@@ -2,7 +2,8 @@
 
 DISABLED by default. When AGX_MQTT_ENABLED != 1 or AGX_MQTT_HOST is empty, start_mqtt() returns
 None and nothing is imported or opened (no socket). Credentials are never logged.
-Topic: <AGX_MQTT_TOPIC_PREFIX>/agx02/health (prefix optional).
+Topic: <AGX_MQTT_TOPIC_PREFIX>/<node>/health (prefix optional; node = config node_name, default the short host
+name, common/machine.py).
 
 Rule R11: enabling MQTT sends data off this machine. Owner approval is needed before you enable it.
 When AGX_MQTT_USER is set and AGX_MQTT_TLS is not 1, the publisher does not start (the user name
@@ -18,6 +19,7 @@ import threading
 from typing import Callable
 
 from common.env import get, truthy
+from common.machine import short_hostname
 
 log = logging.getLogger("dashboard.mqtt")
 
@@ -33,7 +35,8 @@ def credentials_without_tls(env: dict) -> bool:
 
 class MqttPublisher:
     def __init__(self, env: dict, health_fn: Callable[[], dict], interval_s: float = 5.0,
-                 node: str = "agx02"):
+                 node: str | None = None):
+        node = node or short_hostname()
         if credentials_without_tls(env):
             raise ValueError(CLEAR_TEXT_REFUSED)
         import paho.mqtt.client as mqtt  # imported only when enabled
@@ -84,13 +87,14 @@ class MqttPublisher:
             pass
 
 
-def start_mqtt(env: dict, health_fn: Callable[[], dict], interval_s: float = 5.0) -> MqttPublisher | None:
+def start_mqtt(env: dict, health_fn: Callable[[], dict], interval_s: float = 5.0,
+               node: str | None = None) -> MqttPublisher | None:
     if not truthy(get(env, "AGX_MQTT_ENABLED")) or not get(env, "AGX_MQTT_HOST"):
         log.info("mqtt disabled (AGX_MQTT_ENABLED!=1 or AGX_MQTT_HOST empty)")
         return None
     if credentials_without_tls(env):
         log.error(CLEAR_TEXT_REFUSED)
         return None
-    pub = MqttPublisher(env, health_fn, interval_s)
+    pub = MqttPublisher(env, health_fn, interval_s, node=node)
     pub.start()
     return pub

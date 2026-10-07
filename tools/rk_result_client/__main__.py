@@ -2,13 +2,14 @@
 message, and measure the latencies.
 
   python -m tools.rk_result_client --host 127.0.0.1 [--results-port 5560] [--status-port 5561]
-      [--schema /home/tonyho/driveragent-agx/proto/agx_infer.capnp]
-      [--envelope-dir /home/tonyho/driveragent-agx/common] [--seconds N] [--print]
+      [--schema <repo>/proto/agx_infer.capnp]
+      [--envelope-dir <repo>/common] [--seconds N] [--print]
       [--json out.json] [--expect-cams 0,1,2,3,4,5]
 
 Dependencies: pyzmq, pycapnp, the schema file (.capnp) and dabus_envelope.py (the RK reference
 envelope, loaded from --envelope-dir). This file imports no other project code, so you can copy it
-to the RK3588 and run it as "python3 __main__.py ...".
+to the RK3588 and run it as "python3 __main__.py ..." (then give --schema and --envelope-dir: the defaults are
+the folders of the repo that holds this file).
 
 Per message (results and status):
   1. dabus_envelope.unpack: length >= 32, magic 0xDA5E, version 1, len field, CRC-32C.
@@ -54,8 +55,9 @@ from collections import Counter, defaultdict, deque
 import capnp  # pycapnp
 import zmq
 
-DEFAULT_SCHEMA = "/home/tonyho/driveragent-agx/proto/agx_infer.capnp"
-DEFAULT_ENVELOPE_DIR = "/home/tonyho/driveragent-agx/common"
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+DEFAULT_SCHEMA = os.path.join(REPO, "proto", "agx_infer.capnp")
+DEFAULT_ENVELOPE_DIR = os.path.join(REPO, "common")
 RESULT_STRUCT = "AgxPerceptionResult"
 STATUS_STRUCT = "AgxInferStatus"
 SRC_AGX = 1

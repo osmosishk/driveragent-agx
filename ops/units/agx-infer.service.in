@@ -1,0 +1,24 @@
+# @INSTANCE@-infer: driveragent-agx inference node (FrameLink in -> TensorRT -> ZMQ results and status).
+# systemd USER unit. ops/install.sh makes this file from ops/units/agx-infer.service.in. Do not edit it here:
+# change the template and run ops/install.sh again. Remove it with ops/uninstall.sh --instance @INSTANCE@.
+# The node only reads cameras over UDP and publishes results. It has no CAN access by design.
+[Unit]
+Description=driveragent-agx inference node (@INSTANCE@-infer, @REPO_TEXT@)
+StartLimitIntervalSec=120
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+# PWD: pycapnp reads PWD. Without it, capnp writes a warning in the log.
+Environment="PWD=@REPO@"
+Environment=PYTHONUNBUFFERED=1
+Environment="PYTHONPATH=@REPO@"
+@NOUSERSITE_LINE@
+ExecStart="@PYTHON@" -m infer.main --config "@REPO@/config/infer.yaml"
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

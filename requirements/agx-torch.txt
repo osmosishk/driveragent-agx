@@ -1,0 +1,23 @@
+# PyTorch for Jetson (JetPack 6, CUDA 12.6) and its dependencies, with fixed versions.
+# ops/install.sh installs this file FIRST, with only the Jetson index:
+#   .venv/bin/python -m pip install --index-url https://pypi.jetson-ai-lab.io/jp6/cu126 -r requirements/agx-torch.txt
+# (option --torch-index URL of ops/install.sh). Do not add PyPI as an extra index here: PyPI has a torch 2.8.0
+# wheel for aarch64 WITHOUT CUDA, and pip prefers its manylinux tag to the Jetson wheel (tag linux_aarch64).
+# The Jetson index also gives the other packages of this file (it mirrors PyPI).
+#
+# Source of the versions: the working AGX02 (Jetson AGX Orin 64 GB, JetPack 6.2.1, L4T R36.4.7, Python 3.10.12),
+# 2026-10-08: torch-2.8.0-cp310-cp310-linux_aarch64.whl of the index above
+# (sha256 62a1beee9f2f147076a974d2942c90060c12771c94740830327cae705b2595fc in the index), and the dependency
+# closure of torch from the installed metadata.
+# The code uses torch only for CUDA memory of the TensorRT engines (infer/models/trt_engine.py, manager.py,
+# tools/model_check.py). torchvision, torch_tensorrt and pycuda are NOT needed.
+torch==2.8.0
+filelock==3.25.2
+fsspec==2026.3.0
+jinja2==3.1.6
+# MarkupSafe 2.0.1 = the apt package python3-markupsafe on AGX02. pip uses the apt package when it is there.
+markupsafe==2.0.1
+mpmath==1.3.0
+networkx==3.4.2
+sympy==1.14.0
+typing-extensions==4.15.0

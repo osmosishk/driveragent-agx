@@ -47,7 +47,7 @@ def bind_first_free(host: str, start: int, tries: int = 50) -> socket.socket:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="agx02 dashboard (read-only)")
+    ap = argparse.ArgumentParser(description="AGX dashboard (read-only)")
     ap.add_argument("--config", default="config/dashboard.yaml")
     ap.add_argument("--port", type=int, default=None, help="override config port")
     ap.add_argument("--port-file", default=None, help="override config port_file")

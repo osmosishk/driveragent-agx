@@ -1,0 +1,56 @@
+# Python packages of the venv (.venv), with fixed versions. ops/install.sh installs this file AFTER
+# requirements/agx-torch.txt, from PyPI:
+#   PYTHONNOUSERSITE=1 .venv/bin/python -m pip install -r requirements/agx-venv.txt
+#
+# The venv uses the system packages (python3 -m venv --system-site-packages). These come from JetPack / apt,
+# NEVER from pip (ops/preflight.sh checks them):
+#   tensorrt 10.3.0 (python3-libnvinfer), cv2 / OpenCV 4.10.0 (JetPack), gi / PyGObject 3.42.1 + GStreamer
+#   (python3-gi, nvv4l2decoder), yaml / PyYAML 5.4.1 (python3-yaml), psutil 5.9.0 (python3-psutil),
+#   PIL / Pillow 9.0.1 (python3-pil, only for tests).
+# The user site (~/.local) is NOT used: the units set PYTHONNOUSERSITE=1 (ops/install.sh --user-site changes this).
+#
+# Source of the versions: the working AGX02 (JetPack 6.2.1, Python 3.10.12), 2026-10-08. The list is the
+# dependency closure (installed metadata) of the packages that the code imports: fastapi, uvicorn, starlette,
+# pydantic, pyzmq, pycapnp, numpy, onnx, crc32c, paho-mqtt, httpx (tests), pytest (tests).
+# pip 22.0.2 and setuptools 59.6.0 come with "python3 -m venv"; they are not pinned here.
+
+# Dashboard (FastAPI + uvicorn)
+fastapi==0.142.2
+annotated-doc==0.0.4
+opentelemetry-api==1.45.0
+starlette==1.7.0
+anyio==4.13.0
+exceptiongroup==1.3.1
+idna==3.3
+pydantic==2.13.5
+pydantic-core==2.46.5
+annotated-types==0.8.0
+typing-inspection==0.4.4
+typing-extensions==4.15.0
+uvicorn==0.54.0
+click==8.3.1
+h11==0.16.0
+paho-mqtt==2.1.0
+
+# Inference node, link and model controller
+numpy==1.26.4
+pyzmq==27.1.0
+pycapnp==2.2.0
+crc32c==2.9.post0
+onnx==1.21.0
+protobuf==6.31.1
+ml-dtypes==0.5.4
+
+# Tests (pytest, httpx test client)
+pytest==9.1.1
+iniconfig==2.3.0
+packaging==25.0
+pluggy==1.6.0
+pygments==2.20.0
+tomli==2.4.1
+httpx==0.28.1
+httpcore==1.0.9
+# certifi 2020.6.20 = the apt package python3-certifi on AGX02. pip uses the apt package when it is there.
+certifi==2020.6.20
+# Optional, only for the QuickJS page test (tests skip it when it is missing).
+quickjs==1.19.4

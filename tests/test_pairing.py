@@ -51,8 +51,10 @@ def env(tmp_path):
     """Config with temporary paths; returns a factory of apps."""
     from dashboard.config import load_config
 
-    cfg = load_config("config/dashboard.yaml")
-    cfg.update({"model_store": str(tmp_path / "store"), "control_config": str(tmp_path / "control.yaml"),
+    cfg = load_config("config/templates/dashboard.yaml")
+    cfg["allow_cidrs"] = cfg["allow_cidrs"] + ["10.0.0.0/24"]   # the LAN of the test boards (ops/install.sh adds it)
+    cfg.update({"infer_config": "config/templates/infer.yaml",
+                "model_store": str(tmp_path / "store"), "control_config": str(tmp_path / "control.yaml"),
                 "control_token_file": str(tmp_path / "control.token"),
                 "paired_boards_file": str(tmp_path / "paired_boards.json"),
                 "link_settings_file": str(tmp_path / "link_settings.json"),

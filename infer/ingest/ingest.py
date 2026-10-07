@@ -266,7 +266,9 @@ class Ingest:
         if "rk_allowed_sources" in self.cfg:
             log.info("config key rk_allowed_sources is not used any more: the board addresses come from "
                      "data/paired_boards.json")
-        cams_cfg = {int(c["cam"]): c for c in self.cfg.get("cameras", [])}
+        cams_cfg = {int(c["cam"]): c for c in (self.cfg.get("cameras") or [])}
+        # camera N listens on its own "port", else on base_port + N (config/sources.yaml; default 6000)
+        base_port = int(self.cfg.get("base_port") or fl.BASE_PORT)
         self.cams = list(range(6))  # always six cameras, even without config / signal
         self.store = FrameStore(self.cams, stale_s=float(self.cfg.get("stale_s", 0.5)),
                                 no_signal_s=float(self.cfg.get("no_signal_s", 1.0)))
@@ -277,7 +279,7 @@ class Ingest:
             c = cams_cfg.get(cam, {})
             # rk mode: the DA01 rk-camd camera name (role_rk) when present; else the old-stack role
             role = (c.get("role_rk") if self.mode == "rk" else None) or c.get("role", ROLES[cam])
-            port = int(c.get("port", fl.BASE_PORT + cam))
+            port = int(c.get("port") or base_port + cam)
             m = CameraMetrics(cam, role, port if self.mode != "file" else None, self.mode,
                               self.store, expect_simulated=expect_sim)
             self.metrics[cam] = m

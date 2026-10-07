@@ -31,10 +31,10 @@ Short paths have these roots:
 Test command (run from `/home/tonyho/driveragent-agx`):
 
 ```
-PYTHONPATH=. .venv/bin/python -m tools.inspect_engines
+PYTHONPATH=. .venv/bin/python -m tools.inspect_engines --scan /home/tonyho/model
 ```
 
-The tool deserializes each engine in its own subprocess (`tools/inspect_engines.py:1-7`). It scans `/home/tonyho/model` for `.engine`, `.trt` and `.plan` files.
+The tool deserializes each engine in its own subprocess (`tools/inspect_engines.py:1-7`). It scans the `--scan` folders (here `/home/tonyho/model`) for `.engine`, `.trt` and `.plan` files. It has no default folder.
 
 Real output, copied verbatim from `docs/research/engines_io.txt`:
 

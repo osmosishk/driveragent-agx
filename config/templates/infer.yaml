@@ -1,4 +1,6 @@
 # AGX inference node (infer/main.py). Paths are absolute or relative to the project root.
+# Template: ops/install.sh copies this file to config/infer.yaml (only when that file is missing).
+# config/infer.yaml is machine data and is not in git.
 
 sources_config: config/sources.yaml     # ingest (cameras, mode)
 models_config: config/models.yaml       # model list (coordinator file); used when there is no last good set
@@ -6,6 +8,8 @@ model_store: ~/agx-models               # model store of the controller (control
 start_set: last_good                    # last_good: <model_store>/_state/last_good.json when it has a set, else
                                         # models_config | models_yaml: always models_config
 engines_dir: engines                    # new engines are built here (old engines are read-only)
+protected_dirs: []                      # folders that are never written (old engines). engines_dir must not be
+                                        # inside them. Example: [/home/<user>/model]
 proto: proto/agx_infer.capnp            # AgxPerceptionResult + AgxInferStatus + RkCameraInfo, schema version 3
 control_config: config/control.yaml     # control mode for the status when <model_store>/_state/catalog.json is missing
 
@@ -14,7 +18,7 @@ ports:
   status: 5561       # ZMQ PUB AgxInferStatus, 1 Hz (RK3588 connects)
   internal: 5562     # ZMQ PUB internal JSON status + JPEG snapshots (dashboard), localhost only
   admin: 5563        # ZMQ REP admin socket (model stop/start, raw frames), localhost only
-  rkinfo: 5564       # ZMQ SUB RkCameraInfo, 1 Hz camera names / roles from DA01 (the AGX binds, DA01 connects a PUB)
+  rkinfo: 5564       # ZMQ SUB RkCameraInfo, 1 Hz camera names / roles from the RK board (the AGX binds, the board connects a PUB)
 
 bind:
   results: "0.0.0.0"
@@ -31,7 +35,7 @@ results:
 status_period_s: 1.0
 status:
   # AgxInferStatus schema version that agx-infer sends: 2 (no power fields) or 3 (power fields).
-  # Set 3 only after rk-agxlink on the board accepts v3 (rk-agxlink updated and restarted on DA01).
+  # Set 3 only after rk-agxlink on the RK board accepts v3 (rk-agxlink updated and restarted on the board).
   # agx-infer reads this value again when this file changes. You do not restart agx-infer.
   schema_version: 2
 snapshot:

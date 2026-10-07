@@ -1,4 +1,4 @@
-"""Power log of AGX02 (common/powerlog.py PowerLog, file data/power.sqlite; the pages: dashboard/power_api.py).
+"""Power log of this AGX (common/powerlog.py PowerLog, file data/power.sqlite; the pages: dashboard/power_api.py).
 
 The logger does not read the INA3221 sensors itself: it is a listener of the HealthCollector and uses the power part
 of the 1 s health snapshot (s["power"], the rails that the health thread reads already). common/power_sources.py
@@ -13,7 +13,9 @@ Event state (the keys of the contract): models (active set of the model controll
 mtime changes), link (link state of the paired board with the newest last_seen), cameras (number of cameras that give
 frames, from the agx-infer status), power_mode (nvpmodel mode of the health snapshot; the health thread reads it each
 nvpmodel_interval_s), control_mode (config/control.yaml, read again when its mtime changes). sender, agx_unit and
-recording are not known on AGX02 (None: no event).
+recording are not known on the AGX (None: no event).
+
+The power part of this unit is its node name (config node_name, default the short host name; common/machine.py).
 
 A changed value makes an event only when it stays the same for HOLD_S seconds (a short flicker of the link or of a
 camera makes no event). The event time is the first second of the new value. The first state after the start goes
@@ -29,12 +31,12 @@ import threading
 import time
 from pathlib import Path
 
+from common.machine import node_name
 from common.powerlog import FRESH_S, NO_SENSOR, SENSOR, PowerLog, Reading, finite
 from dashboard.config import resolve_path
 
 log = logging.getLogger("dashboard.power_log")
 
-PART = "agx02"
 SOURCE = "jetson_rails"
 HOLD_S = 3.0              # a new state value must stay this long to make an event
 START_S = 5.0             # the first state waits this long after the first sample: just after the start the
@@ -52,9 +54,11 @@ def rails_what(names) -> str:
             else "no INA3221 rail found")
 
 
-def reading_from_power(p: dict, t: float) -> Reading | None:
+def reading_from_power(p: dict, t: float, part: str | None = None) -> Reading | None:
     """The Reading of the health snapshot power part (dashboard/collectors/health.py _power). None: the part has no
-    rails (then the caller uses the fallback). A rail that did not read gives NO SENSOR (the sum would be too low)."""
+    rails (then the caller uses the fallback). A rail that did not read gives NO SENSOR (the sum would be too low).
+    part: the power part (None = the node name of common/machine.py)."""
+    part = part or node_name(None)
     rails_in = (p or {}).get("rails") if isinstance(p, dict) else None
     if not isinstance(rails_in, dict) or not rails_in:
         return None
@@ -67,11 +71,11 @@ def reading_from_power(p: dict, t: float) -> Reading | None:
         else:
             rails[name] = w
     if bad:
-        return Reading(PART, None, NO_SENSOR, t, SOURCE,
+        return Reading(part, None, NO_SENSOR, t, SOURCE,
                        f"{len(bad)} rail(s) did not read ({', '.join(sorted(bad))})", rails)
     if "VDD_IN" in rails:     # a module with a board input rail: that rail is the total (the others are inside it)
-        return Reading(PART, rails["VDD_IN"], SENSOR, t, SOURCE, "VDD_IN rail (board input, INA3221)", rails)
-    return Reading(PART, sum(rails.values()), SENSOR, t, SOURCE, rails_what(sorted(rails)), rails)
+        return Reading(part, rails["VDD_IN"], SENSOR, t, SOURCE, "VDD_IN rail (board input, INA3221)", rails)
+    return Reading(part, sum(rails.values()), SENSOR, t, SOURCE, rails_what(sorted(rails)), rails)
 
 
 class _MtimeJSON:
@@ -123,6 +127,7 @@ class PowerLogger:
         pc = cfg.get("power_log") or {}
         self.cfg = cfg
         self.hub = hub
+        self.part = node_name(cfg)   # the power part of this unit (config node_name)
         self.enabled = bool(pc.get("enabled", True))
         self.db_path = resolve_path(pc.get("db") or "data/power.sqlite")
         self.db_text = str(pc.get("db") or "data/power.sqlite")
@@ -193,7 +198,7 @@ class PowerLogger:
     def _jetson(self):
         if self._rails is None:
             from common.power_sources import JetsonRails
-            self._rails = JetsonRails(PART)
+            self._rails = JetsonRails(self.part)
         return self._rails
 
     # ---- the health thread: only a queue put
@@ -226,12 +231,12 @@ class PowerLogger:
                     log.exception("power log prune failed")
 
     def reading(self, power, t: float) -> Reading:
-        r = reading_from_power(power, t) if isinstance(power, dict) else None
+        r = reading_from_power(power, t, self.part) if isinstance(power, dict) else None
         if r is None:   # the snapshot has no power part: the fallback reads the sysfs files
             try:
                 r = self._jetson().read(t)[0]
             except Exception as e:
-                r = Reading(PART, None, NO_SENSOR, t, SOURCE, f"read failed: {e}")
+                r = Reading(self.part, None, NO_SENSOR, t, SOURCE, f"read failed: {e}")
         return r
 
     def process(self, t: float, power, mode) -> None:
@@ -328,7 +333,7 @@ class PowerLogger:
         with self._lock:
             r, mode = self.now, self.power_mode
         if r is None:
-            d = Reading(PART, None, NO_SENSOR, now, SOURCE,
+            d = Reading(self.part, None, NO_SENSOR, now, SOURCE,
                         "no sample yet" if self.enabled else "the power log is off (config power_log.enabled)").doc()
             d["age_s"] = None
         else:

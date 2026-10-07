@@ -2,8 +2,8 @@
 
 Output in the version folder: <name>_<version>_<precision>.engine (written as .partial, renamed when trtexec is done),
 build.log and build.json ({state: running|done|failed, engine, engine_sha256, command, started, ended, duration_s,
-error}). The old engines and /home/tonyho/model are never written. Only one build at a time (the controller holds
-the change slot during a build: owner rules M4 and 4.4).
+error}). The old engines and the protected folders (config protected_dirs, common/machine.py) are never written.
+Only one build at a time (the controller holds the change slot during a build: owner rules M4 and 4.4).
 """
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ import subprocess
 import threading
 import time
 
+from common.machine import inside_protected
 from controller import manifest as mf
 from controller.store import BUILD_INFO, sha256_file, write_json
 
 DEFAULT_TRTEXEC = "/usr/src/tensorrt/bin/trtexec"
 WARNING = ("A build uses the GPU and the CPU for some minutes: during the build the active models give fewer results "
            "per second and a longer latency.")
-FORBIDDEN_PREFIX = "/home/tonyho/model"
 
 
 def engine_name(m: mf.Manifest) -> str:
@@ -45,14 +45,16 @@ def build_command(trtexec: str, onnx: str, out_partial: str, m: mf.Manifest) -> 
 class BuildJob:
     """One build. start() runs it in a thread; job() is the dict for the API. done_cb(job) is called at the end."""
 
-    def __init__(self, m: mf.Manifest, trtexec: str = DEFAULT_TRTEXEC, timeout_s: float = 3600.0, done_cb=None):
+    def __init__(self, m: mf.Manifest, trtexec: str = DEFAULT_TRTEXEC, timeout_s: float = 3600.0, done_cb=None,
+                 protected_dirs=()):
         self.m = m
         self.trtexec = trtexec
         self.timeout_s = float(timeout_s)
         self.done_cb = done_cb
         self.folder = m.folder
-        if os.path.realpath(self.folder).startswith(FORBIDDEN_PREFIX):
-            raise ValueError(f"refuse to build into {self.folder}")
+        if inside_protected(self.folder, protected_dirs):
+            raise ValueError(f"refuse to build into {self.folder}: it is inside the protected folder "
+                             f"{inside_protected(self.folder, protected_dirs)} (config protected_dirs)")
         self.out = os.path.join(self.folder, engine_name(m))
         self.partial = self.out + ".partial"
         self.log_path = os.path.join(self.folder, "build.log")

@@ -1,4 +1,4 @@
-/* agx02 dashboard page. No external URLs. All reads are GET requests. The ONLY write function is postWrite(): the
+/* AGX dashboard page. No external URLs. All reads are GET requests. The ONLY write function is postWrite(): the
    model controller on the Models page (/api/models/..., docs/MODEL_CONTROL_API.md) and the pairing of RK boards on the
    Settings page (/api/pair/..., docs/PAIRING_API.md). No service control.
    Pages: router.js (hash routing, pure functions). Camera tile state: tiles.js (pure functions). */
@@ -152,9 +152,13 @@
   let lastMsg = 0;
   let lastInfer = null;  // infer_reason from the last health message (null when agx-infer sends status)
   let lastHealth = null, lastServices = null;
+  let nodeName = "";      // node name of this AGX (/api/health node_name; config node_name, default the host name)
+  // the power log part of this AGX: the "part" of the power document, else the node name
+  function powerPart(d) { return (d && d.part) || nodeName || "agx"; }
   function renderHealth(h) {
     lastHealth = h;
-    const host = h.hostname || "agx02";
+    nodeName = h.node_name || h.hostname || nodeName;   // config node_name (default: the short host name)
+    const host = nodeName || "agx";
     setText("host", host);
     setText("side-host", host);
     document.title = R.label(currentPage) + " · " + host + " dashboard";
@@ -455,7 +459,7 @@
   function renderOverview() {
     const h = lastHealth;
     if (!h) return;
-    setText("ov-sub", (h.hostname || "agx02") + " · up " + fmtDur(h.uptime_s) + (h.nvpmodel && h.nvpmodel.mode ? " · power mode " + h.nvpmodel.mode : ""));
+    setText("ov-sub", (h.node_name || h.hostname || "agx") + " · up " + fmtDur(h.uptime_s) + (h.nvpmodel && h.nvpmodel.mode ? " · power mode " + h.nvpmodel.mode : ""));
     const ns = (h.node_state || "NO DATA").toLowerCase();
     const light = LV_LIGHT[ns] || "unknown";
     const ban = $("ov-banner");
@@ -889,7 +893,7 @@
       ? setBadge(id, "Vehicle: changes are refused", "amber") : setBadge(id, "Not known", "muted"));
     modeBadge("mc-mode"); modeBadge("set-mode");
     const problem = ctlField("control_problem") || "";
-    $("mc-problem").hidden = !problem; $("mc-problem").textContent = problem ? "AGX02 control file: " + problem : "";
+    $("mc-problem").hidden = !problem; $("mc-problem").textContent = problem ? "Control file of this AGX: " + problem : "";
     $("set-mode-problem").hidden = !problem; $("set-mode-problem").textContent = problem;
     if (control && control.control_file) setText("set-mode-file", control.control_file);
     const ch = ctlField("change_in_progress");
@@ -952,8 +956,8 @@
     } catch (e) { setText("mc-events-note", "Cannot read the audit list: " + e.message); return; }
     const ev = events.events || [];
     syncRows($("models-events").tBodies[0], (ev.length ? ev.map((x, i) => ({ key: x.change_id ? x.change_id + ":" + x.result + ":" + x.t : "i" + i, nodes: [el("tr", null,
-      // browser time, as every other time on this page; the AGX02 clock text is in the tooltip
-      td("Time", { class: "nowrap", title: x.time ? "AGX02 clock: " + x.time : null }, num(x.t) ? fmtDateTime(x.t) : (x.time || NA)),
+      // browser time, as every other time on this page; the AGX clock text is in the tooltip
+      td("Time", { class: "nowrap", title: x.time ? "AGX clock: " + x.time : null }, num(x.t) ? fmtDateTime(x.t) : (x.time || NA)),
       td("Source", null, x.source || NA),
       td("User", null, x.user || NA),
       td("Action", null, el("span", { class: "tag" }, x.action || NA), Array.isArray(x.cameras) ? el("div", { class: "muted small" }, "cameras " + x.cameras.join(", ")) : null),
@@ -980,7 +984,7 @@
     return { status: r.status, accepted: r.status === 202 || (r.ok && !!(doc && doc.ok)), doc, text };
   }
   function refusalText(res) {
-    // the refusal reason of AGX02 as it is
+    // the refusal reason of the AGX as it is
     return res.doc && res.doc.reason ? res.doc.reason : "HTTP " + res.status + (res.text ? ": " + res.text.slice(0, 300) : "");
   }
   let dlg = null, dlgBusy = false;
@@ -996,19 +1000,19 @@
     const camBox = $("mc-dlg-cams");
     camBox.hidden = kind !== "activate";
     if (kind === "build") {
-      body.replaceChildren(el("p", null, "AGX02 builds an engine for ", el("code", null, key), " from its ONNX file."),
+      body.replaceChildren(el("p", null, "This AGX builds an engine for ", el("code", null, key), " from its ONNX file."),
         el("p", { class: "callout callout--amber" }, (catalog && catalog.build_warning) || "A build uses the GPU and the CPU for some minutes."));
     } else if (kind === "activate") {
       const permitted = camList(e.cameras_permitted);
       const def = camList(e.cameras_default).filter((c) => permitted.includes(c));
-      body.replaceChildren(el("p", null, "AGX02 loads ", el("code", null, key), " on the selected cameras. The other active models continue."));
+      body.replaceChildren(el("p", null, "This AGX loads ", el("code", null, key), " on the selected cameras. The other active models continue."));
       $("mc-dlg-camlist").replaceChildren(...(permitted.length ? permitted.map((c) => {
         const cb = el("input", { type: "checkbox", value: String(c), checked: def.includes(c) ? "" : null });
         cb.addEventListener("change", dlgValidate);
         return el("label", { class: "check" }, cb, camName(c, true));
       }) : [el("span", { class: "muted small" }, "The manifest permits no camera.")]));
     } else if (kind === "deactivate") {
-      body.replaceChildren(el("p", null, "AGX02 stops ", el("code", null, key), ". The other models continue."));
+      body.replaceChildren(el("p", null, "This AGX stops ", el("code", null, key), ". The other models continue."));
     } else {
       rollbackBody(false);
       if (!control) {
@@ -1026,7 +1030,7 @@
   function rollbackBody(loaded) {
     const lg = setList(control && control.last_good_set);
     const why = !control && loaded && controlError ? " (cannot read /api/models/control: " + controlError + ")" : "";
-    $("mc-dlg-body").replaceChildren(el("p", null, "AGX02 puts the last good set back: " +
+    $("mc-dlg-body").replaceChildren(el("p", null, "This AGX puts the last good set back: " +
       (lg.length ? lg.map((s) => s.name + "@" + s.version + " on " + camNames(camList(s.cameras), true)).join("; ")
         : (control || loaded ? "not known on this page" : "reading the last good set")) + why + "."));
   }
@@ -1061,7 +1065,7 @@
       if (res.accepted) {
         const ch = (res.doc && res.doc.change) || {};
         notice = { id: ch.id || null, at: Date.now(),
-          text: "AGX02 started the change: " + DLG_TITLE[kind].toLowerCase() + (entry ? " " + keyOf(entry) : "") + "." +
+          text: "This AGX started the change: " + DLG_TITLE[kind].toLowerCase() + (entry ? " " + keyOf(entry) : "") + "." +
             (res.doc && res.doc.warning ? " " + res.doc.warning : "") };
         closeDialog();
         renderModelHead();
@@ -1271,7 +1275,8 @@
   }
   function drawPowerChart(d) {
     const box = document.querySelector("#ch-powerlog .plot");
-    const s = (d.series || {}).agx02 || [];
+    const part = powerPart(d);
+    const s = (d.series || {})[part] || [];
     if (!s.some((v) => v != null)) {
       if (plPlot) { plPlot.destroy(); plPlot = null; }
       box.replaceChildren(el("div", { class: "empty", text: "No power samples in this time range." }));
@@ -1288,7 +1293,7 @@
       scales: { x: { time: true }, y: { auto: true } },
       axes: axisOpts(),
       plugins: [plMarks()],
-      series: [{ label: "Time" }, { label: "AGX02 W (SENSOR)", stroke: cssVar("--da-chart-1"), width: 2, spanGaps: false,
+      series: [{ label: "Time" }, { label: part.toUpperCase() + " W (SENSOR)", stroke: cssVar("--da-chart-1"), width: 2, spanGaps: false,
         points: { show: false }, value: (u, v) => (v == null ? "-" : v.toFixed(2)) }],
     };
     plPlot = new uPlot(opts, arr, box);
@@ -1337,7 +1342,7 @@
   function renderPowerEvents(d) {
     const rows = d.rows || [];
     fill($("pl-events").tBodies[0], rows.length ? rows.map((r) => {
-      const p = (r.parts || {}).agx02 || {};
+      const p = (r.parts || {})[powerPart(d)] || {};
       const notes = (r.notes || []).concat(p.reason ? [p.reason] : []);
       return el("tr", null, td("Time", null, fmtDateTime(r.t)), td("Event", null, plEventText(r)),
         td("Before W", { class: "n" }, fmt(p.before_w, 2)), td("After W", { class: "n" }, fmt(p.after_w, 2)),
@@ -1347,7 +1352,7 @@
   }
   function renderPowerEnergy(d) {
     fill($("pl-energy").tBodies[0], PL_PERIODS.map(([k, label]) => {
-      const e = (d[k] || {}).agx02 || {};
+      const e = (d[k] || {})[powerPart(d)] || {};
       return el("tr", null, td("Period", null, label), td("Wh", { class: "n" }, fmt(e.wh, 1)),
         td("Hours with data", { class: "n" }, num(e.hours) ? e.hours.toFixed(1) + " of " + fmt(e.span_h, 1) : NA),
         td("Mean W", { class: "n" }, fmt(e.mean_w, 1)));
@@ -1454,7 +1459,7 @@
     const d = pairDoc; if (!d) return;
     renderUnit(d.unit || {});
     const probs = [];
-    if (d.control_mode === "vehicle") probs.push("AGX02 is in vehicle mode: it refuses pairing, removal and changes of these settings.");
+    if (d.control_mode === "vehicle") probs.push("This AGX is in vehicle mode: it refuses pairing, removal and changes of these settings.");
     for (const p of [d.control_problem, d.store_problem, d.settings_problem]) if (p) probs.push(p);
     pairMsg("pr-problem", probs.join(" "));
     renderCode();
@@ -1494,7 +1499,7 @@
     const v = $("pr-acc").value.trim();
     if (v !== "" && !/^\d{1,3}(\.\d{1,3}){3}$/.test(v)) {
       $("pr-acc").setAttribute("aria-invalid", "true");
-      pairMsg("pr-error", "Type an IPv4 address (for example 10.0.0.208), or make the field empty.");
+      pairMsg("pr-error", "Type an IPv4 address (for example 10.42.0.2), or make the field empty.");
       return;
     }
     pairBusy = true; $("pr-acc-save").disabled = true; pairMsg("pr-error", ""); pairMsg("pr-notice", "");
@@ -1502,7 +1507,7 @@
       const res = await postWrite("/api/pair/settings", { accepted_board_address: v });
       if (res.accepted) {
         accDirty = false;
-        pairMsg("pr-notice", "AGX02 saved the accepted board address." + (res.doc.warning ? " Warning: " + res.doc.warning + "." : ""));
+        pairMsg("pr-notice", "This AGX saved the accepted board address." + (res.doc.warning ? " Warning: " + res.doc.warning + "." : ""));
       } else pairMsg("pr-error", refusalText(res));
     } catch (e) { pairMsg("pr-error", "The request did not complete: " + e.message); }
     pairBusy = false; $("pr-acc-save").disabled = false;
@@ -1531,7 +1536,7 @@
         ? "Then the video source filter of agx-infer is off: it accepts video frames and camera names from each address, until you pair a board again."
         : "Then agx-infer has no board address for its video source filter.");
     const body = [
-      el("p", null, "AGX02 refuses the control token of ", el("code", null, b.name || b.id), " at once."),
+      el("p", null, "This AGX refuses the control token of ", el("code", null, b.name || b.id), " at once."),
       el("p", null, "To control this AGX again, the board must pair again with a new code.")];
     if (!addressesLeft(b)) body.push(el("p", { class: "callout callout--amber", id: "pr-dlg-last" }, el("strong", null, "Last board address. "), lastText));
     $("pr-dlg-body").replaceChildren(...body);
@@ -1563,7 +1568,7 @@
       if (res.accepted) {
         closePairDialog();
         pairMsg("pr-error", "");
-        pairMsg("pr-notice", "AGX02 removed the pairing of " + (b.name || b.id) + "." +
+        pairMsg("pr-notice", "This AGX removed the pairing of " + (b.name || b.id) + "." +
           (res.doc && res.doc.warning ? " Warning: " + res.doc.warning + "." : ""));
       } else {
         prDlgError(refusalText(res));
@@ -1610,7 +1615,7 @@
       if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
     $("shell").dataset.page = r.page;
-    document.title = R.label(r.page) + " · " + ($("host").textContent || "agx02") + " dashboard";
+    document.title = R.label(r.page) + " · " + ($("host").textContent || "agx") + " dashboard";
     if (r.page === "models" && r.arg) openDetails[r.arg] = true;
     if (prev !== r.page) {
       // a confirmation is for the page where it opened: close it (it stays only while its request runs, to show the result)

@@ -1,0 +1,31 @@
+# Model plug-ins of the AGX inference node. Facts and reasons: docs/MODELS.md.
+# Template: ops/install.sh copies this file to config/models.yaml (only when that file is missing).
+# config/models.yaml is machine data and is not in git. A new unit has no model: agx-infer uses this list only when
+# the model store has no last good set (config/infer.yaml start_set). Put models into the store with
+# tools/deploy_model.sh and activate them on the dashboard.
+#
+# Fields:
+#   name       unique model name (used in results, status and the dashboard)
+#   group      optional group (the old "DriverGuard" = YOLOPX + DTCP)
+#   enabled    true = load and run; false = state OFF (reason is shown)
+#   engine     TensorRT engine file, absolute path (read-only; never overwritten)
+#   onnx       ONNX file. Only used when the engine does not load: then a new engine is built into
+#              engines/ of this project (the old engine stays as it is)
+#   adapter    preprocessing + postprocessing plug-in in infer/models/adapters/<adapter>.py
+#   cameras    FrameLink camera ids this model runs on
+#   workers    execution contexts (threads) for this engine
+#   max_fps_per_camera   upper limit of results per second for one camera
+#   options    adapter options (thresholds etc. from the old code, see docs/MODELS.md)
+#   reason     why a disabled model is OFF
+#
+# Example entry:
+#   - name: driverguard_dtcp
+#     enabled: true
+#     engine: /home/<user>/model/jetson_bundle/engines/dtcp_v1_fp16.engine
+#     onnx: /home/<user>/model/jetson_bundle/onnx/dtcp_v1.onnx
+#     adapter: dtcp_v1
+#     cameras: [0]
+#     workers: 1
+#     max_fps_per_camera: 10
+
+models: []

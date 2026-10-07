@@ -31,6 +31,9 @@ sys.path.insert(0, str(ROOT))
 
 from dashboard import auth  # noqa: E402
 
+# The code default and the template (config/templates/dashboard.yaml). ops/install.sh adds the private subnets of
+# the unit to config/dashboard.yaml: EXPECTED_ALLOW is such a list (the LAN 10.0.0.0/24 as on AGX02).
+TEMPLATE_ALLOW = ["127.0.0.0/8", "10.42.0.0/30", "100.64.0.0/10"]
 EXPECTED_ALLOW = ["127.0.0.0/8", "10.0.0.0/24", "10.42.0.0/30", "100.64.0.0/10"]
 PW = "test-only-pw"
 
@@ -40,7 +43,8 @@ def _app(tmp_path=None, cfg_over=None, start=False):
     from dashboard.app import create_app
     from dashboard.config import load_config
 
-    cfg = load_config("config/dashboard.yaml")
+    cfg = load_config("config/templates/dashboard.yaml")
+    cfg["allow_cidrs"] = list(EXPECTED_ALLOW)   # an installed unit with its LAN
     if tmp_path is not None:
         cfg["history"]["db"] = str(tmp_path / "h.sqlite")
         cfg["engines"]["cache"] = str(tmp_path / "ec.json")
@@ -80,16 +84,18 @@ def _status(node: dict | None, cams: list, models: list) -> dict:
 def test_m2_allowlist_same_in_all_three_places():
     from dashboard.config import DEFAULTS
 
-    y = yaml.safe_load((ROOT / "config" / "dashboard.yaml").read_text())
-    assert y["allow_cidrs"] == EXPECTED_ALLOW
-    assert list(auth.DEFAULT_ALLOW) == EXPECTED_ALLOW
-    assert DEFAULTS["allow_cidrs"] == EXPECTED_ALLOW
+    y = yaml.safe_load((ROOT / "config" / "templates" / "dashboard.yaml").read_text())
+    assert y["allow_cidrs"] == TEMPLATE_ALLOW
+    assert list(auth.DEFAULT_ALLOW) == TEMPLATE_ALLOW
+    assert DEFAULTS["allow_cidrs"] == TEMPLATE_ALLOW
+    nets = auth.parse_networks(EXPECTED_ALLOW)
     for ok in ("127.0.0.1", "10.0.0.130", "10.0.0.255", "10.42.0.1", "10.42.0.2", "100.64.0.180",
                "100.127.255.254", "::ffff:10.0.0.130"):
-        assert auth.ip_allowed(ok), ok
+        assert auth.ip_allowed(ok, nets), ok
+    assert not auth.ip_allowed("10.0.0.130")    # a LAN is not in the code default
     for bad in ("172.17.0.2", "172.16.0.1", "192.168.1.5", "169.254.10.1", "10.0.1.1", "10.1.0.1",
                 "10.42.0.4", "::1", "fe80::1", "fd00::1", "8.8.8.8"):
-        assert not auth.ip_allowed(bad), bad
+        assert not auth.ip_allowed(bad, nets), bad
 
 
 def test_m2_docker_bridge_gets_403(tmp_path):
@@ -220,8 +226,10 @@ def test_m14_log_units_and_system_or_user_journal(monkeypatch):
     from dashboard.collectors import services
     from dashboard.config import DEFAULTS, load_config
 
-    cfg = load_config("config/dashboard.yaml")
-    assert "agx-sim" in cfg["services"]["log_units"] and "agx-sim" in DEFAULTS["services"]["log_units"]
+    cfg = load_config("config/templates/dashboard.yaml")
+    # null lists in the template and in DEFAULTS: made from unit_prefix "agx"
+    assert DEFAULTS["services"]["log_units"] is None and DEFAULTS["unit_prefix"] == "agx"
+    assert cfg["services"]["log_units"] == ["agx-infer", "agx-dashboard", "agx-sim"]
     assert 'value="agx-sim"' in (ROOT / "dashboard" / "static" / "index.html").read_text()
     calls = []
     state = {"active": True}
@@ -344,7 +352,7 @@ def test_m15_mqtt_mocked_topic_interval_simulated(monkeypatch, clean_mqtt_env):
     fp.install(monkeypatch)
     health = {"schema": "agx-health/1", "simulated": True, "label": "SIMULATED"}
     env = {"AGX_MQTT_ENABLED": "1", "AGX_MQTT_HOST": "broker.test", "AGX_MQTT_TOPIC_PREFIX": "/fleet/"}
-    pub = mqtt_pub.start_mqtt(env, lambda: dict(health), interval_s=0.1)
+    pub = mqtt_pub.start_mqtt(env, lambda: dict(health), interval_s=0.1, node="agx02")
     try:
         assert pub is not None and len(fp.clients) == 1
         cl = fp.clients[0]
@@ -364,7 +372,7 @@ def test_m15_mqtt_mocked_topic_interval_simulated(monkeypatch, clean_mqtt_env):
         assert "simulated" in d and d["simulated"] is True and d["label"] == "SIMULATED"
         assert m[3] == 0 and m[4] is False
     assert pub.interval == 0.1
-    cfg = yaml.safe_load((ROOT / "config" / "dashboard.yaml").read_text())
+    cfg = yaml.safe_load((ROOT / "config" / "templates" / "dashboard.yaml").read_text())
     assert cfg["mqtt_interval_s"] == 5  # the dashboard passes this interval to start_mqtt
 
 

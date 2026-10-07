@@ -150,7 +150,7 @@ Errors: 400 `'x' is not an IPv4 address. Use an address like 10.0.0.208, or leav
   filter): the request is served, `last_seen` changes in memory only, the file does not change; audit
   `pair.address_added` `refused` with the vehicle-mode reason, one time per board and address in the dashboard process.
 - A refused token (unknown, removed, paired again): `401 {"ok": false, "reason": "..."}` with
-  `WWW-Authenticate: Bearer realm="agx02-dashboard"`. Reasons: `the pairing of board rk3588-da01 was removed on this
+  `WWW-Authenticate: Bearer realm="<node_name>-dashboard"` (AGX02: `agx02-dashboard`). Reasons: `the pairing of board rk3588-da01 was removed on this
   AGX: this token stops. pair the board again with a new code (AGX02 dashboard: Settings, RK link)`, `... was paired
   again (a new token) ...`, `this AGX does not know this board token: pair the board again ...` (the removed / replaced
   hashes are kept in memory only: after a dashboard restart the reason is this general one). A refused token is not a

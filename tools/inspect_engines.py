@@ -4,6 +4,9 @@ Each engine is deserialized in its OWN subprocess (a bad engine cannot crash the
 is freed at exit). Used for docs/MODELS.md (T1 test) and by the dashboard (models part B).
 
   python -m tools.inspect_engines [--json] [--scan DIR ...] [ENGINE ...]
+
+There is no default scan folder (the engines of a machine are machine data): give ENGINE files or --scan DIR
+(for example --scan /home/<user>/model). The dashboard scans config/dashboard.yaml engines.scan_dirs.
 """
 from __future__ import annotations
 
@@ -17,7 +20,7 @@ import time
 
 from common import trt_compat
 
-DEFAULT_SCAN = ["/home/tonyho/model"]
+DEFAULT_SCAN: list[str] = []      # no machine folder in the code (config/dashboard.yaml engines.scan_dirs)
 ENGINE_EXT = (".engine", ".trt", ".plan")
 
 _CHILD = r"""
@@ -115,6 +118,9 @@ def main() -> int:
     ap.add_argument("--scan", nargs="*", default=None)
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
+    if not a.engines and not a.scan and not DEFAULT_SCAN:
+        print("inspect_engines: nothing to read: give ENGINE files or --scan DIR", file=sys.stderr)
+        return 2
     paths = list(a.engines) + scan(a.scan if a.scan is not None else ([] if a.engines else DEFAULT_SCAN))
     res = [inspect(p) for p in paths]
     if a.json:

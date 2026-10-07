@@ -517,7 +517,7 @@ struct RkCameraInfo {
 | Item | Value | Source |
 |---|---|---|
 | URL | HTTP GET `http://<agx>:8700/api/health` | Night-task Section 6/7 default; check `dashboard/app.py` route `/api/health` |
-| Auth | HTTP Basic auth, realm `agx02-dashboard` | AGX proposal; check `dashboard/auth.py` `REALM` |
+| Auth | HTTP Basic auth, realm `<node_name>-dashboard` (AGX02: `agx02-dashboard`) | AGX proposal; `config/dashboard.yaml` `node_name` (default: the short host name) |
 | Allowed sources | IPv4 networks only: 127.0.0.0/8, 10.0.0.0/24, 10.42.0.0/30 (Link C), 100.64.0.0/10 (tailscale). This list is for networks, not for one board: the board addresses are in `data/paired_boards.json` (Section 5.5). | Check `config/dashboard.yaml` key `allow_cidrs` (same list in `dashboard/config.py` and `dashboard/auth.py`) |
 | Methods | GET only (POST gives 405) | Check `tests/test_dashboard.py` `test_read_only_and_logs_whitelist()` |
 | RK client | None. The RK repo has no HTTP client for this. The RK reads nothing from the AGX over HTTP. | RK repo (`T1_rk-repo.md` section 4; the only HTTP use is the rk-updater download, `rk/updater/rk_updater.py:53-54`, `:126`) |

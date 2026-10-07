@@ -29,9 +29,9 @@ Options:
 |---|---|---|---|
 | `--store DIR` | both | `~/agx-models` | The model store. It must exist. |
 | `--user U` | both | `$USER` (the script adds `@<hostname>`) | The person in the audit line. |
-| `--host H` | `deploy_model.sh` | `agx02` | The ssh host of the AGX. |
+| `--host H` | `deploy_model.sh` | `$AGX_HOST`, else none | The ssh host of the AGX (for example `agx02`). |
 | `--repo DIR` | `deploy_model.sh` | `~/driveragent-agx` | The repository folder on the AGX. |
-| `--local` / `--remote` | `deploy_model.sh` | by hostname | `--local` runs the deploy on this computer. `--remote` copies to `--host`. On the host `agx02`, the script uses `--local`. |
+| `--local` / `--remote` | `deploy_model.sh` | by host | `--local` runs the deploy on this computer. `--remote` copies to `--host`. Without a host (no `--host`, no `AGX_HOST`), the script uses `--local`. |
 | `--staged DIR` | `model_store_cli deploy` | - | Deploys a package that is already in `<store>/_incoming/`. `deploy_model.sh` uses it. |
 
 Exit codes: `0` = valid or deployed. `1` = a problem: the tool writes each problem in a `PROBLEM:` line.

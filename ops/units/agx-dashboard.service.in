@@ -1,0 +1,23 @@
+# @INSTANCE@-dashboard: driveragent-agx dashboard (FastAPI, HTTP Basic auth, private networks only).
+# systemd USER unit. ops/install.sh makes this file from ops/units/agx-dashboard.service.in. Do not edit it here:
+# change the template and run ops/install.sh again. Remove it with ops/uninstall.sh --instance @INSTANCE@.
+[Unit]
+Description=driveragent-agx dashboard (@INSTANCE@-dashboard, @REPO_TEXT@)
+StartLimitIntervalSec=120
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+# PWD: pycapnp reads PWD. Without it, capnp writes a warning in the log.
+Environment="PWD=@REPO@"
+Environment=PYTHONUNBUFFERED=1
+Environment="PYTHONPATH=@REPO@"
+@NOUSERSITE_LINE@
+ExecStart="@PYTHON@" -m dashboard.main --config "@REPO@/config/dashboard.yaml"
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

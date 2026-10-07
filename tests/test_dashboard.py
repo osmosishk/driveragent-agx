@@ -29,6 +29,7 @@ from dashboard.auth import ip_allowed  # noqa: E402
 OUT = Path(os.environ.get("AGX_DASH_TEST_OUT") or (ROOT / "tests" / "out"))
 PORT_MIN = int(os.environ.get("AGX_DASH_TEST_PORT_MIN") or 18700)
 PORT_MAX = int(os.environ.get("AGX_DASH_TEST_PORT_MAX") or 18799)
+NODE = "testnode"   # config node_name of the test server: auth realm "<node>-dashboard"
 
 
 def _free_port(start=None, end=None) -> int:
@@ -65,12 +66,13 @@ def server(creds):
     OUT.mkdir(parents=True, exist_ok=True)
     port = _free_port()
     log = open(OUT / "dashboard_test.log", "w")
-    # the real config, but the pairing files in tests/out: the start-up pairing migration must never move the real
-    # data/control.token or write the real data/paired_boards.json (docs/PAIRING_API.md)
+    # the template config (a fresh clone has no config/dashboard.yaml), the pairing files in tests/out: the start-up
+    # pairing migration must never move the real data/control.token or write the real data/paired_boards.json
+    # (docs/PAIRING_API.md)
     import yaml
-    with open(ROOT / "config" / "dashboard.yaml", encoding="utf-8") as f:
+    with open(ROOT / "config" / "templates" / "dashboard.yaml", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
-    cfg.update({"control_token_file": str(OUT / "control_test.token"),
+    cfg.update({"node_name": NODE, "control_token_file": str(OUT / "control_test.token"),
                 "paired_boards_file": str(OUT / "paired_boards_test.json"),
                 "link_settings_file": str(OUT / "link_settings_test.json"),
                 "power_log": {"db": str(OUT / "power_test.sqlite"), "enabled": True}})   # never the real power log
@@ -141,7 +143,7 @@ def test_health_real_values(server, creds):
 def test_no_password_401(server):
     r = httpx.get(server + "/api/health", timeout=5)
     assert r.status_code == 401
-    assert r.headers.get("www-authenticate") == 'Basic realm="agx02-dashboard"'
+    assert r.headers.get("www-authenticate") == f'Basic realm="{NODE}-dashboard"'
 
 
 def test_wrong_password_401(server, creds):
@@ -155,7 +157,7 @@ def test_page(server, creds):
     r = httpx.get(server + "/", auth=creds, timeout=5)
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
-    assert "<title>agx02 dashboard</title>" in r.text
+    assert "<title>agx dashboard</title>" in r.text     # neutral text: the page sets the node name
     assert creds[1] not in r.text
     assert "http://" not in r.text and "https://" not in r.text
     # tokens.css (the design values of the rk console) loads before style.css; router.js before app.js
@@ -214,8 +216,11 @@ def test_read_only_and_logs_whitelist(server, creds):
 
 
 def test_allowlist():
+    from dashboard.auth import parse_networks
+
     assert not ip_allowed("8.8.8.8")
-    assert ip_allowed("10.0.0.130")
+    assert not ip_allowed("10.0.0.130")         # a LAN is not in the code default: ops/install.sh adds it to the config
+    assert ip_allowed("10.0.0.130", parse_networks(["10.0.0.0/24"]))
     assert ip_allowed("100.64.0.180")
     assert ip_allowed("127.0.0.1")
     assert ip_allowed("::ffff:127.0.0.1")       # IPv4-mapped form of an allowed address
@@ -289,7 +294,7 @@ def test_guard_403_and_401_in_process():
     from dashboard.app import create_app
     from dashboard.config import load_config
 
-    app = create_app(dict(load_config("config/dashboard.yaml"), model_control=False),
+    app = create_app(dict(load_config("config/templates/dashboard.yaml"), model_control=False),
                      env={"AGX_DASH_USER": "u", "AGX_DASH_PASSWORD": "test-only-pw"},
                      start_collectors=False)
 
@@ -300,8 +305,8 @@ def test_guard_403_and_401_in_process():
 
     assert asyncio.run(go("8.8.8.8", ("u", "test-only-pw"))) == 403
     assert asyncio.run(go("172.17.0.2", ("u", "test-only-pw"))) == 403  # docker bridge: not allowed (M2)
-    assert asyncio.run(go("10.0.0.5", None)) == 401
-    assert asyncio.run(go("10.0.0.5", ("u", "bad"))) == 401
+    assert asyncio.run(go("10.42.0.2", None)) == 401                  # Link C: allowed by the template
+    assert asyncio.run(go("10.42.0.2", ("u", "bad"))) == 401
     assert asyncio.run(go("100.64.0.180", ("u", "test-only-pw"))) == 400  # allowed, auth ok, unit not in whitelist
 
     async def headers(client_ip, auth):
@@ -310,7 +315,7 @@ def test_guard_403_and_401_in_process():
             return (await c.get("/api/health", auth=auth)).headers
 
     # 401 / 403 replies also carry the security headers (SecurityHeaders is the outer middleware)
-    for ip, auth in (("8.8.8.8", None), ("10.0.0.5", None)):
+    for ip, auth in (("8.8.8.8", None), ("10.42.0.2", None)):
         h = asyncio.run(headers(ip, auth))
         assert "content-security-policy" in h and h.get("x-content-type-options") == "nosniff"
 

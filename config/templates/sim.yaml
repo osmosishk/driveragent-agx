@@ -1,7 +1,9 @@
 # RK3588 simulator (tools/rk_sim). It sends FrameLink frames on UDP, like the RK3588 will do.
+# Template: ops/install.sh copies this file to config/sim.yaml (only when that file is missing).
+# config/sim.yaml is machine data and is not in git.
 # Run:   .venv/bin/python -m tools.rk_sim --config config/sim.yaml [--seconds N] [--fmt h265|nv12]
 #        [--cams 0,1,2,3,4,5] [--host 127.0.0.1] [--base-port 6000] [--source file|test-pattern]
-#        [--sessions bench|road|S1,S2] [--transcode] [--status-interval S] [--no-pace]
+#        [--sessions NAME|S1,S2] [--transcode] [--status-interval S] [--no-pace]
 # Command line options replace the values in this file.
 #
 # IMPORTANT: every frame from the simulator has source = REPLAY (2) or TEST_PATTERN (3) in the
@@ -37,78 +39,48 @@ h265:
 # transcode: true  -> decode + nvv4l2h265enc (settings above): one IDR every 15 frames.
 transcode: false
 
-# Old recordings (READ-ONLY). Camera roles of the old stack.
-# Files of one camera are played in this order, then again from the first file (loop forever).
-# Default: three consecutive full sessions (6 cameras each): 8003-20260510_151020, _151120 and the
-# newest full session _151220. Each file is about 58.5 s, thus one loop is about 175 s.
-# CAUTION (checked 2026-10-05): the 2026-05-10 sessions show an INDOOR BENCH (room, door, cables),
-# NOT a road. Road video is in the 2025-10/11 sessions, but there cam4 and cam5 are almost black
-# (files of 1-2 MB). Use "--sessions road" to replace the file list of all cameras with the road set.
-# All recordings: one IDR every 256 AU (8.53 s), VPS/SPS/PPS before every IDR, no B-frames.
+# Recordings (READ-ONLY input). The template has none: each camera sends a test pattern.
+# To replay recordings: set video_root, set "source: file" and a "files" list (paths relative to video_root
+# or absolute) for each camera, or use --sessions. Files of one camera are played in this order, then again
+# from the first file (loop forever).
 # width/height = RK design size of the camera for fmt nv12 (cam0 1280x720, cam1-5 704x396).
-video_root: /home/tonyho/driveragent/logger/video
+# Example:
+#   video_root: /home/<user>/recordings
+#   session_sets:
+#     bench: [session-a, session-b]
+#   cameras:
+#     - {cam: 0, role: front, source: file, width: 1280, height: 720, files: [session-a/front/cam0_a.mp4]}
+video_root: ""
 # --sessions NAME: camera N plays <video_root>/<session>/*/camN_*.mp4 of each session, in this order.
-session_sets:
-  bench:                  # same files as the cameras list below
-    - 8003-20260510_151020
-    - 8003-20260510_151120
-    - 8003-20260510_151220
-  road:                   # motorway, overcast day. cam0-3 road, cam4 + cam5 almost black
-    - 8003-20251109_105508
-    - 8003-20251109_105608
-    - 8003-20251109_105708
+session_sets: {}
 cameras:
   - cam: 0
     role: front
-    source: file          # file | test-pattern
+    source: test-pattern  # file | test-pattern
     width: 1280
     height: 720
-    files:
-      - 8003-20260510_151020/front/cam0_20260510_151020.mp4
-      - 8003-20260510_151120/front/cam0_20260510_151120.mp4
-      - 8003-20260510_151220/front/cam0_20260510_151220.mp4
   - cam: 1
     role: right
-    source: file
+    source: test-pattern  # file | test-pattern
     width: 704
     height: 396
-    files:
-      - 8003-20260510_151020/right/cam1_20260510_151020.mp4
-      - 8003-20260510_151120/right/cam1_20260510_151120.mp4
-      - 8003-20260510_151220/right/cam1_20260510_151220.mp4
   - cam: 2
     role: left
-    source: file
+    source: test-pattern  # file | test-pattern
     width: 704
     height: 396
-    files:
-      - 8003-20260510_151020/left/cam2_20260510_151020.mp4
-      - 8003-20260510_151120/left/cam2_20260510_151120.mp4
-      - 8003-20260510_151220/left/cam2_20260510_151220.mp4
   - cam: 3
     role: right-back
-    source: file
+    source: test-pattern  # file | test-pattern
     width: 704
     height: 396
-    files:
-      - 8003-20260510_151020/right-back/cam3_20260510_151020.mp4
-      - 8003-20260510_151120/right-back/cam3_20260510_151120.mp4
-      - 8003-20260510_151220/right-back/cam3_20260510_151220.mp4
   - cam: 4
     role: left-back
-    source: file
+    source: test-pattern  # file | test-pattern
     width: 704
     height: 396
-    files:
-      - 8003-20260510_151020/left-back/cam4_20260510_151020.mp4
-      - 8003-20260510_151120/left-back/cam4_20260510_151120.mp4
-      - 8003-20260510_151220/left-back/cam4_20260510_151220.mp4
   - cam: 5
     role: back
-    source: file
+    source: test-pattern  # file | test-pattern
     width: 704
     height: 396
-    files:
-      - 8003-20260510_151020/back/cam5_20260510_151020.mp4
-      - 8003-20260510_151120/back/cam5_20260510_151120.mp4
-      - 8003-20260510_151220/back/cam5_20260510_151220.mp4

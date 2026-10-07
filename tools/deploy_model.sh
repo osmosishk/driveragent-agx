@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Put a model package into the model store of AGX02 (docs/DEPLOY_MODEL.md). It does NOT build and does NOT activate.
+# Put a model package into the model store of an AGX (docs/DEPLOY_MODEL.md). It does NOT build and does NOT activate.
 #
-# Usage: tools/deploy_model.sh <package dir> [--host agx02] [--store ~/agx-models] [--user U]
+# Usage: tools/deploy_model.sh <package dir> [--host HOST] [--store ~/agx-models] [--user U]
 #                              [--repo ~/driveragent-agx] [--local | --remote]
 #
-# On AGX02 (hostname agx02, or --local): runs "python -m tools.model_store_cli deploy <package dir>" of this repo.
-# On a workstation (or --remote): copies the package with scp -r to <host>:<store>/_incoming/<name>-<version>-<rand>/
+# No host (no --host and no environment variable AGX_HOST), or --local: local deploy on this AGX: runs
+# "python -m tools.model_store_cli deploy <package dir>" of this repo.
+# With a host (--host HOST or AGX_HOST=HOST, for example an ssh alias of the AGX), or --remote: copies the package
+# with scp -r to <host>:<store>/_incoming/<name>-<version>-<rand>/
 # and runs "python -m tools.model_store_cli deploy --staged <that folder>" on the host over ssh. The command-line
 # tool checks the manifest and the sha256 values, refuses an existing version and writes the audit line.
 # Exit code: 0 deployed, 1 not deployed (the reason is printed).
@@ -19,7 +21,7 @@ die() { echo "deploy_model: $*" >&2; exit 1; }
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pkg=""
-host="agx02"
+host="${AGX_HOST:-}"
 # A literal ~ on purpose: the cli expands it (local), remote_path expands it to the remote home (remote).
 # shellcheck disable=SC2088
 store="~/agx-models"
@@ -47,7 +49,10 @@ done
 pkg="$(cd "$pkg" && pwd)"
 
 if [ "$mode" = "auto" ]; then
-  if [ "$(hostname -s 2>/dev/null || true)" = "agx02" ]; then mode="local"; else mode="remote"; fi
+  if [ -n "$host" ]; then mode="remote"; else mode="local"; fi
+fi
+if [ "$mode" = "remote" ] && [ -z "$host" ]; then
+  die "--remote needs a host: give --host HOST or set AGX_HOST"
 fi
 
 if [ "$mode" = "local" ]; then
@@ -61,7 +66,7 @@ if [ "$mode" = "local" ]; then
   exit 0
 fi
 
-# Remote: scp follows symbolic links, so refuse them here (the cli refuses them on AGX02 too).
+# Remote: scp follows symbolic links, so refuse them here (the cli refuses them on the AGX too).
 if [ -n "$(find "$pkg" -type l -print -quit)" ]; then
   die "the package contains a symbolic link: put the real files into the package"
 fi

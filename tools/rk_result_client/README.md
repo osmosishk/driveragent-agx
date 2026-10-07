@@ -81,7 +81,7 @@ on the RK3588 for live runs.
 
 3. Run it. Use the RK envelope directory `rk/proto/envelope` (it contains `dabus_envelope.py`).
    Set `--host` to the AGX Link C address `10.42.0.1`. Link C is not configured yet. Until it is,
-   use the tailscale address of the AGX, `100.64.0.20` (`docs/RK_AGX_INTERFACE.md` section 2.2).
+   use the tailscale address of the AGX (example: `100.64.0.20`, `docs/RK_AGX_INTERFACE.md` section 2.2).
 
    ```
    cd ~/agx_client
@@ -105,8 +105,8 @@ Options:
 | `--host` | `127.0.0.1` | AGX address |
 | `--results-port` / `--status-port` | `5560` / `5561` | `--status-port 0` = no status |
 | `--result-type-id` / `--status-type-id` | `5560` / `5561` | Expected envelope `type_id` (= the node port). Use these when you connect to a test port. |
-| `--schema` | `/home/tonyho/driveragent-agx/proto/agx_infer.capnp` | Schema file |
-| `--envelope-dir` | `/home/tonyho/driveragent-agx/common` | Directory of `dabus_envelope.py` |
+| `--schema` | `<repo>/proto/agx_infer.capnp` (the repo that holds this tool) | Schema file |
+| `--envelope-dir` | `<repo>/common` | Directory of `dabus_envelope.py` |
 | `--crc` | `auto` | `auto` or `reference` |
 | `--seconds` | `10` | Run time. `0` = until Ctrl-C. |
 | `--print` | off | One line for each result and each status message |
@@ -166,8 +166,8 @@ yet (`docs/RK_AGX_INTERFACE.md` section 9). To add them:
 ## 6. Test
 
 ```
-cd /home/tonyho/driveragent-agx
-PYTHONPATH=/home/tonyho/driveragent-agx .venv/bin/python -m pytest -p no:cacheprovider -q tests/test_rk_result_client.py
+cd <repo>        # for example ~/driveragent-agx
+PYTHONPATH=. .venv/bin/python -m pytest -p no:cacheprovider -q tests/test_rk_result_client.py
 ```
 
 The test uses the real `ResultPublisher` and `StatusPublisher` of `infer/publish` on the test ports

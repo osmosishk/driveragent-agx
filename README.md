@@ -22,46 +22,43 @@ RK3588 (or tools/rk_sim)                       AGX agx02
 
 ## Set-up
 
-Needed: Jetson AGX Orin with JetPack 6.2.1 (L4T R36.4), TensorRT 10.3.0, Python 3.10. The venv uses
-the system packages (`--system-site-packages`). Some packages come from JetPack/apt and some from
-the user site of `tonyho` (`~/.local`). The header of `requirements-venv.txt` gives the list and the
-versions. Install the missing ones with the same versions before the first start.
+Needed: Jetson AGX Orin with JetPack 6.2.1 (L4T R36.4), TensorRT 10.3.0, Python 3.10. The full procedure for a new
+unit (from an empty Jetson to "paired with a board and one model active") is in `docs/INSTALL_AGX.md`. Short form:
 
 ```
+git clone git@github.com:osmosishk/driveragent-agx.git ~/driveragent-agx
 cd ~/driveragent-agx
-python3 -m venv --system-site-packages .venv
-.venv/bin/python -m pip install -r requirements-venv.txt
-cp .env.example .env
-chmod 600 .env
-# Set a random dashboard password in .env (the command does not show the password):
-PW="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
-sed -i "s|^AGX_DASH_PASSWORD=.*|AGX_DASH_PASSWORD=$PW|" .env; unset PW
+ops/preflight.sh                     # checks only; PASS / FAIL per item
+ops/install.sh                       # venv, pinned packages, config/*.yaml, .env (random password), units
+ops/doctor.sh --before-pairing       # PASS / FAIL per item
 ```
 
+`ops/install.sh` makes the venv `.venv` (`--system-site-packages`) and installs the fixed versions of
+`requirements/agx-torch.txt` (torch for Jetson) and `requirements/agx-venv.txt` (all other packages; its header lists
+the packages that come from JetPack / apt). `requirements-venv.txt` only points to `requirements/agx-venv.txt`.
+It makes `config/*.yaml` from `config/templates/` (only missing files) and `.env` from `.env.example` with a new
+random dashboard password (mode 600). It never prints the password: it prints the path of `.env`.
 Do not commit `.env`. The dashboard does not start when `AGX_DASH_PASSWORD` is empty.
 
 ## Start and stop
 
-The services run as transient systemd user units (no sudo tonight; no start at boot).
+`ops/install.sh` installs two systemd USER units, `agx-infer` and `agx-dashboard` (`--instance NAME` changes the
+prefix). For a start at boot, the owner runs `sudo loginctl enable-linger <user>` one time, or installs system units
+(`ops/install.sh --print-system-units` prints the files and the sudo commands). See `docs/INSTALL_AGX.md` section 7.
 
 ```
-cd ~/driveragent-agx
-tools/svc.sh status                         # agx-dashboard, agx-infer, agx-sim
-tools/svc.sh start dashboard
-tools/svc.sh start infer                    # source mode from config/sources.yaml (sim | rk | file)
-tools/svc.sh start sim --sessions road      # simulator: replays old recordings (SIMULATED)
-tools/svc.sh stop sim
-tools/svc.sh logs infer 100
+systemctl --user status agx-dashboard agx-infer
+systemctl --user restart agx-infer
+journalctl --user-unit agx-infer -n 100
+ops/doctor.sh                                # PASS / FAIL per item
 PYTHONPATH=. .venv/bin/python -m tools.model_ctl list            # model states (admin socket, local only)
-PYTHONPATH=. .venv/bin/python -m tools.model_ctl stop driverguard_dtcp
+ops/uninstall.sh                             # removes the units and the venv that install made (--purge: more)
 ```
 
-To install real system units (owner approval), run as `tonyho`, NOT with sudo:
-`bash ~/driveragent-agx/systemd/install_units.sh`. The script asks for the sudo password. It stops
-the transient user units `agx-infer` and `agx-dashboard`, checks that TCP ports 5560-5563 and 8700
-are free, then installs and starts the system units. It does not enable the units at boot.
-No system unit exists for the simulator: in mode `sim`, keep `tools/svc.sh start sim` running, or
-set `mode: rk` in `config/sources.yaml`.
+`tools/svc.sh` starts the services as TRANSIENT user units (no unit file, no start at boot). Use it only where
+`ops/install.sh` did not install the units (AGX02 until the owner switch, `docs/INSTALL_AGX.md` section 7.4), and for
+the simulator: `tools/svc.sh start sim --sessions road` (SIMULATED input). No unit exists for the simulator: in mode
+`sim`, keep it running, or set `mode: rk` in `config/sources.yaml`.
 
 ## Dashboard
 
@@ -90,7 +87,7 @@ set `mode: rk` in `config/sources.yaml`.
 | `python -m infer.ingest.probe --config config/sources.yaml --seconds 60` | camera input metrics only |
 | `python -m tools.rk_result_client --host 127.0.0.1 --seconds 60` | example result subscriber for the RK agent |
 | `python -m tools.result_viewer --seconds 10 --out tests/out/viewer` | draw the published results on their frames |
-| `python -m tools.inspect_engines` | list every engine file with its I/O tensors |
+| `python -m tools.inspect_engines --scan DIR` | list every engine file with its I/O tensors |
 | `python -m tools.sysmon --seconds N --out f.jsonl` | system samples (CPU, GPU, RAM, temperatures, power) |
 
 Run every command from the repository root with `PYTHONPATH=.` and `.venv/bin/python`.
@@ -114,8 +111,8 @@ span). `tests/test_repo_rules.py` fails when a tracked test log is larger than 1
   (strict zero-loss UDP check). It passes when it runs alone.
 - Mode `rk` is not tested with the real RK3588. The RK3588 does not send FrameLink yet
   (`docs/BLOCKERS.md` B3).
-- Transient user units (`tools/svc.sh`) stop when the last session of `tonyho` ends (Linger=no)
-  and at reboot. For a permanent service, install the system units (see "Start and stop").
+- Transient user units (`tools/svc.sh`) stop when the last session of the user ends (Linger=no)
+  and at reboot. For a permanent service, use `ops/install.sh` and linger or system units (see "Start and stop").
 - The dashboard uses plain HTTP with Basic auth: the password crosses the network. Use it through
   tailscale or loopback, or set TLS (`tls_certfile` and `tls_keyfile` in `config/dashboard.yaml`).
 - MQTT publisher: written, DISABLED. Enable it only with owner approval (rule R11: data goes off
@@ -126,6 +123,7 @@ span). `tests/test_repo_rules.py` fails when a tracked test log is larger than 1
 
 | File | Content |
 |---|---|
+| `docs/INSTALL_AGX.md` | install a new AGX unit (ops/ scripts), start at boot, pairing, first model, uninstall |
 | `docs/MORNING_REPORT.md` | status of the night run, numbers, decisions for the owner |
 | `docs/RK_AGX_INTERFACE.md` | interface RK3588 <-> AGX (FrameLink, envelope, results, status) |
 | `docs/RK_TASKS.md` | work for the RK3588 agent, with tests |

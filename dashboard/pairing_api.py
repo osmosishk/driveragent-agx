@@ -1,4 +1,4 @@
-"""Pairing API of the AGX02 dashboard (docs/PAIRING_API.md; store: common/pairing_store.py).
+"""Pairing API of the AGX dashboard (docs/PAIRING_API.md; store: common/pairing_store.py).
 
   GET  /api/pair/info                no auth (IP allowlist)   {agx, name, schema, control_mode, pairing_open, ports}
   POST /api/pair/code                Basic + X-AGX-CSRF       {ok, code, expires_t, ttl_s}       vehicle -> 409
@@ -52,9 +52,10 @@ def schema_hashes() -> dict:
 
 def read_ports(infer_cfg: Path | None, sources_cfg: Path | None) -> dict:
     """The AGX ports for the RK board, from config/infer.yaml and config/sources.yaml (read only; defaults when a
-    file cannot be read)."""
+    file cannot be read). Video: the cameras with their own "port" give the list (as before); else
+    base_port + 0..5 (sources.yaml base_port, default 6000)."""
     out = dict(DEFAULT_PORTS)
-    out["video"] = [6000 + n for n in range(6)]
+    out["video"] = [out["video_base"] + n for n in range(6)]
     try:
         with open(infer_cfg, encoding="utf-8") as f:
             ports = (yaml.safe_load(f) or {}).get("ports") or {}
@@ -65,7 +66,11 @@ def read_ports(infer_cfg: Path | None, sources_cfg: Path | None) -> dict:
         pass
     try:
         with open(sources_cfg, encoding="utf-8") as f:
-            cams = (yaml.safe_load(f) or {}).get("cameras") or []
+            src = yaml.safe_load(f) or {}
+        base = src.get("base_port")
+        if isinstance(base, int) and not isinstance(base, bool) and base > 0:
+            out["video"], out["video_base"] = [base + n for n in range(6)], base
+        cams = src.get("cameras") or []
         vp = sorted(c["port"] for c in cams if isinstance(c, dict) and isinstance(c.get("port"), int))
         if vp:
             out["video"], out["video_base"] = vp, vp[0]
@@ -173,7 +178,7 @@ def register(app, hub, pairing, fails, cfg: dict) -> None:
     def vehicle_refusal(what: str) -> str | None:
         m, problem = mode()
         if m == "vehicle":
-            return f"AGX02 is in vehicle mode (config/control.yaml): {what} is refused" + \
+            return f"This AGX is in vehicle mode (config/control.yaml): {what} is refused" + \
                 (f" ({problem})" if problem else "")
         return None
 
