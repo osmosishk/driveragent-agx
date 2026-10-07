@@ -533,6 +533,8 @@ class ModelManager:
                 "gpu_mem_mb": round(eng.gpu_bytes_estimate() / 2 ** 20, 1) if eng is not None else None,
                 "gpu_mem_note": GPU_MEM_NOTE,
                 "trt_match": eng.trt_match if eng is not None else None,
+                "trt_build_device": eng.trt_build_device if eng is not None else None,
+                "trt_device_warning": eng.trt_device_warning if eng is not None else None,  # information only
                 "trt_version": eng.trt_version if eng is not None else _trt_version(),
                 "load_warnings": list(eng.load_warnings) if eng is not None else [],
                 "inputs": [{"name": t.name, "shape": list(t.shape), "dtype": t.dtype} for t in eng.inputs()]

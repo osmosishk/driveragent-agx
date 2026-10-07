@@ -18,6 +18,8 @@ import numpy as np
 import tensorrt as trt
 import torch
 
+from common import trt_compat
+
 _TRT_TO_TORCH = {
     trt.DataType.FLOAT: torch.float32,
     trt.DataType.HALF: torch.float16,
@@ -93,12 +95,19 @@ class TrtEngine:
                                  or self.engine.device_memory_size)
         self.trt_version = trt.__version__
         self.load_warnings = [m for m in self.logger.messages if m.startswith("WARNING")]
+        hw = getattr(self.engine, "hardware_compatibility_level", None)
+        self.hw_compat = getattr(hw, "name", None)
+        # trt_match: loads with the installed TensorRT + built on an Orin GPU (common/trt_compat.py).
+        # The device warning is information only.
+        self._trt_match, self.trt_build_device = trt_compat.verdict(True, self.hw_compat,
+                                                                    trt_compat.host_is_orin())
+        self.trt_device_warning = trt_compat.device_warning(self.load_warnings)
         self._lock = threading.Lock()
         self.slots: list[ExecutionSlot] = []
 
     @property
     def trt_match(self) -> bool:
-        return not self.load_warnings
+        return self._trt_match
 
     @property
     def version_tag(self) -> str:

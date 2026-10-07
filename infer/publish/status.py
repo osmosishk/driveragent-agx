@@ -91,6 +91,8 @@ def normalize_model_status(m: dict) -> dict:
         "gpu_mem_mb": _num(m.get("gpu_mem_mb")),
         "gpu_mem_note": m.get("gpu_mem_note") or GPU_MEM_NOTE,
         "trt_match": m.get("trt_match"),
+        "trt_build_device": m.get("trt_build_device"),
+        "trt_device_warning": m.get("trt_device_warning"),
         "trt_version": m.get("trt_version"),
         "load_warnings": list(m.get("load_warnings") or []),
         "inputs": list(m.get("inputs") or []),

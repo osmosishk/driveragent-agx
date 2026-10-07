@@ -27,8 +27,9 @@ P_RES, P_STAT, P_INT, P_ADM = 15560, 15561, 15562, 15563
 STATUS_KEYS = {"schema", "t", "node", "cameras", "models", "publish", "link"}
 NODE_KEYS = {"state", "uptime_s", "pid", "version", "simulated", "errors"}
 MODEL_KEYS = {"name", "engine", "engine_version", "state", "error", "reason", "enabled", "cameras",
-              "fps", "lat_ms", "gpu_mem_mb", "gpu_mem_note", "trt_match", "trt_version",
-              "load_warnings", "inputs", "outputs", "results_total"}
+              "fps", "lat_ms", "gpu_mem_mb", "gpu_mem_note", "trt_match", "trt_build_device",
+              "trt_device_warning", "trt_version", "load_warnings", "inputs", "outputs", "results_total"}
+DEV_WARN = "WARNING: Using an engine plan file across different models of devices (fake)"
 PUBLISH_KEYS = {"results_port", "status_port", "results_rate_hz", "subscribers", "results_total",
                 "last_result_t"}
 LINK_KEYS = {"last_frame_t", "time_since_last_frame_ms"}
@@ -190,7 +191,8 @@ class FakeManager:
              "error": None, "reason": None, "enabled": True, "cameras": [0, 1, 2, 3, 4, 5], "fps": 30.0,
              "lat_ms": {"pre": {"p50": 2, "p95": 3, "p99": 4}, "infer": {"p50": 17, "p95": 23, "p99": 25},
                         "post": {"p50": 3, "p95": 4, "p99": 5}, "total": {"p50": 25, "p95": 30, "p99": 35}},
-             "gpu_mem_mb": 180.0, "trt_match": True, "trt_version": "10.3.0", "load_warnings": [],
+             "gpu_mem_mb": 180.0, "trt_match": True, "trt_build_device": "Orin GPU (sm87)",
+             "trt_device_warning": DEV_WARN, "trt_version": "10.3.0", "load_warnings": [DEV_WARN],
              "inputs": [{"name": "image", "shape": [1, 3, 384, 640], "dtype": "FLOAT"}],
              "outputs": [], "results_total": 10},
             {"name": "system1", "engine": None, "state": "OFF", "enabled": False,
@@ -277,6 +279,10 @@ def test_status_publisher(ctx):
             assert set(mm) == MODEL_KEYS
             assert set(mm["lat_ms"]) == {"pre", "infer", "post", "total"}
             assert mm["gpu_mem_note"] == "estimate: engine file + activation + I/O"
+        y, s1 = js["models"]
+        assert y["trt_match"] is True and y["trt_build_device"] == "Orin GPU (sm87)"
+        assert y["trt_device_warning"] == DEV_WARN and y["load_warnings"] == [DEV_WARN]
+        assert s1["trt_build_device"] is None and s1["trt_device_warning"] is None
         assert set(js["publish"]) == PUBLISH_KEYS and js["publish"]["status_port"] == P_STAT
         assert set(js["link"]) == LINK_KEYS and js["link"]["time_since_last_frame_ms"] is not None
     finally:

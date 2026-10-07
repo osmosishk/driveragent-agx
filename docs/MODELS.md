@@ -90,12 +90,41 @@ layers 81  profiles 1  device_memory 237619200 B
   OUTPUT feat_3         (6, 256, 15, 25)       FLOAT
 ```
 
+Since 2026-10-07 the rule for `match` is different (owner decision, `common/trt_compat.py`): `match True` when
+the engine loads with the installed TensorRT AND its build device is an Orin GPU. TensorRT loads an engine that
+was built without hardware compatibility only on a GPU with the same compute capability as the build GPU, so such
+an engine that loads on this Orin was built on an Orin GPU (sm87). The TensorRT device warning is information only
+(field `trt_device_warning`). Real output of the same command on 2026-10-07 (load lines only):
+
+```
+##### /home/tonyho/model/jetson_bundle/engines/dtcp_v1_fp16.engine
+TensorRT 10.3.0  load OK  match True  build device Orin GPU (sm87)
+  device warning (information only): WARNING: Using an engine plan file across different models of devices is not recommended and is likely to affect performance or even cause errors.
+##### /home/tonyho/model/jetson_bundle/engines/yolopx_v2_fp16.engine
+TensorRT 10.3.0  load OK  match True  build device Orin GPU (sm87)
+  device warning (information only): WARNING: Using an engine plan file across different models of devices is not recommended and is likely to affect performance or even cause errors.
+##### /home/tonyho/model/sparsedrive/run/convnext_backbone_fp16.trt
+TensorRT 10.3.0  load OK  match True  build device Orin GPU (sm87)
+  device warning (information only): WARNING: Using an engine plan file across different models of devices is not recommended and is likely to affect performance or even cause errors.
+##### /home/tonyho/model/sparsedrive/run/convnext_backbone_fp16_orin.trt
+TensorRT 10.3.0  load OK  match True  build device Orin GPU (sm87)
+  device warning (information only): WARNING: Using an engine plan file across different models of devices is not recommended and is likely to affect performance or even cause errors.
+##### /home/tonyho/model/sparsedrive/run/resnet_backbone_fp16_orin.trt
+TensorRT 10.3.0  load OK  match True  build device Orin GPU (sm87)
+  device warning (information only): WARNING: Using an engine plan file across different models of devices is not recommended and is likely to affect performance or even cause errors.
+```
+
 Notes:
 - Exactly 5 raw plan files exist on `/`. The critic scanned every file of 200 KB or more for the plan header (T1_critic.md, G1).
 - `/home/tonyho/model/driverguard/engines/` holds only 2 symlinks to the `jetson_bundle/engines/` files (T1_driverguard.md, section 1). The tool lists each real file once.
 - A 6th engine is embedded in `/home/tonyho/model/sparsedrive/run/convnext_backbone_trt.ep`. It is not a plan file, so the tool does not list it. See section 7.5.
 - `/data` is `drwx------ root`. The research could not read it without sudo. Engines there are unknown.
-- The cause of the "different models of devices" warning is NOT determined (T1_other-models.md, section 1).
+- The "different models of devices" warning (2026-10-07 check; strong evidence, not a proof, because TensorRT
+  is closed source): a plan stores the total memory of its build device (plan bytes 265-272: 64,349,240 kB for
+  the two DriverGuard plans, 64,349,236 kB for the three SparseDrive plans). TensorRT writes the warning when the
+  total memory of the current boot is different. MemTotal changes at each boot (64,349,240 kB in the boot of
+  2026-09-25, 64,349,244 kB since the boot of 2026-10-06). It is not a defect (owner decision 2026-10-07): the
+  warning is information only and does not change `match`. A reboot or a rebuild does not reliably remove it.
 
 ## 2. Summary
 
@@ -105,10 +134,10 @@ Source: `config/models.yaml:17-61`. Decisions: `docs/NIGHT_LOG.md` 21:26.
 
 | Model (config name) | Engine file | Size (B) | sha256[:16] | Loads on TRT 10.3.0 | Runnable pipeline | Cameras | Proposed state | Reason |
 |---|---|---|---|---|---|---|---|---|
-| `driverguard_yolopx` | `/home/tonyho/model/jetson_bundle/engines/yolopx_v2_fp16.engine` | 70,643,388 | `3412bafa057a3a76` | Yes. match True. No warning. | Yes | Detections: cam0-cam5. Masks: cam0 only. | **enabled** | Correct output (parity with reference, section 3.8). Old stack ran it on cam0 only. Detection quality on side and rear views is NOT validated. |
-| `driverguard_dtcp` | `/home/tonyho/model/jetson_bundle/engines/dtcp_v1_fp16.engine` | 55,987,852 | `1071ea90213eddc2` | Yes. match True. No warning. | Yes, with assumed inputs | cam0 only | **enabled** | Waypoints for display only. Ego speed and route are not available: `inputsValid = false` (section 4). |
+| `driverguard_yolopx` | `/home/tonyho/model/jetson_bundle/engines/yolopx_v2_fp16.engine` | 70,643,388 | `3412bafa057a3a76` | Yes. match True (built on an Orin GPU). Device warning since the 2026-10-06 boot: information only. | Yes | Detections: cam0-cam5. Masks: cam0 only. | **enabled** | Correct output (parity with reference, section 3.8). Old stack ran it on cam0 only. Detection quality on side and rear views is NOT validated. |
+| `driverguard_dtcp` | `/home/tonyho/model/jetson_bundle/engines/dtcp_v1_fp16.engine` | 55,987,852 | `1071ea90213eddc2` | Yes. match True (built on an Orin GPU). Device warning since the 2026-10-06 boot: information only. | Yes, with assumed inputs | cam0 only | **enabled** | Waypoints for display only. Ego speed and route are not available: `inputsValid = false` (section 4). |
 | `system1` | none (no engine exists) | – | – | No engine | No (PyTorch only) | cam0-cam5 | **disabled** (state `OFF`) | Not a TensorRT model. About 192-213 ms per inference. Bugs B1-B5 in the old runner (section 7.1). |
-| `sparsedrive_convnext_orin` | `/home/tonyho/model/sparsedrive/run/convnext_backbone_fp16_orin.trt` | 63,276,916 | `3d0ece003f5e61a4` | Loads. match False. Device warning. | No | cam0-cam5 | **disabled** | Wrong features (cosine 0.39 against its ONNX). Head is PyTorch only (0.5-0.7 FPS). Calibration is a placeholder (section 7.2). |
+| `sparsedrive_convnext_orin` | `/home/tonyho/model/sparsedrive/run/convnext_backbone_fp16_orin.trt` | 63,276,916 | `3d0ece003f5e61a4` | Loads. match True (built on an Orin GPU). Device warning: information only. | No | cam0-cam5 | **disabled** | Wrong features (cosine 0.39 against its ONNX). Head is PyTorch only (0.5-0.7 FPS). Calibration is a placeholder (section 7.2). |
 
 ### 2.2 Engines on disk that are NOT in the config
 
@@ -116,8 +145,8 @@ The dashboard lists these separately.
 
 | Engine | Size (B) | sha256[:16] | Loads on TRT 10.3.0 | Why not in config |
 |---|---|---|---|---|
-| `/home/tonyho/model/sparsedrive/run/convnext_backbone_fp16.trt` | 63,330,348 | `653ec9617d4d6613` | Loads. match False. Device warning. | Wrong features: cosine 0.121 against `convnext_nchw_backbone.onnx`. |
-| `/home/tonyho/model/sparsedrive/run/resnet_backbone_fp16_orin.trt` | 54,297,884 | `d90f93dc43c1d62d` | Loads. match False. Device warning. | Correct (cosine 1.00000 against its ONNX). No head weights for it: `best.pth` has 0 `resnet.*` keys. |
+| `/home/tonyho/model/sparsedrive/run/convnext_backbone_fp16.trt` | 63,330,348 | `653ec9617d4d6613` | Loads. match True (built on an Orin GPU). Device warning: information only. | Wrong features: cosine 0.121 against `convnext_nchw_backbone.onnx`. |
+| `/home/tonyho/model/sparsedrive/run/resnet_backbone_fp16_orin.trt` | 54,297,884 | `d90f93dc43c1d62d` | Loads. match True (built on an Orin GPU). Device warning: information only. | Correct (cosine 1.00000 against its ONNX). No head weights for it: `best.pth` has 0 `resnet.*` keys. |
 | Engine embedded in `/home/tonyho/model/sparsedrive/run/convnext_backbone_trt.ep` | 65,931,356 (decoded) | `.ep` file: `e28b0f0ae8612ebc` | Deserializes with the device warning (critic check) | Not a plan file. Output is 100% NaN. |
 
 ### 2.3 Other weights: not models for this node

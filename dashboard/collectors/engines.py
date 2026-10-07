@@ -4,8 +4,12 @@ Source: tools/inspect_engines.py (inspect(path), scan(dirs)). Each engine is rea
 subprocess (about 0.5 s each). A background thread scans at start and every interval_s (30 min).
 
 Cache (JSON file, default data/engines_cache.json):
-  {"version": 1, "t": <unix s>, "entries": {"<realpath>|<size>|<mtime_ns>": {<inspect() result>}}}
+  {"version": 2, "t": <unix s>, "entries": {"<realpath>|<size>|<mtime_ns>": {<inspect() result>}}}
 Only engines with a new key (new file, other size or other mtime) are inspected again.
+Version 2 (2026-10-07): new trt_match rule and the fields trt_build_device / trt_device_warning
+(common/trt_compat.py). A version 1 cache is ignored, so every engine is inspected again with the new rule.
+Each entry has the boot_id of its inspection. The TensorRT device warning depends on the boot (total memory),
+so an entry of an other boot is inspected again at the next scan (one time in each boot).
 An inspection that FAILED (timeout, GPU memory full while agx-infer runs, ...) is not kept as final:
 the next periodic scan (start + every interval_s) inspects that engine again.
 The engines of config/models.yaml are always inspected, also when they are outside the scan dirs.
@@ -24,9 +28,19 @@ from pathlib import Path
 
 log = logging.getLogger("dashboard.engines")
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 RESCAN_MIN_S = 30.0
 PENDING = "file changed or new: inspection pending"
+BOOT_ID_PATH = "/proc/sys/kernel/random/boot_id"
+
+
+def current_boot_id() -> str | None:
+    """Linux boot ID, or None when it cannot be read."""
+    try:
+        with open(BOOT_ID_PATH, encoding="ascii") as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
 
 
 def file_key(path: str) -> tuple[str, str] | None:
@@ -105,6 +119,7 @@ class EngineScanner:
         """retry_failed: inspect again the engines whose cached inspection FAILED (periodic scans)."""
         from tools.inspect_engines import inspect, scan
 
+        boot = current_boot_id()
         with self._lock:
             self._running = True
         errors = []
@@ -137,15 +152,19 @@ class EngineScanner:
                 info = old.get(key)
                 if info is not None and retry_failed and info.get("load") != "OK":
                     info = None  # a failed inspection can be temporary: try again
+                if info is not None and info.get("boot_id") != boot:
+                    info = None  # the TensorRT device warning depends on the boot: inspect again in this boot
                 if info is None:
                     t0 = time.monotonic()
                     try:
                         info = inspect(real, timeout=self.inspect_timeout_s)
                     except Exception as e:  # noqa: BLE001
                         info = {"path": real, "realpath": real, "load": "FAILED", "trt_match": False,
+                                "trt_build_device": None, "trt_device_warning": None,
                                 "error": f"inspect failed: {e}"}
                     info["inspect_s"] = round(time.monotonic() - t0, 2)
                     info["inspected_t"] = time.time()
+                    info["boot_id"] = boot
                     log.info("engine inspected %s load %s (%.1f s)", real, info.get("load"), info["inspect_s"])
                 new_entries[key] = info
                 by_real[real] = info

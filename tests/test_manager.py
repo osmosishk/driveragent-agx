@@ -18,6 +18,7 @@ import time
 import numpy as np
 import pytest
 
+from common import trt_compat
 from infer.ingest.frame_store import Frame, FrameStore
 from infer.models.manager import ModelManager
 
@@ -25,8 +26,8 @@ DTCP_ENGINE = "/home/tonyho/model/jetson_bundle/engines/dtcp_v1_fp16.engine"
 DTCP_ONNX = "/home/tonyho/model/jetson_bundle/onnx/dtcp_v1.onnx"
 FORBIDDEN = {"throttle", "steer", "brake", "mu", "sigma", "pred_speed", "pred_speed_mps"}
 CONTRACT_KEYS = {"name", "engine", "engine_version", "state", "error", "reason", "enabled", "cameras", "fps",
-                 "lat_ms", "gpu_mem_mb", "gpu_mem_note", "trt_match", "trt_version", "load_warnings",
-                 "inputs", "outputs", "results_total"}
+                 "lat_ms", "gpu_mem_mb", "gpu_mem_note", "trt_match", "trt_build_device", "trt_device_warning",
+                 "trt_version", "load_warnings", "inputs", "outputs", "results_total"}
 
 pytestmark = pytest.mark.skipif(not os.path.isfile(DTCP_ENGINE), reason="DTCP engine missing")
 
@@ -148,7 +149,11 @@ def test_failed_model_is_isolated_and_stop_start(bad_engine, scratch):
             d = st["driverguard_dtcp"]
             print("driverguard_dtcp:", d["state"], "fps", d["fps"], "results", d["results_total"],
                   "lat_ms", d["lat_ms"]["total"], "gpu_mem_mb", d["gpu_mem_mb"], d["engine_version"])
-            assert d["state"] == "RUNNING" and d["error"] is None and d["trt_match"] is True
+            assert d["state"] == "RUNNING" and d["error"] is None
+            # trt_match: loads with the installed TensorRT + built on an Orin GPU (common/trt_compat.py).
+            # The TensorRT device warning depends on the boot (total memory) and is information only.
+            assert d["trt_match"] is True and d["trt_build_device"] == "Orin GPU (sm87)"
+            assert d["trt_device_warning"] == trt_compat.device_warning(d["load_warnings"])
             assert d["results_total"] >= 20 and d["fps"] <= 11.5
             assert d["lat_ms"]["infer"]["p50"] is not None
             assert [i["name"] for i in d["inputs"]] == ["image", "state", "target_point"]

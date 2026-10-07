@@ -341,12 +341,17 @@
       el("div", null, el("span", { class: "k" }, "Out: "), (outs || []).map(shp).join("; ") || NA));
   }
   function trtCell(m) {
-    const w = m.load_warnings || [];
+    // trt_match: loads with the installed TensorRT + built on an Orin GPU. The TensorRT device warning is
+    // information only (trt_device_warning): grey, not a warning colour.
+    const dw = m.trt_device_warning || null;
+    const w = (m.load_warnings || []).filter((x) => x !== dw);
     const txt = m.trt_match === true ? "yes" : m.trt_match === false ? "no" : NA;
     const cls = m.trt_match === true ? "lv-ok" : m.trt_match === false ? "lv-crit" : "muted";
-    return el("td", { title: w.join("\n") || null },
+    const tip = [m.trt_build_device ? "Build device: " + m.trt_build_device : null, dw].concat(w).filter(Boolean).join("\n");
+    return el("td", { title: tip || null },
       el("span", { class: cls }, txt), m.trt_version ? el("span", { class: "muted" }, " TensorRT " + m.trt_version) : null,
       m.engine_load === "FAILED" ? el("div", { class: "lv-crit small" }, "Load FAILED" + (m.engine_error ? ": " + m.engine_error : "")) : null,
+      dw ? el("div", { class: "muted small" }, "Device warning (information only): " + dw.slice(0, 120)) : null,
       w.length ? el("div", { class: "lv-warn small" }, w.length + " load message(s): " + w[0].slice(0, 120)) : null);
   }
   const STATE_LV = { RUNNING: "lv-ok", LOADED: "lv-warn", OFF: "lv-na", FAILED: "lv-crit" };

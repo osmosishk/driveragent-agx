@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from common.env import load_env  # noqa: E402
-from dashboard.collectors.engines import file_key  # noqa: E402
+from dashboard.collectors.engines import CACHE_VERSION, current_boot_id, file_key  # noqa: E402
 
 OUT = Path(os.environ.get("AGX_DASH_TEST_OUT") or (ROOT / "tests" / "out"))
 # AGX_DASH_TEST_PORT_MIN / AGX_DASH_TEST_PORT_MAX override the default test ports 18800-18899
@@ -200,10 +200,11 @@ def engines_dir():
     bog = d / "bogus_test.plan"
     bog.write_bytes(b"NOT-A-REAL-ENGINE-bogus" * 10)
     real, key = file_key(str(inj))
-    cache = {"version": 1, "t": time.time(), "entries": {key: {
+    cache = {"version": CACHE_VERSION, "t": time.time(), "entries": {key: {
         "path": str(inj), "realpath": real, "size": inj.stat().st_size, "mtime": "2026-10-05 22:00:00",
         "sha256_16": "injected00000001", "trt_version": "10.3.0", "load": "OK", "messages": [],
-        "trt_match": True, "io": [{"name": "images", "mode": "INPUT", "shape": [1, 3, 640, 640], "dtype": "HALF"},
+        "boot_id": current_boot_id(),
+        "trt_match": True, "trt_build_device": "Orin GPU (sm87)", "trt_device_warning": None, "io": [{"name": "images", "mode": "INPUT", "shape": [1, 3, 640, 640], "dtype": "HALF"},
                                   {"name": "out", "mode": "OUTPUT", "shape": [1, 100, 6], "dtype": "FLOAT"}]}}}
     cpath = OUT / "v2_engines_cache.json"
     cpath.write_text(json.dumps(cache))
@@ -659,6 +660,76 @@ def test_engine_scanner_retry_and_pending(monkeypatch):
     assert sc2.found_notes() == [(os.path.realpath(f), None, PENDING)]
     sc2.scan_once(retry_failed=False)
     assert len(calls) == 3 and sc2.facts_note(str(f))[1] is None
+
+
+def test_engine_cache_old_version_and_other_boot(monkeypatch, tmp_path):
+    """A version 1 cache (old trt_match rule) is ignored. An entry of an other boot is inspected again (the
+    TensorRT device warning depends on the boot), one time in each boot."""
+    import tools.inspect_engines as ie
+
+    from dashboard.collectors import engines as eng
+
+    d = tmp_path / "eng"
+    d.mkdir()
+    f = d / "x.engine"
+    f.write_bytes(b"x" * 100)
+    calls = []
+
+    def fake_inspect(path, timeout=120.0):
+        calls.append(path)
+        return {"path": path, "realpath": os.path.realpath(path), "size": os.path.getsize(path), "load": "OK",
+                "trt_match": True, "trt_build_device": "Orin GPU (sm87)", "trt_device_warning": None}
+
+    monkeypatch.setattr(ie, "inspect", fake_inspect)
+    monkeypatch.setattr(ie, "scan", lambda dirs: [str(f)])
+    monkeypatch.setattr(eng, "current_boot_id", lambda: "boot-B")
+    cache = tmp_path / "cache.json"
+    cache.write_text(json.dumps({"version": 1, "t": 0, "entries": {
+        eng.file_key(str(f))[1]: {"load": "OK", "trt_match": False, "messages": ["WARNING: x"]}}}))
+    sc = eng.EngineScanner(cache, [str(d)], lambda: [], 1800, 1)
+    assert sc.facts(str(f)) is None and "unknown format" in sc.status()["error"]
+    sc.scan_once(retry_failed=False)               # no retry: only the version check causes the inspection
+    assert len(calls) == 1 and sc.facts(str(f))["trt_match"] is True
+    assert json.loads(cache.read_text())["version"] == eng.CACHE_VERSION == 2
+    sc.scan_once(retry_failed=False)               # same boot: the result stays cached
+    assert len(calls) == 1
+    monkeypatch.setattr(eng, "current_boot_id", lambda: "boot-C")
+    sc.scan_once(retry_failed=False)               # other boot: inspected again, one time
+    sc.scan_once(retry_failed=False)
+    assert len(calls) == 2 and sc.facts(str(f))["boot_id"] == "boot-C"
+
+
+class _FactsScanner(_StubScanner):
+    def __init__(self, facts):
+        self._facts = facts
+
+    def facts_note(self, p):
+        return self._facts, None
+
+
+def test_live_trt_fields_replace_inspection_values():
+    """An agx-infer with the new rule gives the values of THIS boot: a live 'no device warning' replaces the
+    warning of the inspection. An older agx-infer (no trt_build_device) keeps the inspection values."""
+    from dashboard.infer_views import InferViews
+
+    warn = "WARNING: Using an engine plan file across different models of devices is not recommended"
+    facts = {"load": "OK", "trt_match": True, "trt_build_device": "Orin GPU (sm87)", "trt_device_warning": warn,
+             "messages": [warn], "io": []}
+    v = InferViews(_client_with({}), _FactsScanner(facts), None, None)
+    mc = {"name": "m", "enabled": True, "engine": "/nonexistent/m.engine"}
+    r = v._row(mc, {"name": "m", "state": "RUNNING", "trt_match": True, "trt_build_device": "Orin GPU (sm87)",
+                    "trt_device_warning": None, "load_warnings": []}, True, False)
+    assert r["trt_match"] is True and r["trt_device_warning"] is None and r["load_warnings"] == []
+    r = v._row(mc, {"name": "m", "state": "RUNNING", "trt_match": True, "trt_build_device": "Orin GPU (sm87)",
+                    "trt_device_warning": warn, "load_warnings": [warn]}, True, False)
+    assert r["trt_device_warning"] == warn and r["load_warnings"] == [warn]
+    r = v._row(mc, {"name": "m", "state": "RUNNING", "trt_match": False, "load_warnings": [warn]}, True, False)
+    assert r["trt_match"] is True and r["trt_build_device"] == "Orin GPU (sm87)" and r["trt_device_warning"] == warn
+    r = v._row(mc, None, False, False)             # no live status: the inspection values
+    assert r["trt_match"] is True and r["trt_device_warning"] == warn
+    v = InferViews(_client_with({}), _StubScanner(), None, None)
+    r = v._row(mc, {"name": "m", "state": "RUNNING", "trt_match": False}, True, False)
+    assert r["trt_match"] is False                 # no inspection facts: the value of the older agx-infer
 
 
 def _quickjs():

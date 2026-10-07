@@ -240,8 +240,10 @@ class FakeEngine:
     path = "/nonexistent/fake.engine"
     version_tag = "fake-1"
     trt_match = True
+    trt_build_device = "Orin GPU (sm87)"
+    trt_device_warning = "WARNING: Using an engine plan file across different models of devices (fake)"
     trt_version = "fake"
-    load_warnings = []
+    load_warnings = [trt_device_warning]
 
     def inputs(self):
         return [_T("x", (1, 4))]
@@ -351,6 +353,9 @@ def test_failed_model_restarts_automatically(monkeypatch, caplog):
             mgr.stop()
     print("states:", states, "results:", len(results))
     assert st["auto_restarts"] == 1 and st["error"] is None
+    # the status carries the engine's trt fields; the device warning does not change trt_match
+    assert st["trt_match"] is True and st["trt_build_device"] == FakeEngine.trt_build_device
+    assert st["trt_device_warning"] == FakeEngine.trt_device_warning
     assert any("automatic restart 1" in r.getMessage() for r in caplog.records)
     # L8: the adapter got only its ENGINE_OUTPUTS (no mu / sigma)
     assert adapter.seen_keys == {"y"}

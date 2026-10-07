@@ -240,6 +240,8 @@ class InferViews:
             "engine_error": f.get("error"),
             "trt_version": f.get("trt_version"),
             "trt_match": f.get("trt_match"),
+            "trt_build_device": f.get("trt_build_device"),
+            "trt_device_warning": f.get("trt_device_warning"),  # information only
             "load_warnings": [str(m) for m in _l(f.get("messages"))],
             "device_memory_bytes": f.get("device_memory"),
             "inspected": bool(facts),
@@ -303,11 +305,21 @@ class InferViews:
             row.update(self._error_fields(sm))
             if _l(sm.get("cameras")):
                 row["cameras"] = list(sm["cameras"])
-            if isinstance(sm.get("trt_match"), bool):
+            # An agx-infer with the 2026-10-07 rule sends trt_build_device for a loaded engine. Its trt values are
+            # the values of THIS boot (the device warning depends on the boot), so they replace the inspection
+            # values, also when they are empty. An older agx-infer (no trt_build_device key, old trt_match rule)
+            # keeps the inspection values, which use the new rule.
+            live_trt = "trt_build_device" in sm and isinstance(sm.get("trt_match"), bool)
+            if live_trt:
                 row["trt_match"] = sm["trt_match"]
+                for k in ("trt_build_device", "trt_device_warning"):
+                    row[k] = str(sm[k]) if sm.get(k) else None
+                row["load_warnings"] = [str(w) for w in _l(sm.get("load_warnings"))]
+            elif row.get("trt_match") is None and isinstance(sm.get("trt_match"), bool):
+                row["trt_match"] = sm["trt_match"]  # no inspection facts yet: the value of the older agx-infer
             if sm.get("trt_version"):
                 row["trt_version"] = str(sm["trt_version"])
-            if _l(sm.get("load_warnings")):
+            if not live_trt and _l(sm.get("load_warnings")):
                 row["load_warnings"] = [str(w) for w in sm["load_warnings"]]
             for k in ("inputs", "outputs"):
                 io = [t for t in _l(sm.get(k)) if isinstance(t, dict)]

@@ -15,6 +15,8 @@ import subprocess
 import sys
 import time
 
+from common import trt_compat
+
 DEFAULT_SCAN = ["/home/tonyho/model"]
 ENGINE_EXT = (".engine", ".trt", ".plan")
 
@@ -42,6 +44,7 @@ try:
         out["num_layers"] = e.num_layers
         out["profiles"] = e.num_optimization_profiles
         out["device_memory"] = int(getattr(e, "device_memory_size_v2", 0) or e.device_memory_size)
+        out["hw_compat"] = getattr(getattr(e, "hardware_compatibility_level", None), "name", None)
         io_ = []
         for i in range(e.num_io_tensors):
             n = e.get_tensor_name(i)
@@ -84,9 +87,11 @@ def inspect(path: str, timeout: float = 120.0) -> dict:
                 info.setdefault("messages", []).append(r.stderr.strip()[-300:])
     except subprocess.TimeoutExpired:
         info.update({"load": "FAILED", "error": f"timeout after {timeout} s"})
-    # "match": loads with the installed TensorRT and gives no warning
-    info["trt_match"] = info.get("load") == "OK" and not any("WARNING" in m or "[W]" in m
-                                                              for m in info.get("messages", []))
+    # "match": loads with the installed TensorRT and the build device is an Orin GPU (common/trt_compat.py).
+    # The TensorRT device warning is information only: trt_device_warning.
+    info["trt_match"], info["trt_build_device"] = trt_compat.verdict(
+        info.get("load") == "OK", info.get("hw_compat"), trt_compat.host_is_orin())
+    info["trt_device_warning"] = trt_compat.device_warning(info.get("messages"))
     return info
 
 
@@ -119,9 +124,13 @@ def main() -> int:
         print(f"##### {r['path']}")
         print(f"size {r['size']} B  mtime {r['mtime']}  sha256[:16] {r['sha256_16']}")
         print(f"TensorRT {r.get('trt_version', '?')}  load {r.get('load')}  match {r['trt_match']}"
+              + (f"  build device {r['trt_build_device']}" if r.get("trt_build_device") else "")
               + (f"  error {r['error']}" if r.get("error") else ""))
+        if r.get("trt_device_warning"):
+            print(f"  device warning (information only): {r['trt_device_warning']}")
         for m in r.get("messages", []):
-            print(f"  message: {m}")
+            if m != r.get("trt_device_warning"):
+                print(f"  message: {m}")
         if r.get("load") == "OK":
             print(f"layers {r['num_layers']}  profiles {r['profiles']}  device_memory {r['device_memory']} B")
             for t in r["io"]:
