@@ -240,3 +240,21 @@ def test_deploy_model_sh_remote_with_fake_ssh(tmp_path, store):
     assert r.returncode == 1 and "symbolic link" in r.stderr
     st = os.stat(os.path.join(target(store), "model.onnx"))
     assert stat.S_ISREG(st.st_mode)
+
+
+def test_deploy_model_sh_auto_mode_is_local_on_the_host(tmp_path, store):
+    """No --local/--remote: the hostname is the --host value, so the deploy is local (ssh is never called)."""
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "hostname").write_text("#!/bin/bash\necho thisagx\n")
+    (fake / "ssh").write_text("#!/bin/bash\necho 'ssh must not be called' >&2\nexit 99\n")
+    for f in ("hostname", "ssh"):
+        os.chmod(fake / f, 0o755)
+    pkg = make_pkg(tmp_path / "pkg")
+    env = {"PATH": f"{fake}:{os.environ['PATH']}"}
+    r = _run_script(pkg, "--host", "thisagx", "--store", store, "--user", "auto", env=env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "local deploy" in r.stdout and "DEPLOYED det_model@2" in r.stdout
+    # an explicit other host stays remote (the fake ssh refuses: not deployed)
+    r = _run_script(make_pkg(tmp_path / "pkg2"), "--host", "otheragx", "--store", store, env=env)
+    assert r.returncode == 1 and "cannot reach otheragx" in r.stderr

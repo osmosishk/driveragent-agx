@@ -4,7 +4,7 @@
 # Usage: tools/deploy_model.sh <package dir> [--host agx02] [--store ~/agx-models] [--user U]
 #                              [--repo ~/driveragent-agx] [--local | --remote]
 #
-# On AGX02 (hostname agx02, or --local): runs "python -m tools.model_store_cli deploy <package dir>" of this repo.
+# On the AGX itself (--local; automatic when the hostname is the --host value, or on a Jetson with no --host): runs "python -m tools.model_store_cli deploy <package dir>" of this repo.
 # On a workstation (or --remote): copies the package with scp -r to <host>:<store>/_incoming/<name>-<version>-<rand>/
 # and runs "python -m tools.model_store_cli deploy --staged <that folder>" on the host over ssh. The command-line
 # tool checks the manifest and the sha256 values, refuses an existing version and writes the audit line.
@@ -27,10 +27,11 @@ user="${USER:-$(id -un)}@$(hostname -s 2>/dev/null || echo unknown)"
 # shellcheck disable=SC2088
 repo="~/driveragent-agx"
 mode="auto"
+host_given=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --host) [ $# -ge 2 ] || usage; host="$2"; shift 2 ;;
+    --host) [ $# -ge 2 ] || usage; host="$2"; host_given=1; shift 2 ;;
     --store) [ $# -ge 2 ] || usage; store="$2"; shift 2 ;;
     --user) [ $# -ge 2 ] || usage; user="$2"; shift 2 ;;
     --repo) [ $# -ge 2 ] || usage; repo="$2"; shift 2 ;;
@@ -47,7 +48,11 @@ done
 pkg="$(cd "$pkg" && pwd)"
 
 if [ "$mode" = "auto" ]; then
-  if [ "$(hostname -s 2>/dev/null || true)" = "agx02" ]; then mode="local"; else mode="remote"; fi
+  # Local when this machine is the host. Also local on a Jetson (an AGX unit) when no --host was given: the
+  # default host agx02 is then a different AGX, and a copy to it is not what the user wants.
+  if [ "$(hostname -s 2>/dev/null || true)" = "$host" ]; then mode="local"
+  elif [ "$host_given" = 0 ] && [ -f /etc/nv_tegra_release ]; then mode="local"
+  else mode="remote"; fi
 fi
 
 if [ "$mode" = "local" ]; then

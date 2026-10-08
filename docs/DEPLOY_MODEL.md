@@ -31,7 +31,7 @@ Options:
 | `--user U` | both | `$USER` (the script adds `@<hostname>`) | The person in the audit line. |
 | `--host H` | `deploy_model.sh` | `agx02` | The ssh host of the AGX. |
 | `--repo DIR` | `deploy_model.sh` | `~/driveragent-agx` | The repository folder on the AGX. |
-| `--local` / `--remote` | `deploy_model.sh` | by hostname | `--local` runs the deploy on this computer. `--remote` copies to `--host`. On the host `agx02`, the script uses `--local`. |
+| `--local` / `--remote` | `deploy_model.sh` | automatic | `--local` runs the deploy on this computer. `--remote` copies to `--host`. With neither option, the script uses `--local` when the hostname is the `--host` value (for example on `agx02`), and on a Jetson when you do not give `--host`. Else it uses `--remote`. |
 | `--staged DIR` | `model_store_cli deploy` | - | Deploys a package that is already in `<store>/_incoming/`. `deploy_model.sh` uses it. |
 
 Exit codes: `0` = valid or deployed. `1` = a problem: the tool writes each problem in a `PROBLEM:` line.
