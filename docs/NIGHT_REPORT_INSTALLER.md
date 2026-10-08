@@ -33,6 +33,16 @@ Commits (not pushed):
 | AGX02 driveragent-agx | (last) | this report |
 | DA01 driveragent | (last) | this report |
 
+Test suites at the end:
+
+| Suite | Command | Result |
+|---|---|---|
+| AGX02 full suite (with GPU tests) | `cd ~/driveragent-agx && .venv/bin/python -m pytest -q -p no:cacheprovider tests` | `328 passed, 1 warning in 161.50s` (12:3x CST, before the report commit; the same at each commit tonight) |
+| DA01 full suite (`da01_suite.sh`, 29 steps) | 12:25-12:47 CST | 28 PASS, 1 FAIL: `router` (subprocess.TimeoutExpired: the known failure from before these tasks). Console: `293 passed, 5 skipped in 296.58s`. The DA01 repository has only this report as a change. |
+
+End state (12:25:40 CST): link UP, AGX02 active, sender ON, yolopx@1 7.0-7.2 results/s per camera, dtcp@1 10.0/s,
+rejected 0, stale 0; agx-infer PID 387147 and agx-dashboard PID 386946 (NRestarts 0, the same as at the start).
+
 ## 2. Values that were true only for AGX02 (A1)
 
 ### 2.1 What I found and what I did
