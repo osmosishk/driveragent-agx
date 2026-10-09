@@ -12,7 +12,7 @@ Times: AGX02 shows BST (UTC+1), DA01 shows CST (UTC+8). 07:00 BST = 14:00 CST.
 | A1.2 table of stage 1 | DONE | Section 4 (dry run of `ops/cleanup/stage1_disable.sh`, 13 items in group `base`) |
 | A1.3 check against rule Z3 | DONE | Section 5: group `base` disables no Z3 item and no port, device or file of the new software |
 | A1.4 SAVE FIRST repositories | DONE | Section 6: stage 1 deletes nothing, so they do not block this task |
-| A1.5 start at boot | DONE (user part) | Section 7: unit files in `~/.config/systemd/user`, links in `default.target.wants`; undo tested. Linger: owner step |
+| A1.5 start at boot | DONE (user part; no start limit after the review) | Section 7: unit files in `~/.config/systemd/user`, links in `default.target.wants`; undo tested. Linger: owner step |
 | A1.6 acceptance script | DONE | `ops/accept_stage1.sh`; before values in `tests/out/stage1/before_agx.json` (folder ignored by git: machine data) |
 | Stage 1 (owner) | WAITING FOR OWNER | - |
 | Reboot and section 5 acceptance | WAITING FOR OWNER | - |
@@ -27,7 +27,7 @@ Times: AGX02 shows BST (UTC+1), DA01 shows CST (UTC+8). 07:00 BST = 14:00 CST.
 4. At start, `agx-infer` loads the last good set (`start_set: last_good`, `~/agx-models/_state/last_good.json`): `driverguard_yolopx@1` on cameras 0-5 and `driverguard_dtcp@1` on camera 0.
 5. The unit files use the user site `~/.local` (the same as the live transient units, and the same as `ops/install.sh --user-site`). The live venv needs it (CLEANUP_PROPOSAL.md row 16).
 6. The GNOME session logs in automatically at boot (`who`: `:0` since boot). This session also starts the user manager. Thus a start at boot is possible also without linger, but only while the desktop auto-login stays. Linger makes the start independent of the desktop.
-7. The wall clock of AGX02 stepped by about 2 h after the last boot (user manager "10:12:18 BST", boot "12:12:20 BST" from `/proc/uptime`). The acceptance script uses the monotonic clock (seconds after boot) for the start times.
+7. The wall clock of AGX02 stepped by about 2 h after the last boot (the clock was 2 h behind at boot, NTP corrected it later). After the reboot, the units start before this correction. I check on DA01 that the link does not wait for it (user manager "10:12:18 BST", boot "12:12:20 BST" from `/proc/uptime`). The acceptance script uses the monotonic clock (seconds after boot) for the start times.
 
 ## 3. State before stage 1 (A1.1)
 
@@ -87,7 +87,7 @@ Not in this stage 1 (optional groups, not in the owner command): `--with nomachi
 | NVIDIA power mode, fan | `nvpmodel` (oneshot), `nvfancontrol`, `jtop` | no | enabled; nvfancontrol and jtop active |
 | New software | `agx-infer`, `agx-dashboard`, `docker`, `containerd` | no | active |
 
-The script refuses a KEEP unit (`KEEP_UNITS_RE`). Result: **stage 1 (base) disables no Z3 item.**
+Result: **stage 1 (base) disables no Z3 item.** The KEEP guard of the script (`KEEP_UNITS_RE`) does not list `nxserver`, `openvpn` or `avahi`. Thus the guard does not protect NoMachine: only the group selection does (`--with nomachine` is not in the owner command). `ModemManager`: `mmcli -L` shows "No modems were found"; `nmcli` shows no gsm or wwan device. `rpcbind`: no NFS mount and no `rpc-statd`. `packagekit` mask: apt keeps working.
 
 Ports, devices and files: the new software uses TCP 5560-5564 (ZMQ), TCP 8700 (dashboard), UDP 6000-6005 (FrameLink), `/dev/nvhost*` and `/dev/nvmap` (TensorRT), `~/agx-models`, `~/driveragent-agx`, `~/.local`, `/home/tonyho/model`. Stage 1 closes 111, 631 and 8002. None of the 13 items holds one of these. The new code has no reference to an item of stage 1 (grep of `infer/`, `dashboard/`, `controller/`, `config/`). `config/dashboard.yaml` `old_units` shows `nvargus-daemon`, `snap.cups.cupsd` and `packagekit` on the dashboard page only: after stage 1 they show "inactive". This is information, not an error.
 
@@ -102,13 +102,17 @@ Ports, devices and files: the new software uses TCP 5560-5564 (ZMQ), TCP 8700 (d
 Done (no sudo), 2026-10-09 06:59 BST:
 
 ```
-~/.config/systemd/user/agx-infer.service       (sha256 0b826add...; from ops/units/agx-infer.service.in)
-~/.config/systemd/user/agx-dashboard.service   (sha256 c36f84a1...; from ops/units/agx-dashboard.service.in)
+~/.config/systemd/user/agx-infer.service       (sha256 9d18d524...; from ops/units/agx-infer.service.in)
+~/.config/systemd/user/agx-dashboard.service   (sha256 e8fbea51...; from ops/units/agx-dashboard.service.in)
 ~/.config/systemd/user/default.target.wants/agx-infer.service     -> ../agx-infer.service
 ~/.config/systemd/user/default.target.wants/agx-dashboard.service -> ../agx-dashboard.service
 ```
 
-`agx-sim` stays disabled (no unit file). `systemd-analyze --user verify` passes. The running transient units did not change (no daemon-reload, no restart). The new files take effect at the next start of the user manager (the reboot).
+Changes after the review (commit 2f4950c): the two templates have `StartLimitIntervalSec=0` and `RestartSec=5` (before: 10 starts in 120 s, then the unit stays failed). At boot a unit must keep trying without a person. The command line and the environment are the same as the transient units of `tools/svc.sh` (`PWD`, `PYTHONUNBUFFERED=1`, `PYTHONPATH`, no `PYTHONNOUSERSITE`).
+
+`agx-sim` stays disabled (no unit file).
+
+Until the reboot: do not stop and start the two services with `tools/svc.sh`. When a transient unit stops, the name resolves to the new unit file, and `systemd-run` (svc.sh) then fails with "Unit ... already exists". If a service stops before the reboot, use `systemctl --user start agx-infer` (or `agx-dashboard`); it then runs the HEAD code. `systemd-analyze --user verify` passes. The running transient units did not change (no daemon-reload, no restart). The new files take effect at the next start of the user manager (the reboot).
 
 Undo (tested 2026-10-09 07:00 BST: files removed, units stayed active, files written again):
 ```
@@ -123,4 +127,10 @@ Linger (owner step, sudo): `sudo loginctl enable-linger tonyho`. Undo: `sudo log
 
 `ops/accept_stage1.sh [--save FILE] [--before FILE] [--da01 FILE]`. It changes nothing (read-only; it writes only the `--save` file). One line for each item of task section 5: PASS, FAIL, SKIP (data from DA01 is missing) or INFO. Items 1b and 8 need a JSON file from DA01 (link DOWN time, first result per camera, restarts on DA01, results/s, capture-to-result p50/p95, stale results).
 
-Run before stage 1 (2026-10-09 07:02 BST): PASS 1a, 3a, 3b, 4a, 4b, 6; FAIL 2a (linger no), 2b and 2c (transient units), 5 (13 old items and the container active). These FAIL lines are the expected state before stage 1.
+Item 2 proof of linger: with linger, logind starts `user@1000` at boot before any session; without linger, the GNOME auto-login session starts it. The script compares the start of `user@1000` with the first logind "New session" line (monotonic time), and the first start of each unit in this boot (user journal) with the first SSH login. It also prints the restarts of the units. Item 4b counts only the model control actions `activate`, `deactivate`, `rollback` from the rk console after the boot. Item 5 also needs each old unit disabled or masked. Item 6 also needs `nvpmodel` Result=success. Run the script 15 min or more after the boot (10-min power mean, NTP).
+
+Run before stage 1 (2026-10-09 07:19 BST): PASS 1a, 3a, 3b, 4a, 4b, 6; FAIL 2a (linger no), 2b (user manager 19.5 s after boot, after the first session at 17.5 s: no linger), 2c and 2d (transient units), 5 (13 old items and the container active). These FAIL lines are the expected state before stage 1.
+
+## 9. Review of this preparation
+
+Three independent review agents checked the claims of this report and of the DA01 report (read-only). Results used here: the start limit of the units (fixed), the svc.sh trap before the reboot (written in section 7), the linger proof of item 2 (fixed), the action filter of item 4b, the enabled check of item 5 and the nvpmodel check of item 6 (fixed), the KEEP guard and NoMachine (section 5).
