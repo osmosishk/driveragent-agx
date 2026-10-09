@@ -3,8 +3,8 @@
 # change the template and run ops/install.sh again. Remove it with ops/uninstall.sh --instance @INSTANCE@.
 [Unit]
 Description=driveragent-agx dashboard (@INSTANCE@-dashboard, @REPO_TEXT@)
-StartLimitIntervalSec=120
-StartLimitBurst=10
+# No start limit: at boot the unit must keep trying without a person (task cleanup stage 1, 2026-10-09).
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -16,7 +16,7 @@ Environment="PYTHONPATH=@REPO@"
 @NOUSERSITE_LINE@
 ExecStart="@PYTHON@" -m dashboard.main --config "@REPO@/config/dashboard.yaml"
 Restart=on-failure
-RestartSec=3
+RestartSec=5
 TimeoutStopSec=20
 
 [Install]

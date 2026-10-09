@@ -14,6 +14,7 @@
 # agx-sim not active; 4 pairing valid, model control request from the rk console accepted; 5 old stack not active;
 # 6 rule Z3 items active; 7 compare with the state before; 8 link numbers agree with the values before.
 # Output: one line per check, PASS / FAIL / INFO / SKIP. Exit 0 only when no check fails.
+# Run it 15 min or more after a boot: item 7 uses a 10-min power mean, item 6 needs NTP synchronised.
 set -euo pipefail
 # shellcheck source=lib/common.sh
 . "$(dirname "$0")/lib/common.sh"
@@ -148,26 +149,38 @@ def mono(v):   # systemd ...TimestampMonotonic (us since boot) -> s since boot; 
 
 # Times as seconds since boot (monotonic): the wall clock can step after boot (NTP), the monotonic clock cannot.
 um = mono(sprop(f"user@{os.getuid()}.service", "ActiveEnterTimestampMonotonic"))
-first_login = None   # first SSH login after boot (sshd journal; the user is in group adm)
-for ln in sh("journalctl", "-b", "-u", "ssh", "-o", "short-monotonic", "--no-pager", "-g", "Accepted").splitlines():
-    m = re.match(r"\[\s*([0-9.]+)\]", ln)
-    if m:
-        first_login = float(m.group(1))
-        break
+
+
+def first_line(*args):   # first journal line of this boot as seconds after boot (short-monotonic)
+    for ln in sh("journalctl", "-b", "-o", "short-monotonic", "--no-pager", *args).splitlines():
+        m = re.match(r"\[\s*([0-9.]+)\]", ln)
+        if m:
+            return float(m.group(1))
+    return None
+
+
+# With linger, logind starts user@<uid> at boot, before any session. Without linger, only a session (the GNOME
+# auto-login or an SSH login) starts it. Proof: the user manager is up before the first logind session.
+first_session = first_line("-u", "systemd-logind", "-g", f"New session .* of user {os.environ.get('USER', 'tonyho')}")
+first_ssh = first_line("-u", "ssh", "-g", "Accepted")
+sess_txt = (f"first session {first_session:.1f} s after boot" if first_session is not None else "no session found")
+ok_um = um is not None and linger == "yes" and (first_session is None or um < first_session)
+item("PASS" if ok_um else "FAIL", "2b", "user manager before sessions",
+     f"user@{os.getuid()} up {f'{um:.1f} s after boot' if um is not None else '?'}; {sess_txt}; "
+     f"first SSH login {f'{first_ssh:.1f} s after boot' if first_ssh is not None else 'none'}")
 for t in ("infer", "dashboard"):
     u = f"{inst}-{t}.service"
     st, frag = uprop(u, "ActiveState"), uprop(u, "FragmentPath")
-    start = mono(uprop(u, "ActiveEnterTimestampMonotonic"))
+    start = first_line("--user", "-u", u, "-g", "^Started ")
+    nr = uprop(u, "NRestarts")
     en = sh("systemctl", "--user", "is-enabled", u)
     transient = uprop(u, "Transient") == "yes"
     V[f"{t}_start_s_after_boot"] = start
-    lg = f"first SSH login {first_login:.1f} s after boot" if first_login is not None else "no SSH login after boot"
     ok = (st == "active" and not transient and en == "enabled" and start is not None
-          and (first_login is None or start < first_login))
-    item("PASS" if ok else "FAIL", "2b" if t == "infer" else "2c", f"{u} at boot",
-         f"{st}, {'TRANSIENT' if transient else 'unit file ' + frag}, {en}; started "
-         f"{f'{start:.1f} s after boot' if start is not None else '?'}; {lg}; user manager "
-         f"{f'{um:.1f} s after boot' if um is not None else '?'}")
+          and (first_ssh is None or start < first_ssh) and (first_session is None or start < first_session + 120))
+    item("PASS" if ok else "FAIL", "2c" if t == "infer" else "2d", f"{u} at boot",
+         f"{st}, {'TRANSIENT' if transient else 'unit file ' + frag}, {en}; first start "
+         f"{f'{start:.1f} s after boot' if start is not None else 'not in this boot'}; restarts {nr}")
 
 # ---------------------------------------------------------------- 3. last good set active, agx-sim not active
 store = os.path.join(HOME, "agx-models")
@@ -194,23 +207,24 @@ if board:
 else:
     item("FAIL", "4a", "pairing rk3588-da01", "no paired board rk3588-da01 in /api/pair/state")
 acc = None
+CONTROL = ("activate", "deactivate", "rollback")   # model control actions of the controller audit
 try:
     for ln in open(os.path.join(store, "_state", "audit.jsonl"), encoding="utf-8"):
         try:
             e = json.loads(ln)
         except ValueError:
             continue
-        if e.get("source") == "rk-console" and e.get("t", 0) >= boot_t and str(e.get("action", "")).split(".")[0] \
-                not in ("pair",):
+        if e.get("source") == "rk-console" and e.get("t", 0) >= boot_t and e.get("action") in CONTROL:
             acc = e if e.get("result") == "ok" else (acc or e)
 except OSError:
     pass
+last_txt = f"{acc.get('action')} -> {acc.get('result')}" if acc else "none"
 if acc and acc.get("result") == "ok":
     item("PASS", "4b", "control request from rk console", f"{acc.get('time')}: {acc.get('action')} "
          f"{acc.get('model') or ''} -> {acc.get('result')}")
 else:
     item("FAIL", "4b", "control request from rk console",
-         f"no accepted model request from the rk console after boot (last: {acc.get('action') + ' -> ' + str(acc.get('result')) if acc else 'none'})")
+         f"no accepted model request from the rk console after boot (last: {last_txt})")
 
 # ---------------------------------------------------------------- 5. old stack not active
 OLD_UNITS = ["nvargus-daemon.service", "bluetooth.service", "ModemManager.service", "kerneloops.service",
@@ -226,7 +240,8 @@ for d in glob.glob("/proc/[0-9]*"):
         continue
     if "/home/tonyho/driveragent/" in cmd or "valhalla_service" in cmd or "start-driveragent" in cmd:
         oldp.append(f"{d[6:]}:{cmd[:60]}")
-act_units = [u for u, (_e, a) in states.items() if a in ("active", "activating", "reloading")]
+act_units = [u for u, (e, a) in states.items() if a in ("active", "activating", "reloading")
+             or e not in ("disabled", "masked", "-", "not-found")]
 ok = not act_units and not cont.endswith("running") and not oldp
 item("PASS" if ok else "FAIL", "5", "old stack not active",
      "; ".join(f"{u} {e}/{a}" for u, (e, a) in states.items()) + f"; container driveragent-valhalla: {cont or 'not found'}"
@@ -243,6 +258,10 @@ for u, need in KEEP.items():
     txt.append(f"{u.removesuffix('.service')} {e}/{a}")
     if (need == "active" and a != "active") or e not in ("enabled", "static", "alias"):
         bad.append(u)
+nvp = sprop("nvpmodel.service", "Result")
+if nvp != "success":
+    bad.append(f"nvpmodel.service Result={nvp}")
+txt.append(f"nvpmodel mode {sh('nvpmodel', '-q').splitlines()[0] if sh('nvpmodel', '-q') else '?'}")
 ntp = sh("timedatectl", "show", "-p", "NTPSynchronized", "--value")
 ts_ip = sh("tailscale", "ip", "-4")
 item("PASS" if not bad and ntp == "yes" else "FAIL", "6", "rule Z3 items active",

@@ -4,8 +4,8 @@
 # The node only reads cameras over UDP and publishes results. It has no CAN access by design.
 [Unit]
 Description=driveragent-agx inference node (@INSTANCE@-infer, @REPO_TEXT@)
-StartLimitIntervalSec=120
-StartLimitBurst=10
+# No start limit: at boot the unit must keep trying without a person (task cleanup stage 1, 2026-10-09).
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -17,7 +17,7 @@ Environment="PYTHONPATH=@REPO@"
 @NOUSERSITE_LINE@
 ExecStart="@PYTHON@" -m infer.main --config "@REPO@/config/infer.yaml"
 Restart=on-failure
-RestartSec=3
+RestartSec=5
 TimeoutStopSec=20
 
 [Install]
