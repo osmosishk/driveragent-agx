@@ -14,6 +14,7 @@ Times: AGX02 shows BST (UTC+1), DA01 shows CST (UTC+8). 07:00 BST = 14:00 CST.
 | A1.4 SAVE FIRST repositories | DONE | Section 6: stage 1 deletes nothing, so they do not block this task |
 | A1.5 start at boot | DONE (user part; no start limit after the review) | Section 7: unit files in `~/.config/systemd/user`, links in `default.target.wants`; undo tested. Linger: owner step |
 | A1.6 acceptance script | DONE | `ops/accept_stage1.sh`; before values in `tests/out/stage1/before_agx.json` (folder ignored by git: machine data) |
+| Restart onto the HEAD code before stage 1 (owner request) | DONE | Section 10: suite 328 passed, doctor PASSED, link UP, both models give results; gaps 5.4, 5.6 and 21.5 s |
 | Stage 1 (owner) | WAITING FOR OWNER | - |
 | Reboot and section 5 acceptance | WAITING FOR OWNER | - |
 
@@ -134,3 +135,21 @@ Run before stage 1 (2026-10-09 07:19 BST): PASS 1a, 3a, 3b, 4a, 4b, 6; FAIL 2a (
 ## 9. Review of this preparation
 
 Three independent review agents checked the claims of this report and of the DA01 report (read-only). Results used here: the start limit of the units (fixed), the svc.sh trap before the reboot (written in section 7), the linger proof of item 2 (fixed), the action filter of item 4b, the enabled check of item 5 and the nvpmodel check of item 6 (fixed), the KEEP guard and NoMachine (section 5).
+
+## 10. Restart onto the HEAD code before stage 1 (owner request, 2026-10-09 07:53-07:55 BST)
+
+The owner asked for this restart, so that the HEAD code runs on the live installation before the reboot.
+
+| Time (BST) | Action | Result | Time without results on DA01 (7 streams: yolopx cameras 0-5, dtcp camera 0) |
+|---|---|---|---|
+| 07:53:42 | `systemctl --user stop agx-dashboard`, `daemon-reload`, `start agx-dashboard` | runs from `~/.config/systemd/user/agx-dashboard.service`, PID 829902 | none (the dashboard is not in the result path) |
+| 07:53:54 | `stop agx-infer`, `start agx-infer` | HEAD code (status version 92d86be), but **from the transient file again**: the stopped transient unit was still loaded | **5.39-5.50 s** (link DOWN 14:53:57 CST, UP 14:54:00) |
+| 07:54:38 | `stop`, `daemon-reload`, `start` | again transient | 5.61-5.76 s |
+| 07:55:07 | `stop`, wait 15 s for the unload, `daemon-reload`, `start` | again transient (PID 830915) | 21.37-21.50 s |
+
+Cause of "again transient": after the first `daemon-reload`, `default.target` lists `agx-infer` (the new link in `default.target.wants`). This reference keeps the stopped transient unit loaded, so `start` uses the transient file again. I stopped after the third try: a fourth gap would not change the code, only the unit type. The command line and the environment are the same, so **the HEAD code runs now**. After the reboot the transient file is gone and the unit file is used. The dashboard was stopped before the first `daemon-reload`, so it moved to the unit file.
+
+Checks after the restart:
+- `ops/doctor.sh` 07:55:55 BST: **DOCTOR PASSED** (units active, health 200, agx-infer RUNNING with yolopx and dtcp, 6 cameras OK, model store, sensors, pairing, link UP, 51 results/s).
+- AGX test suite `.venv/bin/python -m pytest -q -p no:cacheprovider tests`: **328 passed, 1 warning in 162.65 s** (the same as the night task). No gap in results during the suite.
+- DA01, 60 s at 15:01 CST: link UP, yolopx@1 6.79 results/s per camera, dtcp@1 10.02 /s, capture-to-result p50 109.0 ms, p95 144.4 ms, stale 0, rejected 0. Before (14:19 CST, old code): 6.89, 10.01, 116.4 ms, 149.9 ms, 0.
