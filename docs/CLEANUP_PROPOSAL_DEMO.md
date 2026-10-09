@@ -4,7 +4,7 @@
 |---|---|
 | Date | 2026-10-08, 20:40-22:00 BST (clock of `demo`) |
 | Unit | `demo`: Jetson AGX Orin 64 GB, L4T R36.4.7, user `tonyho`. Disk `/`: 915G, 65G used, 804G free. |
-| State | PHASE A only. This document is a proposal. Nothing was deleted, moved, renamed, stopped or disabled. No sudo. No reboot. |
+| State | PHASE A (2026-10-08). PHASE B part 1 (2026-10-09): items 3, 20, 23, 26, 33, 34, 35, 40, 41a, 41b, 43, 44, 45, 47, 48, 58, 76 moved to `~/_old_agx_20261009/` (list: `MOVES.txt` there). Section 6 is version 2. The rest of this line is the PHASE A state: this document is a proposal. Nothing was deleted, moved, renamed, stopped or disabled. No sudo. No reboot. |
 | Method | Six read-only surveys (folders, services, git, dependencies, only copies, recordings) and one critic that checked the five most important claims again. The surveys used no key and called no cloud API. |
 | Reference | `docs/CLEANUP_PROPOSAL.md` (AGX02). The table format is the same, with two more columns: "Last change" and "Sudo". |
 
@@ -198,8 +198,8 @@ root-only: unknown).
 | `~/model/jetson_bundle/engines/yolopx_v2_fp16.engine`, `dtcp_v1_fp16.engine` | agx-infer, dashboard controller (manifests), model check, dashboard engine scan | **each start of agx-infer** (no `last_good.json`) | `config/models.yaml:21,36`; `~/agx-models/driverguard_*/1/manifest.yaml`; live status | The running process continues (no file is open). The next start: both models FAILED. |
 | `~/model/jetson_bundle/onnx/yolopx_v2.onnx`, `dtcp_v1.onnx` | agx-infer (rebuild when an engine does not load), manifests | only at an engine load failure | `config/models.yaml:22,37`; `infer/models/manager.py:476` | No rebuild |
 | `~/model/system1/system1_deploy.pth` | `~/agx-models/system1/1` manifest | catalog check only (NO ADAPTER) | manifest | The catalog shows the check failure |
-| `~/model` (whole tree) | dashboard engine scan every 1800 s | runtime | `config/dashboard.yaml:60-61`, `tools/inspect_engines.py:20` | Handled: the card shows a missing folder |
-| `~/model/...` engines, ONNX, samples | 6 test files; `tests/test_t1_models_doc.py` (through `tools/inspect_engines.py:20`) | tests | `tests/test_manager.py:25-26` and 5 others | 6 files: PASS changes to SKIPPED. `test_t1_models_doc` fails now and continues to fail. |
+| `~/model` (whole tree) | dashboard engine scan every 1800 s | runtime | `config/dashboard.yaml:60-61` (on main: machine data; template `scan_dirs: []`; `tools/inspect_engines.py:23` `DEFAULT_SCAN = []`) | Handled: the card shows a missing folder |
+| `~/model/...` engines, ONNX, samples | 6 test files; `tests/test_t1_models_doc.py` (on main: `AGX_OLD_MODELS`, default `/home/tonyho/model`) | tests | `tests/test_manager.py:25-26` and 5 others | 6 files: PASS changes to SKIPPED. `test_t1_models_doc` fails now and continues to fail. |
 | `~/model/...` ONNX, weights, samples, `MANIFEST.json` | `da-models publish` | publish only | `~/driveragent-models/releases/*.yaml` | A new publish of those releases fails. `verify` and `pull` read only `/opt/driveragent/models`. |
 | `~/driveragent/logger/video` | `tools/rk_sim` | simulator tests | `config/sim.yaml:49` | The simulator file source fails (use absolute `--sessions` paths or `--source test-pattern`) |
 | `~/driveragent/logger/video/8003-*` | agx-infer in `mode: file`; 2 tests | only in mode file | `config/sources.yaml:86-134` | Nothing: these sessions are not on demo |
@@ -257,50 +257,79 @@ lists the same sha256 (`1071ea90213eddc2`) on AGX02. It is not an only copy. It 
 
 Sizes to save: P1 0.70 GiB, P2 3.62 GiB, P3 0.73 GiB. Total about 5.05 GiB.
 
-## 6. Independence plan (proposal only; PHASE B step 1)
+## 6. Change to main and independence plan (version 2, 2026-10-09)
 
-Aim: agx-infer, agx-dashboard, the tools and the tests do not read `~/model` or `~/driveragent`. Each step needs the
-owner approval, because it changes `~/agx-models` or `config/` (rule R3 in PHASE A).
+This section replaces the first plan (2026-10-08). `main` now has the installer (`ops/install.sh`, `ops/preflight.sh`,
+`ops/doctor.sh`, `ops/export_model.sh`, `ops/uninstall.sh`, `docs/INSTALL_AGX.md`). The machine data is not in git:
+`config/*.yaml` are made from `config/templates/` and git ignores them. Part A and Part B are approved (2026-10-09).
+Part C is not approved yet.
 
-1. **Save the P1 files** (note 3, group P1). `dtcp_v1.onnx` is the only rebuild source of the running DTCP engine.
-2. **Make two packages with the files inside** (`docs/DEPLOY_MODEL.md` section 2). Use version `"2"`, so that version
-   `"1"` stays unchanged (owner rule M2: a version is never changed):
-   - `driverguard_yolopx-2/`: `yolopx_v2_fp16.engine` and `model.onnx` (copies of the `jetson_bundle` files), and the
-     manifest of `~/agx-models/driverguard_yolopx/1` with `version: '2'` and relative paths and the same sha256 values.
-   - `driverguard_dtcp-2/`: `dtcp_v1_fp16.engine` and `model.onnx` (copy of `dtcp_v1.onnx`), the same way.
-   - Optional: `system1-2/` with `system1_deploy.pth` copied from `/opt/driveragent/models/system1/1.0.1/` (the same
-     sha256 `a5629a5e...`).
-   - Size: 355.6 MB (608 MB with system1). Disk: 804G free.
-3. **Deploy and check:** `tools/deploy_model.sh <package>` (local mode on demo), then
-   `tools.model_check ~/agx-models/<name>/2`. Expected: REGISTERED, then READY (the engines have the same sha256).
-4. **Activate** `driverguard_yolopx@2` and `driverguard_dtcp@2` (controller API or dashboard, bench mode). The controller
-   writes `_state/last_good.json`. Restart agx-infer. Proof: the log shows the start set from `last_good`, and the
-   live status shows engine paths in `~/agx-models`. Downtime: about 6 s for each restart.
-5. **Recordings for the simulator:** copy the 4 sessions of item 18 (500 MiB):
-   `mkdir -p /home/tonyho/agx-data/recordings && cp -a /home/tonyho/driveragent/logger/video/8001-20260926_{122805,122905,123016,123045} /home/tonyho/agx-data/recordings/`.
-   Undo: `rm -rf /home/tonyho/agx-data/recordings`.
-   Start the simulator with absolute paths: `tools/svc.sh start sim --sessions
-   /home/tonyho/agx-data/recordings/8001-20260926_122805,...` (`tools/rk_sim/config.py:97` accepts absolute paths).
-   No change in `config/sim.yaml`.
-6. **Configuration** (branch `deploy/demo`, owner approval):
-   - `config/models.yaml`: the `engine` and `onnx` paths of the two DriverGuard models point to the version `2` files
-     in `~/agx-models`. Then the fallback (a start without `last_good.json`) does not read `~/model` either.
-     Alternative: keep `models.yaml` and accept the fallback risk.
-   - `config/dashboard.yaml` `engines.scan_dirs`: `[]` (the configured engines are always read).
-7. **Tests:** six test files have `/home/tonyho/model/...` constants. Change them to the store paths, or record a new
-   baseline (they change from PASS to SKIPPED, no failure). `tests/test_t1_models_doc.py` reads
-   `tools/inspect_engines.py:20` `DEFAULT_SCAN`: it fails now and continues to fail. Change `DEFAULT_SCAN`, or record it. Record the baseline before the moves: today 302 passed,
-   2 failed, 4 skipped (`docs/DEPLOY_DEMO_REPORT.md`).
-8. **da-models runtimes:** make a copy of the shared files outside `~/driveragent`: copy `~/driveragent/message/{__init__.py,
-   capnp_pubsub.py,message.capnp}` and the calibration (`~/driveragent/calibration`, plus the camera 2-5 files of
-   `~/driveragent-bk/calibration` after an owner check) to `/home/tonyho/agx-data/shared/` (`mkdir -p` first; no sudo).
-   Set `DRIVERAGENT_ROOT=/home/tonyho/agx-data/shared` for each da-models runtime. (`/opt/driveragent` is
-   `root:root 755`: a folder there needs `sudo install -d -o tonyho -g tonyho /opt/driveragent/shared`.) Better: publish these files as a registry
-   item (a change in `~/driveragent-models`, owner approval).
-9. **Map service:** move the container and the map data to the RK3588 (items 56, 57, 59, 60) before `~/driveragent`
-   moves.
-10. **Checks after steps 1-9** (PHASE B step 1): `tools.model_check` for the version `2` models, the test suite, a
-    5-minute simulator test (step 5 sessions), and `da-models verify`. Then items 5 to 11 and item 1 can move.
+What the installer does from the first plan: no step completely. Partly: step 2 (`ops/export_model.sh` makes a
+package with relative paths, but `install.sh` does not run it), step 6 (the templates have `models: []` and
+`scan_dirs: []`, but install uses them only for a file that is missing) and step 10 (`ops/doctor.sh` checks the units,
+`/api/health`, the store, the sensors and the pairing; it does not run the tests, a simulator test or
+`da-models verify`). New items that the first plan did not have: pinned packages, user unit files with start at boot,
+an install record and `ops/uninstall.sh`.
+
+The AGX02 scripts: `ops/accept_stage1.sh` does not apply as it is (fixed values for AGX02: board `rk3588-da01`, set `@1`,
+`systemd-timesyncd`, the units `lpd` and `apport.service`, power series `agx02`). Use `ops/doctor.sh` and the checks of
+step B9. `ops/cleanup/stage1_disable.sh` can do items 61 to 70 only with a demo item list (no `lpd`, no
+`apport.service`, no container before item 56 is approved) and `CLEANUP_HOST=demo`. `stage2_archive.sh` and
+`stage3_delete.sh` do not apply (other archive layout; `rm`).
+
+### Part A: preparation (no stop of the node)
+
+1. Save the P1 files and copy the 4 sessions: **done 2026-10-09**. `~/backup/demo_20261009/p1.tar` (754,974,720 B,
+   152 members, `tar -d` identical, `SHA256SUMS`). `~/agx-data/recordings/` (501 MB, sha256 identical).
+2. Make the branch `deploy/demo-2` from `origin/main` in a separate worktree. Cherry-pick the two document commits,
+   remove `docs/DEPLOY_NEW_AGX.md` (`docs/INSTALL_AGX.md` replaces it), correct the two demo documents, push the new
+   branch. `deploy/demo` stays as the record. Then remove the worktree (a branch can be in only one worktree).
+3. Backup in `~/agx-backup/demo-<date>/` (mode 700): `config/*.yaml`, `.env`, `.venv` (`cp -a`), and `pip freeze` of the
+   venv and of `~/.local`. `data/` is copied after the stop (below), so that its SQLite files are consistent.
+
+### Part B: change to main with the installer
+
+Before step 4: record the sha256 of `data/paired_boards.json` (or "absent"), a sha256 of the dashboard password (the
+value is not shown) and the pairing and link state (`/api/pair/boards`, `/api/link`). Stop the node
+(`tools/svc.sh stop infer`, `tools/svc.sh stop dashboard`): the old processes must not run on the new code. Copy
+`data/` to the backup. The node stays stopped until step 8 (some minutes; accepted on this bench unit).
+
+4. In `~/driveragent-agx`: `git switch deploy/demo-2`. Git removes the tracked files `config/*.yaml` and `systemd/*`.
+   Put the 6 config files back from the backup at once. Add `protected_dirs: [/home/tonyho/model]` to
+   `config/dashboard.yaml` and `config/infer.yaml` (as on AGX02). `chmod 700 data`.
+5. `ops/preflight.sh --instance agx`.
+6. `ops/install.sh --user-site --no-enable --no-start`: packages into the venv, the kept files stay, the unit files are
+   written. `--user-site`: the units keep torch, numpy and pycuda from `~/.local`, as before and as on AGX02.
+7. `tools.model_check` for `driverguard_yolopx/1` and `driverguard_dtcp/1` with the new code.
+8. `ops/install.sh --user-site --takeover --yes`: the installed units `agx-dashboard` and `agx-infer` are enabled and
+   start. With Linger=yes they start at boot (no sudo).
+9. Checks: `ops/doctor.sh --before-pairing`; the test suite (units stopped during the run); a 5-minute simulator test
+   (set `mode: sim` in `config/sources.yaml`, restart agx-infer, `tools/svc.sh start sim --sessions` with the absolute
+   paths of `~/agx-data/recordings`, then `mode: rk` again and restart). Then prove: mode rk; `data/paired_boards.json`
+   has the same sha256 as before (or is still absent); the password did not change; the units are enabled and
+   Linger=yes; if a board was paired, its link is UP again.
+10. Rollback (when a step fails; no second method): `ops/uninstall.sh --yes` (when an install record exists), move the
+    current `.venv` and `data/` to `~/_old_agx_<date>/rollback/`, `git switch deploy/demo`, put back `config/*.yaml`,
+    `.env`, `data/` and `.venv` from the backup, then `tools/svc.sh start dashboard` and `tools/svc.sh start infer`.
+
+### Part C: independence from `~/model` (not approved yet)
+
+1. Make the packages: `ops/export_model.sh driverguard_yolopx 1 --with-engine` and the same for `driverguard_dtcp`
+   (relative paths, sha256 check). Change `version` to `'2'` in each package manifest (the tool keeps `'1'`).
+2. `tools/deploy_model.sh <package>` (on main: no host = local), then `tools.model_check ~/agx-models/<name>/2`.
+   Expected: READY with no build (the same engine bytes).
+3. Activate `driverguard_yolopx@2` and `driverguard_dtcp@2` (bench mode). The controller writes
+   `_state/last_good.json`. Restart agx-infer once and prove the start from the store (about 6 s).
+4. `config/models.yaml`: `models: []` or the store paths (machine data now: no git change).
+5. Copies for the da-models runtimes: `message/{__init__.py,capnp_pubsub.py,message.capnp}` and the calibration to
+   `/home/tonyho/agx-data/shared/`; `DRIVERAGENT_ROOT=/home/tonyho/agx-data/shared` for each da-models runtime.
+6. Map service to the RK3588 (items 56, 57, 59, 60) before `~/driveragent` moves.
+7. Checks: `ops/doctor.sh`, `tools.model_check`, the tests, a simulator test, `da-models verify`. Then items 5 to 11
+   and item 1 can move.
+8. Tests on main: `tests/test_t1_models_doc.py` runs while `AGX_OLD_MODELS` (default `/home/tonyho/model`) exists, and
+   it fails on demo (demo has other engine files than AGX02). `tests/test_dashboard_v2.py::test_01_models` counts the
+   SparseDrive engine path that is not on demo, and it fails (correction for the owner of main: count only the files
+   that exist).
 
 ## 7. Unknowns
 

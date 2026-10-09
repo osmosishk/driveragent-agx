@@ -1,5 +1,22 @@
 # Deploy of driveragent-agx on demo - report
 
+> **Note of 2026-10-09 (branch `deploy/demo-2`, based on `main` e995569).** This report is the record of the deploy of
+> 2026-10-08 on `deploy/demo` (`970d5ac` + `d6d09d5`). After the change to `main` these parts are out of date:
+> - `d6d09d5` (`tools/deploy_model.sh` automatic local mode, its test, the `docs/DEPLOY_MODEL.md` row; decision D8) is
+>   not on `deploy/demo-2`. `main` has its own rule: no `--host` and no `AGX_HOST` = local deploy.
+> - Section 2 and D1-D3: `ops/install.sh` installs the pinned packages of `requirements/` into the venv.
+> - Section 4: `config/*.yaml` are machine data now (made from `config/templates/`, ignored by git).
+>   `tools/register_existing_models.py` needs `--root`. `tools/inspect_engines.py` has `DEFAULT_SCAN = []`.
+> - Sections 10, 11, 12 (B1, B2) and 13: `systemd/` and `install_units.sh` are removed. `ops/install.sh` makes user
+>   units that start at boot (Linger=yes). `tools/svc.sh start infer|dashboard` does not apply to installed units: use
+>   `systemctl --user start agx-dashboard agx-infer`.
+> - `docs/DEPLOY_NEW_AGX.md` is removed: `docs/INSTALL_AGX.md` replaces it. These facts were only in it:
+>   1. Check that the DTCP waypoints are finite (decision D6, section 5): `tools.model_check` refuses a non-finite
+>      `pred_wp`.
+>   2. Two tests fail on a unit with other engine files than AGX02 (section 6).
+>   3. A simulator test with the recordings of the unit: `tools/svc.sh start sim --sessions <absolute paths>`.
+>   4. Do not copy `data/` from a different unit: the tokens and the pairings are for one unit only.
+
 | Item | Value |
 |---|---|
 | Date | 2026-10-08, 19:18-19:50 BST (clock of `demo`, UTC+1) |
